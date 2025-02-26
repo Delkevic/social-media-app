@@ -1,7 +1,7 @@
 package main
 
-import "fmt"
+import "social-media-app/backend/database"
 
 func main() {
-	fmt.Println("Backend çalışıyor...")
+	database.ConnectDatabase()
 }
