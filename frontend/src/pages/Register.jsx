@@ -1,29 +1,53 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+const Register = () => {
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value,
+    });
+  };
+
   const validateForm = () => {
-    if (!email) {
+    if (!formData.fullName) {
+      setError('Ad Soyad gereklidir');
+      return false;
+    }
+    if (!formData.email) {
       setError('E-posta adresi gereklidir');
       return false;
     }
-    if (!email.includes('@') || !email.includes('.')) {
+    if (!formData.email.includes('@') || !formData.email.includes('.')) {
       setError('Geçerli bir e-posta adresi girin');
       return false;
     }
-    if (!password) {
+    if (!formData.password) {
       setError('Şifre gereklidir');
       return false;
     }
-    if (password.length < 6) {
+    if (formData.password.length < 6) {
       setError('Şifre en az 6 karakter olmalıdır');
+      return false;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError('Şifreler eşleşmiyor');
+      return false;
+    }
+    if (!agreeTerms) {
+      setError('Kullanım şartlarını kabul etmelisiniz');
       return false;
     }
     return true;
@@ -34,10 +58,10 @@ const Login = () => {
     if (validateForm()) {
       setLoading(true);
       setError('');
-      console.log('Giriş bilgileri:', { email, password, rememberMe });
+      console.log('Kayıt bilgileri:', formData, agreeTerms);
       setTimeout(() => {
         setLoading(false);
-        alert('Giriş başarılı (simülasyon)');
+        alert('Kayıt başarılı (simülasyon)');
       }, 1500);
     }
   };
@@ -60,7 +84,7 @@ const Login = () => {
             boxShadow: 'var(--shadow-lg)',
           }}
         >
-          <div className="text-center mb-8">
+          <div className="text-center mb-6"> {/* mb-8 -> mb-6 */}
             <h1
               className="text-2xl font-bold inline-block relative tracking-widest"
               style={{ color: 'var(--text-primary)' }}
@@ -72,11 +96,11 @@ const Login = () => {
               ></span>
             </h1>
             <p className="mt-4" style={{ color: 'var(--text-tertiary)' }}>
-              Hesabınıza Giriş Yapın
+              Yeni Hesap Oluşturun
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4"> {/* space-y-6 -> space-y-4 */}
             {error && (
               <div
                 className="p-3 rounded-lg text-sm border text-center"
@@ -89,6 +113,44 @@ const Login = () => {
                 {error}
               </div>
             )}
+
+            <div className="space-y-2">
+              <label
+                className="block text-sm font-medium"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                Ad Soyad
+              </label>
+              <div className="relative">
+                <div
+                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                      clipRule="evenodd"
+                    ></path>
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  name="fullName"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg"
+                  style={{
+                    backgroundColor: 'var(--input-bg)',
+                    borderColor: 'var(--input-border)',
+                    color: 'var(--input-text)',
+                  }}
+                  placeholder="Adınız Soyadınız"
+                  autoComplete="name"
+                  required
+                />
+              </div>
+            </div>
 
             <div className="space-y-2">
               <label
@@ -109,8 +171,9 @@ const Login = () => {
                 </div>
                 <input
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
                   className="w-full pl-10 pr-4 py-3 rounded-lg"
                   style={{
                     backgroundColor: 'var(--input-bg)',
@@ -146,8 +209,9 @@ const Login = () => {
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
                   className="w-full pl-10 pr-10 py-3 rounded-lg"
                   style={{
                     backgroundColor: 'var(--input-bg)',
@@ -155,7 +219,7 @@ const Login = () => {
                     color: 'var(--input-text)',
                   }}
                   placeholder="••••••••"
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   required
                 />
                 <button
@@ -187,34 +251,81 @@ const Login = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
+            <div className="space-y-2">
+              <label
+                className="block text-sm font-medium"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                Şifre Tekrar
+              </label>
+              <div className="relative">
+                <div
+                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                  style={{ color: 'var(--text-tertiary)' }}
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                      clipRule="evenodd"
+                    ></path>
+                  </svg>
+                </div>
                 <input
-                  id="remember"
+                  type={showPassword ? 'text' : 'password'}
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg"
+                  style={{
+                    backgroundColor: 'var(--input-bg)',
+                    borderColor: 'var(--input-border)',
+                    color: 'var(--input-text)',
+                  }}
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex items-start">
+              <div className="flex items-center h-5 mt-1">
+                <input
+                  id="terms"
                   type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
+                  checked={agreeTerms}
+                  onChange={(e) => setAgreeTerms(e.target.checked)}
                   className="w-4 h-4 rounded"
                   style={{
                     borderColor: 'var(--input-border)',
                     accentColor: 'var(--accent-blue)',
                   }}
+                  required
                 />
-                <label
-                  htmlFor="remember"
-                  className="ml-2 text-sm"
-                  style={{ color: 'var(--text-tertiary)' }}
-                >
-                  Beni Hatırla
-                </label>
               </div>
-              <Link
-                to="/forgot-password"
-                className="text-sm font-medium hover:underline"
-                style={{ color: 'var(--accent-blue)' }}
+              <label
+                htmlFor="terms"
+                className="ml-2 text-sm"
+                style={{ color: 'var(--text-tertiary)' }}
               >
-                Şifremi Unuttum
-              </Link>
+                <a
+                  href="#"
+                  className="font-medium hover:underline"
+                  style={{ color: 'var(--accent-blue)' }}
+                >
+                  Kullanım Şartları
+                </a>
+                'nı ve{' '}
+                <a
+                  href="#"
+                  className="font-medium hover:underline"
+                  style={{ color: 'var(--accent-blue)' }}
+                >
+                  Gizlilik Politikası
+                </a>
+                'nı kabul ediyorum
+              </label>
             </div>
 
             <button
@@ -250,22 +361,22 @@ const Login = () => {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     ></path>
                   </svg>
-                  Giriş Yapılıyor...
+                  Kayıt Yapılıyor...
                 </>
               ) : (
-                'Giriş Yap'
+                'Kayıt Ol'
               )}
             </button>
 
             <div className="text-center mt-4">
               <p style={{ color: 'var(--text-tertiary)' }}>
-                Hesabınız yok mu?{' '}
+                Zaten hesabınız var mı?{' '}
                 <Link
-                  to="/register"
+                  to="/login"
                   className="font-medium hover:underline"
                   style={{ color: 'var(--accent-blue)' }}
                 >
-                  Kayıt Ol
+                  Giriş Yap
                 </Link>
               </p>
             </div>
@@ -276,4 +387,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default Register;

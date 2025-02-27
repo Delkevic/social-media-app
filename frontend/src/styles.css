@@ -1,0 +1,159 @@
+:root {
+    --background-primary: #ffffff;
+    --background-secondary: #f3f4f6;
+    --background-tertiary: #e5e7eb;
+    --background-gradient: linear-gradient(to right top, #2563eb, #3b82f6, #60a5fa);
+    --background-card: rgba(255, 255, 255, 0.9);
+    --background-card-hover: rgba(255, 255, 255, 1);
+    --background-glass: rgba(255, 255, 255, 0.1);
+    --backdrop-blur: blur(10px);
+    
+    --text-primary: #111827;
+    --text-secondary: #374151;
+    --text-tertiary: #6b7280;
+    --text-inverted: #ffffff;
+    
+    --border-color: rgba(229, 231, 235, 0.8);
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    
+    --accent-blue: #3b82f6;
+    --accent-blue-light: #60a5fa;
+    --accent-blue-dark: #2563eb;
+    --accent-red: #ef4444;
+    --accent-green: #10b981;
+    --accent-yellow: #f59e0b;
+    
+    --nav-bg: rgba(255, 255, 255, 0.9);
+    --nav-text: #111827;
+    --nav-border: rgba(229, 231, 235, 0.8);
+    --nav-glass: rgba(255, 255, 255, 0.1);
+    
+    --input-bg: rgba(255, 255, 255, 0.8);
+    --input-border: rgba(209, 213, 219, 0.8);
+    --input-text: #111827;
+    --input-placeholder: #9ca3af;
+    
+    --btn-primary-bg: linear-gradient(to right, #2563eb, #3b82f6);
+    --btn-primary-text: #ffffff;
+    --btn-secondary-bg: rgba(255, 255, 255, 0.1);
+    --btn-secondary-text: #111827;
+    
+    --transition-duration: 0.3s;
+  }
+  
+  [data-theme="dark"] {
+    /* Daha koyu arka planlar */
+    --background-primary: #0a0e17; /* Daha koyu gri-mavi ton */
+    --background-secondary: #141824; /* Daha derin bir ikincil arka plan */
+    --background-tertiary: #1f2633; /* Daha koyu üçüncül arka plan */
+    --background-gradient: linear-gradient(to right top, #172554, #1e3a8a, #1d4ed8); /* Daha koyu bir gradyan */
+    --background-card: rgba(20, 24, 36, 0.9); /* Kartlar için daha koyu ton */
+    --background-card-hover: rgba(20, 24, 36, 1);
+    --background-glass: rgba(10, 14, 23, 0.1); /* Daha koyu cam efekti */
+    
+    /* Metin renkleri (okunabilirlik için açık bırakıldı) */
+    --text-primary: #f9fafb;
+    --text-secondary: #d1d5db;
+    --text-tertiary: #9ca3af;
+    --text-inverted: #0a0e17;
+    
+    /* Daha koyu gölgeler ve kenarlıklar */
+    --border-color: rgba(31, 38, 51, 0.8); /* Daha koyu bir kenarlık */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+    
+    /* Daha koyu accent renkler */
+    --accent-blue: #1d4ed8; /* Daha koyu mavi */
+    --accent-blue-light: #3b82f6;
+    --accent-blue-dark: #172554; /* Çok daha koyu bir mavi ton */
+    --accent-red: #dc2626; /* Daha koyu kırmızı */
+    --accent-green: #059669; /* Daha koyu yeşil */
+    --accent-yellow: #d97706; /* Daha koyu sarı */
+    
+    /* Daha koyu navigasyon */
+    --nav-bg: rgba(10, 14, 23, 0.9); /* Daha koyu nav */
+    --nav-text: #f9fafb;
+    --nav-border: rgba(31, 38, 51, 0.8);
+    --nav-glass: rgba(10, 14, 23, 0.1);
+    
+    /* Daha koyu input alanları */
+    --input-bg: rgba(20, 24, 36, 0.8); /* Daha koyu input arka plan */
+    --input-border: rgba(55, 65, 81, 0.8); /* Daha koyu kenar */
+    --input-text: #f9fafb;
+    --input-placeholder: #6b7280;
+    
+    /* Daha koyu butonlar */
+    --btn-primary-bg: linear-gradient(to right, #172554, #1d4ed8); /* Daha koyu bir gradyan */
+    --btn-primary-text: #ffffff;
+    --btn-secondary-bg: rgba(20, 24, 36, 0.3);
+    --btn-secondary-text: #d1d5db;
+  }
+  
+  /* Base Styles */
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--background-primary);
+    color: var(--text-primary);
+    transition: background-color var(--transition-duration), color var(--transition-duration);
+  }
+  
+  /* Transitions for smooth theme switching */
+  * {
+    transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: var(--transition-duration);
+  }
+  
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: var(--background-secondary);
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: var(--background-tertiary);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-blue-dark);
+  }
+  
+  /* Form elements */
+  input,
+  textarea,
+  select {
+    background-color: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--input-text);
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    outline: none;
+  }
+  
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--input-placeholder);
+  }
+  
+  /* Text styles */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+  
+  p {
+    color: var(--text-secondary);
+  }

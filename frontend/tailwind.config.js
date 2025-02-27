@@ -1,11 +1,22 @@
-/** @type {import('tailwindcss').Config} */
-export default {
+module.exports = {
     content: [
-      "./index.html",
-      "./src/**/*.{js,ts,jsx,tsx}",
+      "./src/**/*.{js,jsx,ts,tsx}",
     ],
     theme: {
-      extend: {},
+      extend: {
+        animation: {
+          'slowMove': 'backgroundMove 30s linear infinite',
+        },
+        keyframes: {
+          backgroundMove: {
+            '0%': { transform: 'translateX(-50%) translateY(-50%) rotate(-45deg)' },
+            '100%': { transform: 'translateX(0%) translateY(0%) rotate(-45deg)' },
+          }
+        },
+        backgroundImage: {
+          'gradient-45': 'linear-gradient(45deg, var(--tw-gradient-stops))',
+        }
+      },
     },
     plugins: [],
   }
