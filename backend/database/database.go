@@ -2,9 +2,9 @@ package database
 
 import (
 	"log"
-
+	
 	"social-media-app/backend/models" // Proje ismini kendi dizinine göre değiştir
-
+	
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -17,10 +17,25 @@ func ConnectDatabase() {
 	if err != nil {
 		log.Fatal("Database bağlantısı başarısız:", err)
 	}
-
+	
 	DB = db
 	log.Println("Database bağlantısı başarılı!")
-
+	
 	// Tabloları otomatik oluştur
-	db.AutoMigrate(&models.User{}, &models.Post{})
+	err = db.AutoMigrate(
+		&models.User{},
+		&models.Follow{},
+		&models.FollowRequest{}, 
+		&models.Notification{},
+		&models.UserSettings{},
+		&models.Post{},
+		&models.Comment{},
+		&models.CommentLike{}, 
+	)
+	
+	if err != nil {
+		log.Fatal("Database migration hatası:", err)
+	}
+	
+	log.Println("Database migration başarılı!")
 }
