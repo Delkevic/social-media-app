@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Register = () => {
   const [formData, setFormData] = useState({
-    fullName: '',
+    username: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -12,6 +12,7 @@ const Register = () => {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -22,8 +23,13 @@ const Register = () => {
   };
 
   const validateForm = () => {
-    if (!formData.fullName) {
-      setError('Ad Soyad gereklidir');
+    if (formData.username.length < 3) {
+      setError('Kullanıcı adı en az 3 karakter olmalıdır');
+      return false;
+    }
+    // Username formatını kontrol et (opsiyonel)
+    if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+      setError('Kullanıcı adı sadece harf, sayı ve alt çizgi içerebilir');
       return false;
     }
     if (!formData.email) {
@@ -38,8 +44,8 @@ const Register = () => {
       setError('Şifre gereklidir');
       return false;
     }
-    if (formData.password.length < 6) {
-      setError('Şifre en az 6 karakter olmalıdır');
+    if (formData.password.length < 8) {
+      setError('Şifre en az 8 karakter olmalıdır');
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -53,16 +59,41 @@ const Register = () => {
     return true;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (validateForm()) {
       setLoading(true);
       setError('');
-      console.log('Kayıt bilgileri:', formData, agreeTerms);
-      setTimeout(() => {
+      
+      try {
+        const response = await fetch('http://localhost:8080/api/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData),
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          setError(data.message);
+          setLoading(false);
+          return;
+        }
+        
+        // Token'ı sessionStorage'a kaydet
+        sessionStorage.setItem('token', data.token);
+        sessionStorage.setItem('user', JSON.stringify(data.data.user));
+        
+        // Kullanıcıyı ana sayfaya yönlendir
         setLoading(false);
-        alert('Kayıt başarılı (simülasyon)');
-      }, 1500);
+        navigate('/');
+        
+      } catch (error) {
+        setError('Sunucu bağlantısı sırasında bir hata oluştu');
+        setLoading(false);
+      }
     }
   };
 
@@ -75,7 +106,7 @@ const Register = () => {
         <div className="absolute w-[200%] h-[200%] bg-gradient-45 from-white/20 to-transparent bg-[length:100px_100px] -rotate-45 animate-slowMove"></div>
       </div>
 
-      <div className="relative z-10 w-full max-w-lg px-4 py-8"> {/* max-w-md -> max-w-lg */}
+      <div className="relative z-10 w-full max-w-lg px-4 py-8">
         <div
           className="rounded-2xl p-8"
           style={{
@@ -84,7 +115,7 @@ const Register = () => {
             boxShadow: 'var(--shadow-lg)',
           }}
         >
-          <div className="text-center mb-6"> {/* mb-8 -> mb-6 */}
+          <div className="text-center mb-6">
             <h1
               className="text-2xl font-bold inline-block relative tracking-widest"
               style={{ color: 'var(--text-primary)' }}
@@ -100,7 +131,7 @@ const Register = () => {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4"> {/* space-y-6 -> space-y-4 */}
+          <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div
                 className="p-3 rounded-lg text-sm border text-center"
@@ -119,7 +150,7 @@ const Register = () => {
                 className="block text-sm font-medium"
                 style={{ color: 'var(--text-secondary)' }}
               >
-                Ad Soyad
+                Kullanıcı Adı
               </label>
               <div className="relative">
                 <div
@@ -136,8 +167,8 @@ const Register = () => {
                 </div>
                 <input
                   type="text"
-                  name="fullName"
-                  value={formData.fullName}
+                  name="username"
+                  value={formData.username}
                   onChange={handleChange}
                   className="w-full pl-10 pr-4 py-3 rounded-lg"
                   style={{
@@ -145,8 +176,7 @@ const Register = () => {
                     borderColor: 'var(--input-border)',
                     color: 'var(--input-text)',
                   }}
-                  placeholder="Adınız Soyadınız"
-                  autoComplete="name"
+                  placeholder="kullanici_adi"
                   required
                 />
               </div>
