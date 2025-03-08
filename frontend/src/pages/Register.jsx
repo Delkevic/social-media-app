@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SparklesCore } from "../components/ui/sparkles";
 import { HoverButton } from "../components/ui/HoverButton";
+import { GlowingEffect } from "../components/ui/GlowingEffect";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -123,13 +124,23 @@ const Register = () => {
 
       <div className="relative z-10 w-full max-w-lg px-4 py-8">
         <div
-          className="rounded-2xl p-8 backdrop-blur-lg"
+          className="relative rounded-2xl p-8 backdrop-blur-lg"
           style={{
             backgroundColor: "rgba(20, 24, 36, 0.7)",
             boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
             border: "1px solid rgba(255, 255, 255, 0.1)"
           }}
         >
+          {/* Kırmızı parlayan efekt */}
+          <GlowingEffect
+            spread={40}
+            glow={true}
+            disabled={false}
+            proximity={64}
+            inactiveZone={0.01}
+            borderWidth={2}
+          />
+          
           <div className="text-center mb-6">
             <h1
               className="text-4xl font-bold inline-block relative tracking-widest text-white"
