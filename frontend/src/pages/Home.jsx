@@ -99,14 +99,15 @@ const Home = () => {
             <div 
               className="w-12 h-12 rounded-full flex items-center justify-center"
               style={{ backgroundColor: 'var(--accent-blue)' }}
+              onClick={() => navigate('/profile')}
             >
               {user.username ? user.username.charAt(0).toUpperCase() : 'U'}
             </div>
             <div>
-              <h2 className="font-bold" style={{ color: 'var(--text-primary)' }}>
+              <h2 className="font-bold" style={{ color: 'var(--text-primary)' }} onClick={() => navigate('/profile')}>
                 {user.username || 'Kullanıcı'}
               </h2>
-              <p style={{ color: 'var(--text-tertiary)' }}>
+              <p style={{ color: 'var(--text-tertiary)' }} onClick={() => navigate('/profile')}>
                 {user.email || 'E-posta bilgisi yok'}
               </p>
             </div>
