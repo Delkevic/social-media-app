@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { GradientButtn } from "../components/ui/GradientButtn";
 import { SparklesCore } from "../components/ui/sparkles";
+import { HoverButton } from "../components/ui/HoverButton";
 
 const Login = () => {
   const [identifier, setIdentifier] = useState("");
@@ -107,11 +107,10 @@ const Login = () => {
             >
               BUZZIFY
               <span
-                className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-0.5 mt-2"
-                style={{ background: "linear-gradient(90deg, transparent, #3b82f6, transparent)" }}
+                className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-32 h-0.5 mt-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"
               ></span>
             </h1>
-            <p className="mt-4 text-blue-100 opacity-80">
+            <p className="mt-6 text-blue-100 opacity-80">
               Hesabınıza Giriş Yapın
             </p>
           </div>
@@ -245,18 +244,22 @@ const Login = () => {
               </div>
               <Link
                 to="/forgot-password"
-                className="text-sm font-medium text-blue-400 hover:text-blue-300 hover:underline"
+                className="text-sm font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
               >
                 Şifremi Unuttum
+                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
               </Link>
             </div>
 
-            {/* Gradient Button (Mavi varyant) kullanımı */}
-            <GradientButtn
+            {/* HoverButton kullanımı */}
+            <HoverButton
               type="submit"
               disabled={loading}
-              className="w-full h-12 flex items-center justify-center"
-              variant="variant" // Mavi varyantı kullanmak için "variant" eklendi
+              className="w-full flex items-center justify-center"
+              style={{
+                "--circle-start": "#3b82f6", 
+                "--circle-end": "#1e40af"
+              }}
             >
               {loading ? (
                 <>
@@ -285,16 +288,17 @@ const Login = () => {
               ) : (
                 "Giriş Yap"
               )}
-            </GradientButtn>
+            </HoverButton>
 
             <div className="text-center mt-4">
               <p className="text-blue-100">
                 Hesabınız yok mu?{" "}
                 <Link
                   to="/register"
-                  className="font-medium text-blue-400 hover:text-blue-300 hover:underline"
+                  className="font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
                 >
                   Kayıt Ol
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
                 </Link>
               </p>
             </div>
