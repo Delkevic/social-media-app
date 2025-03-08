@@ -111,6 +111,7 @@ const GlowingEffect = memo(
 
     return (
       <>
+        {/* İlk div - sadece border gösterimi için */}
         <div
           className={cn(
             "pointer-events-none absolute -inset-px hidden rounded-[inherit] border opacity-0 transition-opacity",
@@ -118,7 +119,12 @@ const GlowingEffect = memo(
             variant === "white" && "border-white",
             disabled && "!block"
           )}
+          style={{
+            borderRadius: "inherit"
+          }}
         />
+        
+        {/* Ana efekt konteyner */}
         <div
           ref={containerRef}
           style={{
@@ -128,25 +134,26 @@ const GlowingEffect = memo(
             "--active": "0",
             "--glowingeffect-border-width": `${borderWidth}px`,
             "--repeating-conic-gradient-times": "5",
+            "borderRadius": "inherit", // Border radius inherit eklenmiş hali
             "--gradient":
               variant === "white"
                 ? `repeating-conic-gradient(
-      from 236.84deg at 50% 50%,
-      var(--black),
-      var(--black) calc(25% / var(--repeating-conic-gradient-times))
-    )`
+                    from 236.84deg at 50% 50%,
+                    var(--black),
+                    var(--black) calc(25% / var(--repeating-conic-gradient-times))
+                  )`
                 : `radial-gradient(circle, #3b82f6 10%, #3b82f600 20%),
-    radial-gradient(circle at 40% 40%, #60a5fa 5%, #60a5fa00 15%),
-    radial-gradient(circle at 60% 60%, #93c5fd 10%, #93c5fd00 20%), 
-    radial-gradient(circle at 40% 60%, #1d4ed8 10%, #1d4ed800 20%),
-    repeating-conic-gradient(
-      from 236.84deg at 50% 50%,
-      #3b82f6 0%,
-      #60a5fa calc(25% / var(--repeating-conic-gradient-times)),
-      #93c5fd calc(50% / var(--repeating-conic-gradient-times)), 
-      #1d4ed8 calc(75% / var(--repeating-conic-gradient-times)),
-      #3b82f6 calc(100% / var(--repeating-conic-gradient-times))
-    )`,
+                  radial-gradient(circle at 40% 40%, #60a5fa 5%, #60a5fa00 15%),
+                  radial-gradient(circle at 60% 60%, #93c5fd 10%, #93c5fd00 20%), 
+                  radial-gradient(circle at 40% 60%, #1d4ed8 10%, #1d4ed800 20%),
+                  repeating-conic-gradient(
+                    from 236.84deg at 50% 50%,
+                    #3b82f6 0%,
+                    #60a5fa calc(25% / var(--repeating-conic-gradient-times)),
+                    #93c5fd calc(50% / var(--repeating-conic-gradient-times)), 
+                    #1d4ed8 calc(75% / var(--repeating-conic-gradient-times)),
+                    #3b82f6 calc(100% / var(--repeating-conic-gradient-times))
+                  )`,
           }}
           className={cn(
             "pointer-events-none absolute inset-0 rounded-[inherit] opacity-100 transition-opacity",
@@ -156,6 +163,7 @@ const GlowingEffect = memo(
             disabled && "!hidden"
           )}
         >
+          {/* Glow efekti */}
           <div
             className={cn(
               "glow",

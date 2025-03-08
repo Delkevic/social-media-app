@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api from '../../../services/api';
 
 const PostItem = ({ post, onLike, onSave, currentUser }) => {
-  const navigate = useNavigate();
   const [showComments, setShowComments] = useState(false);
   const [comment, setComment] = useState('');
   const [comments, setComments] = useState([]);
@@ -118,11 +117,11 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
 
   return (
     <div 
-      className="rounded-2xl overflow-hidden"
+      className="rounded-2xl overflow-hidden backdrop-blur-lg mb-4"
       style={{
-        backgroundColor: 'var(--background-card)',
-        backdropFilter: 'var(--backdrop-blur)',
-        boxShadow: 'var(--shadow-lg)',
+        backgroundColor: "rgba(20, 24, 36, 0.7)",
+        boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+        border: "1px solid rgba(255, 255, 255, 0.1)"
       }}
     >
       {/* Gönderi başlığı */}
@@ -136,10 +135,9 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
             />
           ) : (
             <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: 'var(--accent-red)' }}
+              className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-500"
             >
-              <span style={{ color: 'white', fontWeight: 'bold' }}>
+              <span className="text-white font-bold">
                 {post.user.username.charAt(0).toUpperCase()}
               </span>
             </div>
@@ -149,22 +147,18 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
         <div className="ml-3 min-w-0">
           <Link 
             to={`/profile/${post.user.username}`}
-            className="font-medium hover:underline"
-            style={{ color: 'var(--text-primary)' }}
+            className="font-medium hover:underline text-white"
           >
             {post.user.username}
           </Link>
-          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          <p className="text-xs text-blue-200/70">
             {post.createdAt}
           </p>
         </div>
         
         <div className="ml-auto">
           <button 
-            className="p-1 rounded-full"
-            style={{
-              color: 'var(--text-tertiary)',
-            }}
+            className="p-1 rounded-full text-blue-200 hover:bg-slate-700/50 transition-colors"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
               <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
@@ -175,49 +169,45 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
       
       {/* Gönderi içeriği */}
       <div className="px-4 pb-3">
-        <p style={{ color: 'var(--text-primary)' }}>{post.content}</p>
+        <p className="text-white">{post.content}</p>
       </div>
       
       {/* Gönderi görselleri (varsa) */}
       {post.images && post.images.length > 0 && (
-  <div className="w-full">
-    {post.images.map((image, index) => {
-      // Görsel URL'sini işle (fullUrl varsa onu kullan)
-      let imageUrl = typeof image === 'string' 
-        ? image 
-        : (image.fullUrl || image.url || '');
-      
-      // Eğer URL tam bir URL değilse (http ile başlamıyorsa) backend URL'sini ekle
-      if (imageUrl && !imageUrl.startsWith('http')) {
-        imageUrl = `http://localhost:8080${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
-      }
-      
-      console.log(`Yükleniyor: ${imageUrl}`);
-      
-      return (
-        <div key={index} className="relative">
-          <img 
-            src={imageUrl}
-            alt={`Gönderi görseli ${index + 1}`}
-            className="w-full object-cover"
-            style={{ maxHeight: '300px' }}
-            onError={(e) => {
-              console.error(`Görsel yüklenemedi (${index}): ${e.target.src}`);
-              e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='24' fill='%23fff' text-anchor='middle' dominant-baseline='middle'%3EGörsel Yüklenemedi%3C/text%3E%3C/svg%3E";
-              e.target.onerror = null;
-            }}
-          />
+        <div className="w-full">
+          {post.images.map((image, index) => {
+            // Görsel URL'sini işle (fullUrl varsa onu kullan)
+            let imageUrl = typeof image === 'string' 
+              ? image 
+              : (image.fullUrl || image.url || '');
+            
+            // Eğer URL tam bir URL değilse (http ile başlamıyorsa) backend URL'sini ekle
+            if (imageUrl && !imageUrl.startsWith('http')) {
+              imageUrl = `http://localhost:8080${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+            }
+            
+            return (
+              <div key={index} className="relative">
+                <img 
+                  src={imageUrl}
+                  alt={`Gönderi görseli ${index + 1}`}
+                  className="w-full object-cover"
+                  style={{ maxHeight: '300px' }}
+                  onError={(e) => {
+                    console.error(`Görsel yüklenemedi (${index}): ${e.target.src}`);
+                    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='24' fill='%23fff' text-anchor='middle' dominant-baseline='middle'%3EGörsel Yüklenemedi%3C/text%3E%3C/svg%3E";
+                    e.target.onerror = null;
+                  }}
+                />
+              </div>
+            );
+          })}
         </div>
-      );
-    })}
-  </div>
-)}
-
+      )}
       
       {/* Etkileşim bilgileri */}
       <div 
-        className="px-4 py-2 flex justify-between text-sm"
-        style={{ color: 'var(--text-tertiary)' }}
+        className="px-4 py-2 flex justify-between text-sm text-blue-200"
       >
         <div>
           {post.likes > 0 && (
@@ -235,13 +225,12 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
       
       {/* Etkileşim butonları */}
       <div 
-        className="flex border-t border-b"
-        style={{ borderColor: 'var(--border-color)' }}
+        className="flex border-t border-b border-slate-700/50"
       >
         <button 
-          className="flex-1 py-2 flex items-center justify-center"
+          className="flex-1 py-2 flex items-center justify-center transition-colors hover:bg-slate-800/30"
           style={{
-            color: post.liked ? 'var(--accent-red)' : 'var(--text-secondary)',
+            color: post.liked ? '#3b82f6' : 'white',
           }}
           onClick={handleLike}
         >
@@ -263,8 +252,7 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
         </button>
         
         <button 
-          className="flex-1 py-2 flex items-center justify-center"
-          style={{ color: 'var(--text-secondary)' }}
+          className="flex-1 py-2 flex items-center justify-center text-white hover:bg-slate-800/30 transition-colors"
           onClick={() => setShowComments(!showComments)}
         >
           <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -279,9 +267,9 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
         </button>
         
         <button 
-          className="flex-1 py-2 flex items-center justify-center"
+          className="flex-1 py-2 flex items-center justify-center hover:bg-slate-800/30 transition-colors"
           style={{
-            color: post.saved ? 'var(--accent-red)' : 'var(--text-secondary)',
+            color: post.saved ? '#3b82f6' : 'white',
           }}
           onClick={handleSave}
         >
@@ -313,22 +301,15 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
               placeholder="Bir yorum yazın..."
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              className="flex-1 p-2 rounded-l-lg"
-              style={{
-                backgroundColor: 'var(--background-secondary)',
-                color: 'var(--text-primary)',
-                border: 'none',
-              }}
+              className="flex-1 p-2 rounded-l-lg bg-slate-800/50 border-none text-white"
             />
             <button
               type="submit"
-              className="px-3 rounded-r-lg"
+              className="px-3 rounded-r-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+              disabled={!comment.trim()}
               style={{
-                backgroundColor: 'var(--accent-red)',
-                color: 'white',
                 opacity: !comment.trim() ? 0.7 : 1,
               }}
-              disabled={!comment.trim()}
             >
               Gönder
             </button>
@@ -337,12 +318,7 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
           {/* Hata mesajı */}
           {error && (
             <div 
-              className="p-2 rounded-lg text-sm text-center"
-              style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                color: 'var(--accent-red)',
-                borderColor: 'var(--accent-red)',
-              }}
+              className="p-2 rounded-lg text-sm text-center bg-red-500/10 text-red-400 border border-red-500/20"
             >
               {error}
             </div>
@@ -351,13 +327,12 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
           {/* Yorumlar listesi */}
           {loadingComments ? (
             <div className="flex justify-center py-4">
-              <div className="animate-spin h-5 w-5 border-2 rounded-full"
-                style={{ borderColor: 'var(--accent-red) transparent transparent transparent' }}></div>
+              <div className="animate-spin h-5 w-5 border-2 rounded-full border-blue-500 border-t-transparent"></div>
             </div>
           ) : (
             <div className="space-y-3">
               {comments.length === 0 ? (
-                <p className="text-center py-2 text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                <p className="text-center py-2 text-sm text-blue-200/70">
                   Henüz yorum yapılmamış. İlk yorumu siz yapın!
                 </p>
               ) : (
@@ -372,28 +347,26 @@ const PostItem = ({ post, onLike, onSave, currentUser }) => {
                         />
                       ) : (
                         <div 
-                          className="w-8 h-8 rounded-full flex items-center justify-center"
-                          style={{ backgroundColor: 'var(--accent-red)' }}
+                          className="w-8 h-8 rounded-full flex items-center justify-center bg-blue-500"
                         >
-                          <span style={{ color: 'white', fontWeight: 'bold', fontSize: '0.75rem' }}>
+                          <span className="text-white font-bold text-xs">
                             {comment.user.username.charAt(0).toUpperCase()}
                           </span>
                         </div>
                       )}
                     </div>
                     <div 
-                      className="flex-1 p-2 rounded-lg"
-                      style={{ backgroundColor: 'var(--background-secondary)' }}
+                      className="flex-1 p-2 rounded-lg bg-slate-800/50"
                     >
                       <div className="flex justify-between items-start">
-                        <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
+                        <span className="font-medium text-sm text-white">
                           {comment.user.username}
                         </span>
-                        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                        <span className="text-xs text-blue-200/70">
                           {comment.createdAt}
                         </span>
                       </div>
-                      <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                      <p className="text-sm mt-1 text-blue-100">
                         {comment.content}
                       </p>
                     </div>

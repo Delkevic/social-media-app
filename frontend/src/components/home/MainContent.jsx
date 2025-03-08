@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GlowingEffect } from '../../components/ui/GlowingEffect';
 import SearchBar from './common/SearchBar';
 import PostList from './posts/PostList';
 import CreatePostForm from './posts/CreatePostForm';
@@ -166,8 +167,18 @@ const MainContent = ({ user }) => {
 
   return (
     <div className="space-y-4">
-      {/* Arama Çubuğu */}
-      <SearchBar onSearch={handleSearch} />
+      {/* Arama Çubuğu - GlowingEffect ile */}
+      <div className="relative">
+        <GlowingEffect
+          spread={40}
+          glow={true}
+          disabled={false}
+          proximity={64}
+          inactiveZone={0.01}
+          borderWidth={2}
+        />
+        <SearchBar onSearch={handleSearch} />
+      </div>
       
       {/* Hata mesajı */}
       {error && (
@@ -175,23 +186,32 @@ const MainContent = ({ user }) => {
           className="p-3 rounded-lg text-sm border text-center"
           style={{
             backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            color: 'var(--accent-red)',
-            borderColor: 'var(--accent-red)',
+            color: '#ef4444',
+            borderColor: '#ef4444',
           }}
         >
           {error}
         </div>
       )}
       
-      {/* Gönderi Oluşturma (kaldırcam / profile eklencek */}
+      {/* Gönderi Oluşturma - GlowingEffect ile */}
       <div 
-        className="rounded-2xl p-4"
+        className="relative rounded-2xl p-4 backdrop-blur-lg"
         style={{
-          backgroundColor: 'var(--background-card)',
-          backdropFilter: 'var(--backdrop-blur)',
-          boxShadow: 'var(--shadow-lg)',
+          backgroundColor: "rgba(20, 24, 36, 0.7)",
+          boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+          border: "1px solid rgba(255, 255, 255, 0.1)"
         }}
       >
+        <GlowingEffect
+          spread={40}
+          glow={true}
+          disabled={false}
+          proximity={64}
+          inactiveZone={0.01}
+          borderWidth={2}
+        />
+        
         {showCreateForm ? (
           <CreatePostForm 
             onSubmit={handleCreatePost} 
@@ -199,8 +219,7 @@ const MainContent = ({ user }) => {
           />
         ) : (
           <div 
-            className="flex items-center cursor-pointer p-2 rounded-lg"
-            style={{ backgroundColor: 'var(--background-secondary)' }}
+            className="flex items-center cursor-pointer p-2 rounded-lg transition-all hover:bg-slate-800/50"
             onClick={() => setShowCreateForm(true)}
           >
             <div className="flex-shrink-0 mr-3">
@@ -212,10 +231,9 @@ const MainContent = ({ user }) => {
                 />
               ) : (
                 <div 
-                  className="w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: 'var(--accent-red)' }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-500 text-white"
                 >
-                  <span style={{ color: 'white', fontWeight: 'bold' }}>
+                  <span className="font-bold">
                     {user.username.charAt(0).toUpperCase()}
                   </span>
                 </div>
@@ -223,24 +241,33 @@ const MainContent = ({ user }) => {
             </div>
             
             <div className="flex-1">
-              <p style={{ color: 'var(--text-tertiary)' }}>
-                Post Atmak için deneme paneli, {user.username}?
+              <p className="text-blue-100">
+                Post atmak için tıklayın, {user.username}?
               </p>
             </div>
           </div>
         )}
       </div>
       
-      {/* Sekme Menüsü */}
+      {/* Sekme Menüsü - GlowingEffect ile */}
       <div 
-        className="rounded-2xl overflow-hidden"
+        className="relative rounded-2xl overflow-hidden backdrop-blur-lg"
         style={{
-          backgroundColor: 'var(--background-card)',
-          backdropFilter: 'var(--backdrop-blur)',
-          boxShadow: 'var(--shadow-lg)',
+          backgroundColor: "rgba(20, 24, 36, 0.7)",
+          boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+          border: "1px solid rgba(255, 255, 255, 0.1)"
         }}
       >
-        <div className="flex border-b" style={{ borderColor: 'var(--border-color)' }}>
+        <GlowingEffect
+          spread={40}
+          glow={true}
+          disabled={false}
+          proximity={64}
+          inactiveZone={0.01}
+          borderWidth={2}
+        />
+        
+        <div className="flex border-b border-slate-700/50">
           <button
             className={`flex-1 py-3 text-center font-medium transition-colors ${
               activeTab === 'following' 
@@ -248,8 +275,8 @@ const MainContent = ({ user }) => {
                 : 'opacity-70'
             }`}
             style={{ 
-              borderColor: activeTab === 'following' ? 'var(--accent-red)' : 'transparent',
-              color: 'var(--text-primary)' 
+              borderColor: activeTab === 'following' ? '#3b82f6' : 'transparent',
+              color: 'white' 
             }}
             onClick={() => setActiveTab('following')}
           >
@@ -263,8 +290,8 @@ const MainContent = ({ user }) => {
                 : 'opacity-70'
             }`}
             style={{ 
-              borderColor: activeTab === 'general' ? 'var(--accent-red)' : 'transparent',
-              color: 'var(--text-primary)' 
+              borderColor: activeTab === 'general' ? '#3b82f6' : 'transparent',
+              color: 'white' 
             }}
             onClick={() => setActiveTab('general')}
           >
@@ -278,8 +305,8 @@ const MainContent = ({ user }) => {
                 : 'opacity-70'
             }`}
             style={{ 
-              borderColor: activeTab === 'trending' ? 'var(--accent-red)' : 'transparent',
-              color: 'var(--text-primary)' 
+              borderColor: activeTab === 'trending' ? '#3b82f6' : 'transparent',
+              color: 'white' 
             }}
             onClick={() => setActiveTab('trending')}
           >
@@ -288,11 +315,10 @@ const MainContent = ({ user }) => {
         </div>
       </div>
       
-      {/* Gönderiler */}
+      {/* Gönderiler - GlowingEffect olmadan */}
       {loading ? (
         <div className="flex justify-center py-8">
-          <div className="animate-spin h-8 w-8 border-4 rounded-full"
-              style={{ borderColor: 'var(--accent-red) transparent transparent transparent' }}></div>
+          <div className="animate-spin h-8 w-8 border-4 rounded-full border-blue-500 border-t-transparent"></div>
         </div>
       ) : (
         <PostList 
