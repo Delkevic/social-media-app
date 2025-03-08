@@ -259,6 +259,131 @@ func GetUserProfile(c *gin.Context) {
 	})
 }
 
+func GetUserByUsername(c *gin.Context) {
+    username := c.Param("username")
+    currentUserID, _ := c.Get("userID")
+    
+    var user models.User
+    if err := database.DB.Where("username = ?", username).First(&user).Error; err != nil {
+        c.JSON(http.StatusNotFound, Response{
+            Success: false,
+            Message: "Kullanıcı bulunamadı",
+        })
+        return
+    }
+    
+    // Takipçi ve takip edilenlerin sayısını al
+    var followerCount int64
+    database.DB.Model(&models.Follow{}).Where("following_id = ?", user.ID).Count(&followerCount)
+    
+    var followingCount int64
+    database.DB.Model(&models.Follow{}).Where("follower_id = ?", user.ID).Count(&followingCount)
+    
+    // Gönderi sayısını al
+    var postCount int64
+    database.DB.Model(&models.Post{}).Where("user_id = ?", user.ID).Count(&postCount)
+    
+    // Mevcut kullanıcının bu kullanıcıyı takip edip etmediğini kontrol et
+    var isFollowing bool
+    if currentUserID != nil {
+        var followCount int64
+        database.DB.Model(&models.Follow{}).
+            Where("follower_id = ? AND following_id = ?", currentUserID, user.ID).
+            Count(&followCount)
+        isFollowing = followCount > 0
+    }
+    
+    c.JSON(http.StatusOK, Response{
+        Success: true,
+        Data: map[string]interface{}{
+            "user": map[string]interface{}{
+                "id":             user.ID,
+                "username":       user.Username,
+                "fullName":       user.FullName,
+                "profileImage":   user.ProfileImage,
+                "bio":            user.Bio,
+                "location":       user.Location,
+                "website":        user.Website,
+                "isPrivate":      user.IsPrivate,
+                "isVerified":     user.IsVerified,
+                "followerCount":  followerCount,
+                "followingCount": followingCount,
+                "postCount":      postCount,
+                "isFollowing":    isFollowing,
+                "createdAt":      user.CreatedAt,
+            },
+        },
+    })
+}
+
+// Kullanıcı Gönderilerini Getirme
+func GetUserPosts(c *gin.Context) {
+    username := c.Param("username")
+    currentUserID, _ := c.Get("userID")
+    
+    var user models.User
+    if err := database.DB.Where("username = ?", username).First(&user).Error; err != nil {
+        c.JSON(http.StatusNotFound, Response{
+            Success: false,
+            Message: "Kullanıcı bulunamadı",
+        })
+        return
+    }
+    
+    var posts []models.Post
+    if err := database.DB.Where("user_id = ?", user.ID).
+        Order("created_at DESC").
+        Find(&posts).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, Response{
+            Success: false,
+            Message: "Gönderiler yüklenirken bir hata oluştu: " + err.Error(),
+        })
+        return
+    }
+    
+    // Yanıt için post dizisi oluştur
+    var responsePosts []map[string]interface{}
+    
+    for _, post := range posts {
+        // Kullanıcının gönderiyi beğenip beğenmediğini kontrol et
+        var likeCount int64
+        database.DB.Model(&models.Like{}).
+            Where("user_id = ? AND post_id = ?", currentUserID, post.ID).
+            Count(&likeCount)
+        
+        // Kullanıcının gönderiyi kaydedip kaydetmediğini kontrol et
+        var saveCount int64
+        database.DB.Model(&models.SavedPost{}).
+            Where("user_id = ? AND post_id = ?", currentUserID, post.ID).
+            Count(&saveCount)
+        
+        // Yanıt oluştur
+        postResponse := map[string]interface{}{
+            "id":        post.ID,
+            "content":   post.Content,
+            "likes":     post.LikeCount,
+            "comments":  post.CommentCount,
+            "createdAt": formatTimeAgo(post.CreatedAt),
+            "liked":     likeCount > 0,
+            "saved":     saveCount > 0,
+            "user": map[string]interface{}{
+                "id":           user.ID,
+                "username":     user.Username,
+                "profileImage": user.ProfileImage,
+            },
+        }
+        
+        responsePosts = append(responsePosts, postResponse)
+    }
+    
+    c.JSON(http.StatusOK, Response{
+        Success: true,
+        Data: map[string]interface{}{
+            "posts": responsePosts,
+        },
+    })
+}
+
 // Profil güncelleme isteği için struct
 type UpdateProfileRequest struct {
     FullName     string `json:"fullName"`

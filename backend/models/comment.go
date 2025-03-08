@@ -10,6 +10,7 @@ type Comment struct {
 	ID        uint           `gorm:"primaryKey"`
 	Content   string         `gorm:"not null"` // Yorum içeriği
 	UserID    uint           `gorm:"not null"` // Yorumu yapan kullanıcı
+	User      User           `gorm:"foreignKey:UserID"` 
 	PostID    uint           `gorm:"not null"` // Yorumun yapıldığı gönderi
 	ParentID  *uint          // Yanıt verilen yorum ID'si (iç içe yorumlar için)
 	Likes     int            `gorm:"default:0"` // Beğeni sayısı

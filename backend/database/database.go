@@ -31,6 +31,9 @@ func ConnectDatabase() {
 		&models.Post{},
 		&models.Comment{},
 		&models.CommentLike{}, 
+		&models.PostImage{},
+		&models.Like{},        
+        &models.SavedPost{},
 	)
 	
 	if err != nil {

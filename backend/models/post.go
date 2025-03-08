@@ -7,18 +7,21 @@ import (
 
 // Post - Gönderi modeli
 type Post struct {
-	ID           uint           `gorm:"primaryKey"`
-	UserID       uint           `gorm:"not null"`
-	Content      string
-	LikeCount    int            `gorm:"default:0"`
-	CommentCount int            `gorm:"default:0"`
-	LikedBy      []User         `gorm:"many2many:likes;"`
-	SavedBy      []User         `gorm:"many2many:saved_posts;"`
-	Comments     []Comment      `gorm:"foreignKey:PostID"` // Comment modeliyle ilişki
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	DeletedAt    gorm.DeletedAt `gorm:"index"` // Soft delete için
+    ID           uint           `gorm:"primaryKey"`
+    UserID       uint           `gorm:"not null"`
+    User         User           `gorm:"foreignKey:UserID"`
+    Content      string
+    LikeCount    int            `gorm:"default:0"`
+    CommentCount int            `gorm:"default:0"`
+    Images       []PostImage    `gorm:"foreignKey:PostID"` 
+    LikedBy      []User         `gorm:"many2many:likes;"`
+    SavedBy      []User         `gorm:"many2many:saved_posts;"`
+    Comments     []Comment      `gorm:"foreignKey:PostID"`
+    CreatedAt    time.Time
+    UpdatedAt    time.Time
+    DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
+
 
 // Like - Beğeni ilişkisi (ara tablo)
 type Like struct {
