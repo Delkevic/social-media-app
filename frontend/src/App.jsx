@@ -59,7 +59,15 @@ function App() {
         />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/profile" element={<Profile />} />
+        {/* Profil sayfası için username parametresi ekledik */}
+        <Route 
+          path="/profile/:username" 
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          } 
+        />
       </Routes>
     </Router>
   );

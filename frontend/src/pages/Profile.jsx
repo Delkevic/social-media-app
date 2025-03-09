@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import '../styles/Profile.css'; // You'll need to create this CSS file
+import { useNavigate, useParams } from 'react-router-dom';
+import '../styles/Profile.css';
 
 const Profile = () => {
   const [user, setUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState([]);
   const [stats, setStats] = useState({ followers: 0, following: 0, posts: 0 });
   const [isEditing, setIsEditing] = useState(false);
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [editFormData, setEditFormData] = useState({
     fullName: '',
     bio: '',
@@ -16,9 +18,10 @@ const Profile = () => {
   });
   
   const navigate = useNavigate();
+  const { username } = useParams(); // URL'den kullanıcı adını al
 
   useEffect(() => {
-    // Session veya localStorage'dan kullanıcı bilgilerini al
+    // Session veya localStorage'dan mevcut kullanıcı bilgilerini al
     const storedUser =
       JSON.parse(sessionStorage.getItem("user")) ||
       JSON.parse(localStorage.getItem("user"));
@@ -31,20 +34,54 @@ const Profile = () => {
       return;
     }
 
-    // Kullanıcı bilgilerini state'e kaydet
-    setUser(storedUser);
+    // Mevcut kullanıcı bilgilerini state'e kaydet
+    setCurrentUser(storedUser);
     
-    // Kullanıcı verilerini editForm için hazırla
-    setEditFormData({
-      fullName: storedUser.fullName || '',
-      bio: storedUser.bio || '',
-      location: storedUser.location || '',
-      website: storedUser.website || '',
-    });
+    // URL'deki kullanıcı adı mevcut kullanıcının kullanıcı adına eşitse kendi profili
+    setIsOwnProfile(username === storedUser.username);
     
-    // Kullanıcı gönderilerini ve istatistiklerini çek
-    fetchUserPosts(storedUser.id, token);
-    fetchUserStats(storedUser.id, token);
+    const fetchUserProfile = async () => {
+      try {
+        const response = await fetch(`http://localhost:8080/api/profile/${username}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error('Kullanıcı profili bulunamadı');
+        }
+        
+        const data = await response.json();
+        if (data.success && data.data.user) {
+          setUser(data.data.user);
+          
+          // Eğer kendi profili ise, profil düzenleme formunu doldur
+          if (isOwnProfile) {
+            setEditFormData({
+              fullName: data.data.user.fullName || '',
+              bio: data.data.user.bio || '',
+              location: data.data.user.location || '',
+              website: data.data.user.website || '',
+            });
+          }
+          
+          // Stats verilerini güncelle
+          setStats({
+            followers: data.data.user.followerCount || 0,
+            following: data.data.user.followingCount || 0,
+            posts: data.data.user.postCount || 0,
+          });
+          
+          // Kullanıcının gönderilerini çek
+          fetchUserPosts(username, token);
+        }
+      } catch (error) {
+        console.error("Profil yüklenirken hata oluştu:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
     const verifyToken = async () => {
       try {
@@ -62,21 +99,23 @@ const Profile = () => {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           navigate("/login");
+        } else {
+          // Token geçerliyse kullanıcı profilini çek
+          fetchUserProfile();
         }
       } catch (error) {
         console.error("Token doğrulama hatası:", error);
-      } finally {
         setLoading(false);
       }
     };
 
     verifyToken();
-  }, [navigate]);
+  }, [navigate, username, isOwnProfile]);
 
   // Kullanıcının gönderilerini çek
-  const fetchUserPosts = async (userId, token) => {
+  const fetchUserPosts = async (username, token) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/posts/user/${userId}`, {
+      const response = await fetch(`http://localhost:8080/api/profile/${username}/posts`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -84,28 +123,12 @@ const Profile = () => {
       
       if (response.ok) {
         const data = await response.json();
-        setPosts(data);
+        if (data.success && data.data.posts) {
+          setPosts(data.data.posts);
+        }
       }
     } catch (error) {
       console.error("Gönderiler yüklenirken hata oluştu:", error);
-    }
-  };
-
-  // Kullanıcı istatistiklerini çek
-  const fetchUserStats = async (userId, token) => {
-    try {
-      const response = await fetch(`http://localhost:8080/api/users/${userId}/stats`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
-    } catch (error) {
-      console.error("Kullanıcı istatistikleri yüklenirken hata oluştu:", error);
     }
   };
 
@@ -125,8 +148,8 @@ const Profile = () => {
     const token = sessionStorage.getItem("token") || localStorage.getItem("token");
     
     try {
-      const response = await fetch(`http://localhost:8080/api/users/${user.id}`, {
-        method: "PATCH",
+      const response = await fetch(`http://localhost:8080/api/user/profile`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -135,18 +158,23 @@ const Profile = () => {
       });
       
       if (response.ok) {
-        const updatedUser = await response.json();
-        setUser(updatedUser);
-        
-        // Güncellenen kullanıcı bilgilerini depolama alanına kaydet
-        if (sessionStorage.getItem("user")) {
-          sessionStorage.setItem("user", JSON.stringify(updatedUser));
+        const result = await response.json();
+        if (result.success && result.data.user) {
+          // Kullanıcı state'ini güncelle
+          setUser(result.data.user);
+          
+          // Güncellenen kullanıcı bilgilerini depolama alanına kaydet
+          const updatedUser = {...currentUser, ...result.data.user};
+          if (sessionStorage.getItem("user")) {
+            sessionStorage.setItem("user", JSON.stringify(updatedUser));
+          }
+          if (localStorage.getItem("user")) {
+            localStorage.setItem("user", JSON.stringify(updatedUser));
+          }
+          
+          setCurrentUser(updatedUser);
+          setIsEditing(false);
         }
-        if (localStorage.getItem("user")) {
-          localStorage.setItem("user", JSON.stringify(updatedUser));
-        }
-        
-        setIsEditing(false);
       }
     } catch (error) {
       console.error("Profil güncellenirken hata oluştu:", error);
@@ -181,12 +209,14 @@ const Profile = () => {
               <div className="profile-details">
                 <div className="profile-name-actions">
                   <h1 className="profile-name">{user.fullName || user.username}</h1>
-                  <button 
-                    className="edit-profile-btn"
-                    onClick={() => setIsEditing(!isEditing)}
-                  >
-                    {isEditing ? "İptal" : "Profili Düzenle"}
-                  </button>
+                  {isOwnProfile && (
+                    <button 
+                      className="edit-profile-btn"
+                      onClick={() => setIsEditing(!isEditing)}
+                    >
+                      {isEditing ? "İptal" : "Profili Düzenle"}
+                    </button>
+                  )}
                 </div>
                 
                 <div className="profile-stats">
@@ -268,9 +298,11 @@ const Profile = () => {
             {posts.length === 0 ? (
               <div className="no-posts-message">
                 <p>Henüz gönderi paylaşılmamış.</p>
-                <button onClick={() => navigate("/create-post")} className="create-post-btn">
-                  Gönderi Oluştur
-                </button>
+                {isOwnProfile && (
+                  <button onClick={() => navigate("/create-post")} className="create-post-btn">
+                    Gönderi Oluştur
+                  </button>
+                )}
               </div>
             ) : (
               <div className="posts-grid">
@@ -278,8 +310,8 @@ const Profile = () => {
                   <div key={post.id} className="post-item" onClick={() => navigate(`/post/${post.id}`)}>
                     <div className="post-content">{post.content}</div>
                     <div className="post-meta">
-                      <span>{post.likeCount} beğeni</span>
-                      <span>{post.commentCount} yorum</span>
+                      <span>{post.likes} beğeni</span>
+                      <span>{post.comments} yorum</span>
                     </div>
                   </div>
                 ))}
