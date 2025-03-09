@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { GlowingEffect } from '../../components/ui/GlowingEffect';
 import SearchBar from './common/SearchBar';
 import PostList from './posts/PostList';
 import CreatePostForm from './posts/CreatePostForm';
@@ -167,16 +166,8 @@ const MainContent = ({ user }) => {
 
   return (
     <div className="space-y-4">
-      {/* Arama Çubuğu - GlowingEffect ile */}
+      {/* Arama Çubuğu - GlowingEffect kaldırıldı */}
       <div className="relative">
-        <GlowingEffect
-          spread={40}
-          glow={true}
-          disabled={false}
-          proximity={64}
-          inactiveZone={0.01}
-          borderWidth={2}
-        />
         <SearchBar onSearch={handleSearch} />
       </div>
       
@@ -194,24 +185,15 @@ const MainContent = ({ user }) => {
         </div>
       )}
       
-      {/* Gönderi Oluşturma - GlowingEffect ile */}
+      {/* Gönderi Oluşturma - GlowingEffect kaldırıldı */}
       <div 
-        className="relative rounded-2xl p-4 backdrop-blur-lg"
+        className="rounded-2xl p-4 backdrop-blur-lg"
         style={{
           backgroundColor: "rgba(20, 24, 36, 0.7)",
           boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
           border: "1px solid rgba(255, 255, 255, 0.1)"
         }}
       >
-        <GlowingEffect
-          spread={40}
-          glow={true}
-          disabled={false}
-          proximity={64}
-          inactiveZone={0.01}
-          borderWidth={2}
-        />
-        
         {showCreateForm ? (
           <CreatePostForm 
             onSubmit={handleCreatePost} 
@@ -249,24 +231,15 @@ const MainContent = ({ user }) => {
         )}
       </div>
       
-      {/* Sekme Menüsü - GlowingEffect ile */}
+      {/* Sekme Menüsü - GlowingEffect kaldırıldı */}
       <div 
-        className="relative rounded-2xl overflow-hidden backdrop-blur-lg"
+        className="rounded-2xl overflow-hidden backdrop-blur-lg"
         style={{
           backgroundColor: "rgba(20, 24, 36, 0.7)",
           boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
           border: "1px solid rgba(255, 255, 255, 0.1)"
         }}
       >
-        <GlowingEffect
-          spread={40}
-          glow={true}
-          disabled={false}
-          proximity={64}
-          inactiveZone={0.01}
-          borderWidth={2}
-        />
-        
         <div className="flex border-b border-slate-700/50">
           <button
             className={`flex-1 py-3 text-center font-medium transition-colors ${

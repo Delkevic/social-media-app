@@ -11,17 +11,18 @@ const SearchBar = ({ onSearch }) => {
   };
 
   return (
-    <div 
+    <div
       className="rounded-2xl p-2"
       style={{
         backgroundColor: 'var(--background-card)',
         backdropFilter: 'var(--backdrop-blur)',
         boxShadow: 'var(--shadow-lg)',
+        border: '1px solid var(--border-color)'
       }}
     >
       <form onSubmit={handleSubmit} className="relative">
         <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-          <svg 
+          <svg
             className="w-5 h-5"
             fill="none"
             stroke="currentColor"
@@ -34,7 +35,7 @@ const SearchBar = ({ onSearch }) => {
         </div>
         <input
           type="search"
-          className="block w-full pl-10 pr-4 py-2 rounded-lg"
+          className="block w-full pl-10 pr-10 py-2 rounded-xl"
           placeholder="Arkadaşlar, gönderiler veya konular ara..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -47,7 +48,7 @@ const SearchBar = ({ onSearch }) => {
         <button
           type="submit"
           className="absolute inset-y-0 right-0 flex items-center pr-3"
-          style={{ color: 'var(--accent-red)' }}
+          style={{ color: 'var(--accent-blue)' }}
         >
           <span className="sr-only">Ara</span>
           {searchTerm && (

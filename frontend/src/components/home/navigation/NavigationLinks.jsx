@@ -28,7 +28,7 @@ const NavigationLinks = () => {
       to: '/favorites',
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-          <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
+          <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path>
         </svg>
       ),
       label: 'Favoriler'
@@ -45,12 +45,13 @@ const NavigationLinks = () => {
   ];
 
   return (
-    <div 
+    <div
       className="rounded-2xl overflow-hidden"
       style={{
         backgroundColor: 'var(--background-card)',
         backdropFilter: 'var(--backdrop-blur)',
         boxShadow: 'var(--shadow-lg)',
+        border: '1px solid var(--border-color)'
       }}
     >
       <div className="p-4">
@@ -66,10 +67,11 @@ const NavigationLinks = () => {
               <Link
                 key={link.to}
                 to={link.to}
-                className="flex items-center p-2 rounded-lg transition-colors"
+                className="flex items-center p-2 rounded-lg transition-colors hover:bg-opacity-80"
                 style={{
-                  backgroundColor: isActive ? 'var(--background-tertiary)' : 'transparent',
-                  color: isActive ? 'var(--accent-red)' : 'var(--text-primary)',
+                  backgroundColor: isActive ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                  color: isActive ? 'var(--accent-blue)' : 'var(--text-primary)',
+                  borderLeft: isActive ? '2px solid var(--accent-blue)' : '2px solid transparent'
                 }}
               >
                 <div className="mr-3">

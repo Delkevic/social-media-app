@@ -184,9 +184,9 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
           
           <button 
             type="submit"
-            className="px-3 py-1.5 rounded-lg font-medium"
+            className="px-3 py-1.5 rounded-lg font-medium transition-colors"
             style={{
-              backgroundColor: 'var(--accent-red)',
+              backgroundColor: 'var(--accent-blue)',
               color: 'white',
               opacity: (!content.trim() && images.length === 0) || isSubmitting ? 0.7 : 1,
             }}
