@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
+import { ChatPanel } from './components/chat/ChatPanel';
 
 // Korumalı Route bileşeni oluşturuyoruz
 const ProtectedRoute = ({ children }) => {
@@ -61,6 +62,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/profile" element={<Profile />} />
       </Routes>
+      <ChatPanel />
     </Router>
   );
 }
