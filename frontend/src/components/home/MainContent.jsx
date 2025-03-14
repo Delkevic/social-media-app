@@ -164,6 +164,24 @@ const MainContent = ({ user }) => {
     }
   };
 
+  const handleDeletePost = async (postId) => {
+    try {
+      // Optimistik güncelleme - gönderiyi hemen listeden kaldır
+      setPosts(prevPosts => prevPosts.filter(post => post.id !== postId));
+      
+      // API çağrısı
+      await api.posts.delete(postId);
+    } catch (err) {
+      // Hata durumunda gönderiyi geri ekle
+      const deletedPost = posts.find(post => post.id === postId);
+      if (deletedPost) {
+        setPosts(prevPosts => [...prevPosts, deletedPost]);
+      }
+      
+      setError('Gönderi silinirken bir hata oluştu: ' + err.message);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Arama Çubuğu - GlowingEffect kaldırıldı */}
@@ -298,6 +316,7 @@ const MainContent = ({ user }) => {
           posts={posts} 
           onLike={toggleLike}
           onSave={toggleSave}
+          onDelete={handleDeletePost}
           currentUser={user}
         />
       )}

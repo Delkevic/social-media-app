@@ -22,10 +22,16 @@ const fetchWithAuth = async (endpoint, options = {}) => {
     },
   };
   
+  let requestUrl = `${API_BASE_URL}${endpoint}`;
+  console.log(`API İsteği: ${options.method || 'GET'} ${requestUrl}`);
+  
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    const response = await fetch(requestUrl, config);
     
+    // Detaylı hata bilgileri yazdır
     if (!response.ok) {
+      console.error(`API Hata Yanıtı: ${response.status} (${response.statusText})`);
+      
       // Token süresi dolmuşsa veya yetkisiz erişim varsa
       if (response.status === 401) {
         // Oturumu temizle ve login sayfasına yönlendir
@@ -36,11 +42,40 @@ const fetchWithAuth = async (endpoint, options = {}) => {
         window.location.href = '/login';
       }
       
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Bir hata oluştu');
+      // Yanıt içeriğini güvenli bir şekilde JSON olarak parse etmeye çalış
+      let errorData;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          errorData = await response.json();
+        } else {
+          // JSON değilse, text olarak oku
+          const text = await response.text();
+          errorData = { message: text || `HTTP Hata: ${response.status} ${response.statusText}` };
+        }
+      } catch (parseError) {
+        console.error('Hata yanıtı parse edilemedi:', parseError);
+        errorData = { message: `Sunucu yanıtı işlenemedi: ${response.status} ${response.statusText}` };
+      }
+      
+      throw new Error(errorData.message || `Sunucu hatası: ${response.status}`);
     }
     
-    return await response.json();
+    // Yanıtı güvenli bir şekilde parse et
+    try {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        // JSON değilse, text olarak döndür
+        const text = await response.text();
+        return { success: true, data: text };
+      }
+    } catch (parseError) {
+      console.error('Başarılı yanıt parse edilemedi:', parseError);
+      throw new Error('Sunucu yanıtı işlenemedi');
+    }
   } catch (error) {
     console.error(`API Hatası (${endpoint}):`, error);
     throw error;
@@ -65,6 +100,9 @@ const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+    delete: (postId) => fetchWithAuth(`/posts/${postId}`, {
+      method: 'DELETE',
+    }),
     like: (postId) => fetchWithAuth(`/posts/${postId}/like`, {
       method: 'POST',
     }),
@@ -77,10 +115,11 @@ const api = {
     unsave: (postId) => fetchWithAuth(`/posts/${postId}/save`, {
       method: 'DELETE',
     }),
-    addComment: (postId, content) => fetchWithAuth(`/posts/${postId}/comments`, {
+    addComment: (postId, data) => fetchWithAuth(`/posts/${postId}/comments`, {
       method: 'POST',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(data)
     }),
+    getComments: (postId) => fetchWithAuth(`/posts/${postId}/comments`),
   },
   
   // Bildirim ile ilgili işlemler
@@ -124,10 +163,11 @@ const api = {
           
           const result = await response.json();
           
-          // Önemli değişiklik: URL'yi tam URL'ye dönüştürüyoruz
+          // URL'yi düzelt
           if (result.success && result.data && result.data.url) {
-              // Backend URL'sine dönüştür
-              result.data.fullUrl = `http://localhost:8080${result.data.url}`;
+              // Sadece dosya adını al
+              const fileName = result.data.url.split('/').pop();
+              result.data.url = fileName;
           }
           
           return result;
@@ -135,6 +175,19 @@ const api = {
           console.error('Görsel yükleme hatası:', error);
           throw error;
       }
+  },
+
+  // Yorum ile ilgili işlemler
+  comments: {
+    toggleLike: (commentId) => fetchWithAuth(`/comments/${commentId}/like`, {
+      method: 'POST'
+    }),
+    delete: (commentId) => fetchWithAuth(`/comments/${commentId}`, {
+      method: 'DELETE'
+    }),
+    report: (commentId) => fetchWithAuth(`/comments/${commentId}/report`, {
+      method: 'POST'
+    }),
   },
 };
 

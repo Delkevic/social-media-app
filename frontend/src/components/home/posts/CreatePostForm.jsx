@@ -54,8 +54,9 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         }
         
         // Yalnızca görsel dosyalarını kabul et
-        if (!file.type.startsWith('image/')) {
-          setError('Yalnızca görsel dosyaları yükleyebilirsiniz');
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+          setError('Yalnızca JPG, JPEG, PNG ve GIF formatındaki görseller yüklenebilir');
           continue;
         }
         
