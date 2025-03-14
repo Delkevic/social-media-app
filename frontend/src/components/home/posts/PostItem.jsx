@@ -189,13 +189,39 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       return null;
     }
 
-    const [showReplyForm, setShowReplyForm] = useState(false);
-    const [showReplies, setShowReplies] = useState(false);
+    // Bir ref oluştur ve bunu yorumun kendine özgü bir ID'sine bağla
+    // Bu şekilde component yeniden render edilse bile state korunacak
+    const commentId = comment?.id?.toString() || Math.random().toString();
+    const instanceKey = `comment-${commentId}`;
+    
+    // Her Comment instance'ının kendi benzersiz ID'si ile state'leri global olarak sakla
+    if (!window.commentStates) {
+      window.commentStates = {};
+    }
+    
+    if (!window.commentStates[instanceKey]) {
+      window.commentStates[instanceKey] = {
+        showReplies: false,
+        showReplyForm: false
+      };
+    }
+
+    const [showReplyForm, setShowReplyForm] = useState(window.commentStates[instanceKey].showReplyForm);
+    const [showReplies, setShowReplies] = useState(window.commentStates[instanceKey].showReplies);
     const [replyContent, setReplyContent] = useState('');
     const [isLiking, setIsLiking] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    
+    // showReplies veya showReplyForm değiştiğinde, global state'i güncelle
+    useEffect(() => {
+      window.commentStates[instanceKey].showReplies = showReplies;
+    }, [showReplies, instanceKey]);
+    
+    useEffect(() => {
+      window.commentStates[instanceKey].showReplyForm = showReplyForm;
+    }, [showReplyForm, instanceKey]);
 
     if (!comment || !comment.user) {
       return null;
@@ -283,6 +309,25 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       
       setIsLiking(true);
       
+      // Halihazırda açık olan yorum yanıt durumlarını kaydet
+      const openRepliesStates = {};
+      const saveOpenStates = (comments) => {
+        if (!Array.isArray(comments)) return;
+        comments.forEach(c => {
+          if (!c || !c.id) return;
+          const key = `comment-${c.id}`;
+          if (window.commentStates && window.commentStates[key]) {
+            openRepliesStates[key] = { ...window.commentStates[key] };
+          }
+          if (c.replies && Array.isArray(c.replies)) {
+            saveOpenStates(c.replies);
+          }
+        });
+      };
+      
+      // Mevcut yorumların açık/kapalı durumlarını kaydet
+      saveOpenStates(comments);
+      
       try {
         const response = await api.comments.toggleLike(comment.id);
         
@@ -326,6 +371,13 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
             
             return c;
           }).filter(Boolean);
+        });
+        
+        // İşlem bittikten sonra, kaydedilen açık durumları window.commentStates'e geri yükle
+        Object.keys(openRepliesStates).forEach(key => {
+          if (window.commentStates) {
+            window.commentStates[key] = openRepliesStates[key];
+          }
         });
       } catch (err) {
         console.error('Yorum beğenirken hata:', err);
