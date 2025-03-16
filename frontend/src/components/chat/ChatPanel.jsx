@@ -3,8 +3,10 @@ import { X, Users, Send, ArrowLeft, User, Image, Paperclip, Smile } from "lucide
 import { getConversations, getMessages, sendMessage } from "../../services/message-service";
 import { 
   Button, Avatar, AvatarImage, AvatarFallback, 
-  ChatBubble, ChatBubbleAvatar, ChatBubbleMessage 
+  ChatBubble, ChatBubbleAvatar, ChatBubbleMessage,
+  SendButton, MessageBubbleTrail, KeyboardEffect, EmojiPack
 } from "./ChatComponents";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Ana MessagesPanel bileşeni
 export function ChatPanel() {
@@ -30,12 +32,14 @@ export function ChatPanel() {
   }, [isOpen]);
 
   // Seçili konuşmaya ait mesajları yükle
-  useEffect(() => {
+  /* useEffect(() => {
     if (selectedConversation) {
       loadMessages(selectedConversation.id);
-      setShowConversations(false); // Konuşma seçildiğinde mesaj görünümüne geç
+      setTimeout(() => {
+        setShowConversations(false); // Konuşma seçildiğinde mesaj görünümüne geç
+      }, 10);
     }
-  }, [selectedConversation]);
+  }, [selectedConversation]); */
 
   // Yeni mesajlar geldiğinde otomatik kaydırma
   useEffect(() => {
@@ -102,7 +106,7 @@ export function ChatPanel() {
       setTyping(true);
       
       // Rastgele bir süre sonra typing durumunu kapat
-      const typingDuration = Math.floor(Math.random() * 3000) + 1000; // 1-4 saniye
+      const typingDuration = Math.floor(Math.random() * 2000) + 500; // 0.5-2.5 saniye (daha kısa süre)
       typingTimeoutRef.current = setTimeout(() => {
         setTyping(false);
       }, typingDuration);
@@ -120,6 +124,7 @@ export function ChatPanel() {
       content: input.trim(),
       sender: "currentUser",
       timestamp: new Date().toISOString(),
+      isNew: true, // Animasyon için yeni eklenen mesajları işaretleyelim
     };
     
     setMessages(prev => [...prev, newMessage]);
@@ -136,7 +141,7 @@ export function ChatPanel() {
       // Bir süre sonra mesajlar güncellensin
       setTimeout(() => {
         loadMessages(selectedConversation.id);
-      }, 1500);
+      }, 1000); // 1.5 saniyeden 1 saniyeye düşürüldü
     } catch (error) {
       console.error("Mesaj gönderilirken hata:", error);
       // Hata durumunda geçici mesajı kaldır
@@ -148,16 +153,38 @@ export function ChatPanel() {
 
   // Panel açma/kapama
   const togglePanel = () => {
-    setIsOpen(!isOpen);
-    if (!isOpen) {
+    if (isOpen) {
+      // Önce UI'ı konuşma listesine getir, sonra kapat
+      setShowConversations(true);
+      // Animasyonların düzgün çalışması için state güncellemelerini zamanla
+      setTimeout(() => {
+        setIsOpen(false);
+      }, 100); // Biraz daha uzun süre bekleme ekledik
+    } else {
+      setIsOpen(true);
       setShowConversations(true);
     }
   };
 
   // Konuşma listesine dön
   const backToConversations = () => {
+    // Direkt olarak UI'ı güncelleyelim
     setShowConversations(true);
-    setSelectedConversation(null);
+    // UI güncellemesinin oturmasını bekleyelim, sonra state'i temizleyelim
+    setTimeout(() => {
+      setSelectedConversation(null);
+    }, 100);
+  };
+
+  // Konuşma seçme fonksiyonu
+  const selectConversation = (conversation) => {
+    // Önce mesajları yükleyelim
+    setSelectedConversation(conversation);
+    loadMessages(conversation.id);
+    // UI'ı güncelleyelim
+    setTimeout(() => {
+      setShowConversations(false);
+    }, 50); // Daha uzun bir gecikme
   };
 
   // Konuşma arama
@@ -202,275 +229,739 @@ export function ChatPanel() {
   
   const messageGroups = groupMessagesByDate();
 
-  // JSX Yapısını güncelleyelim
+  // Panel animasyon varyantları - basitleştirilmiş
+  const panelVariants = {
+    hidden: {
+      opacity: 0,
+      scale: 0.95,
+      y: 20,
+      transition: {
+        duration: 0.15,
+        ease: "easeIn"
+      }
+    },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      transition: {
+        duration: 0.2,
+        ease: "easeOut"
+      }
+    },
+    exit: {
+      opacity: 0,
+      scale: 0.95,
+      y: 20,
+      transition: {
+        duration: 0.15,
+        ease: "easeIn"
+      }
+    }
+  };
+
+  // Konuşma listesi animasyon varyantları - basitleştirilmiş
+  const conversationListVariants = {
+    hidden: { 
+      opacity: 0,
+      x: -20,
+      transition: { 
+        duration: 0.15
+      }
+    },
+    visible: { 
+      opacity: 1,
+      x: 0,
+      transition: { 
+        duration: 0.2,
+        ease: "easeOut"
+      }
+    },
+    exit: { 
+      opacity: 0,
+      x: -20,
+      transition: { 
+        duration: 0.15
+      }
+    }
+  };
+
+  // Mesaj bölümü animasyon varyantları - basitleştirilmiş
+  const messageViewVariants = {
+    hidden: { 
+      opacity: 0,
+      x: 20,
+      transition: { 
+        duration: 0.15
+      }
+    },
+    visible: { 
+      opacity: 1,
+      x: 0,
+      transition: { 
+        duration: 0.2,
+        ease: "easeOut"
+      }
+    },
+    exit: { 
+      opacity: 0,
+      x: 20,
+      transition: { 
+        duration: 0.15
+      }
+    }
+  };
+
+  // Buton animasyon varyantları - basitleştirilmiş
+  const buttonVariants = {
+    hover: {
+      scale: 1.05,
+      transition: {
+        duration: 0.1
+      }
+    },
+    tap: {
+      scale: 0.95,
+      transition: {
+        duration: 0.1
+      }
+    }
+  };
+
+  const headerGradient = "linear-gradient(135deg, rgba(149, 76, 233, 0.2), rgba(43, 192, 228, 0.2))";
+  
+  // JSX içindeki animasyonları hızlandırma
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
-      {isOpen && (
-        <div 
-          className="bg-background mb-4 rounded-lg shadow-lg overflow-hidden flex flex-col w-[400px] h-[600px] border"
-          style={{ 
-            backgroundColor: 'var(--background-card)',
-            backdropFilter: 'var(--backdrop-blur)',
-            boxShadow: 'var(--shadow-lg)',
-            border: '1px solid var(--border-color)'
-          }}
-        >
-          {/* Panel Header */}
-          <div 
-            className="p-4 border-b flex items-center justify-between"
-            style={{ borderColor: 'var(--border-color)' }}
+      <AnimatePresence mode="wait" initial={false}>
+        {isOpen && (
+          <motion.div
+            key="chat-panel"
+            variants={panelVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="bg-background mb-4 rounded-xl shadow-2xl overflow-hidden flex flex-col w-[400px] h-[600px]"
+            style={{ 
+              backgroundColor: 'rgba(13, 13, 20, 0.85)',
+              backdropFilter: 'blur(20px)',
+              boxShadow: '0 25px 50px -12px rgba(149, 76, 233, 0.25), 0 0 0 1px rgba(149, 76, 233, 0.1)',
+              border: '1px solid rgba(149, 76, 233, 0.3)',
+              transformOrigin: 'bottom right'
+            }}
           >
-            {showConversations ? (
-              <div className="flex items-center justify-between w-full">
-                <h1 className="text-xl font-semibold">Mesajlar</h1>
-                <Button
-                  className="p-2 rounded-full hover:bg-opacity-10 hover:bg-gray-500"
-                  onClick={togglePanel}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2">
-                  <Button
-                    className="p-2 rounded-full hover:bg-opacity-10 hover:bg-gray-500"
-                    onClick={backToConversations}
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                  <div className="flex flex-col">
-                    <h1 className="text-xl font-semibold">{selectedConversation?.username}</h1>
-                    <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                      {selectedConversation?.online ? (
-                        <span className="flex items-center">
-                          <span className="h-2 w-2 rounded-full bg-green-500 mr-1"></span>
-                          Çevrimiçi
-                        </span>
-                      ) : (
-                        `Son görülme: ${formatLastSeen(selectedConversation?.lastSeen)}`
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  className="p-2 rounded-full hover:bg-opacity-10 hover:bg-gray-500"
-                  onClick={togglePanel}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Panel Content */}
-          <div className="flex flex-grow overflow-hidden">
-            {/* Konuşma Listesi (Sidebar) */}
-            {showConversations && (
-              <div className="w-full overflow-y-auto" ref={conversationsRef}>
-                {/* Arama */}
-                <div className="p-3 sticky top-0 bg-background z-10" style={{ backgroundColor: 'var(--background-card)' }}>
-                  <input
-                    type="text"
-                    placeholder="Ara..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full p-2 rounded-md border"
-                    style={{ 
-                      backgroundColor: 'var(--input-bg)', 
-                      borderColor: 'var(--input-border)',
-                      color: 'var(--input-text)'
+            {/* Panel Header */}
+            <motion.div 
+              className="p-4 flex items-center justify-between"
+              style={{ 
+                background: headerGradient,
+                borderBottom: '1px solid rgba(149, 76, 233, 0.2)',
+                backdropFilter: 'blur(5px)'
+              }}
+              initial={{ opacity: 0, y: -5 }} // Daha az hareket
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.15 }} // Daha hızlı
+            >
+              {showConversations ? (
+                <div className="flex items-center justify-between w-full">
+                  <motion.h1 
+                    className="text-xl font-semibold"
+                    initial={{ opacity: 0 }}
+                    animate={{ 
+                      opacity: 1,
+                      textShadow: "0 0 5px rgba(149, 76, 233, 0.3)" // Daha az gölge
                     }}
-                  />
+                    transition={{ duration: 0.15 }} // Daha hızlı
+                  >
+                    Mesajlar
+                  </motion.h1>
+                  <motion.div
+                    whileHover={{ 
+                      rotate: 90,
+                      scale: 1.05 // Daha az büyüme
+                    }}
+                    transition={{ duration: 0.1 }} // Daha hızlı
+                  >
+                    <Button
+                      className="p-2 rounded-full hover:bg-purple-500/20"
+                      onClick={togglePanel}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </motion.div>
                 </div>
-                
-                {filteredConversations.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-64 text-center p-4">
-                    <User className="h-12 w-12 mb-2 opacity-30" />
-                    <p className="text-lg font-medium">Sonuç bulunamadı</p>
-                    <p className="text-sm opacity-70">Farklı bir arama terimi deneyin</p>
-                  </div>
-                ) : (
-                  filteredConversations.map((conversation) => (
-                    <div 
-                      key={conversation.id}
-                      className="flex items-center gap-3 p-3 hover:bg-opacity-10 hover:bg-gray-500 cursor-pointer relative"
-                      onClick={() => setSelectedConversation(conversation)}
-                      style={{
-                        backgroundColor: conversation.unreadCount > 0 ? 'rgba(0, 123, 255, 0.05)' : 'transparent'
+              ) : (
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-3">
+                    <motion.div
+                      whileHover={{ 
+                        x: -2, // Daha az hareket
+                        scale: 1.05 // Daha az büyüme
+                      }}
+                      whileTap={{ scale: 0.95, rotate: -3 }} // Daha az dönme
+                      transition={{ duration: 0.15 }} // Daha hızlı
+                    >
+                      <Button
+                        className="p-2 rounded-full hover:bg-purple-500/20"
+                        onClick={backToConversations}
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                    </motion.div>
+                    <motion.div 
+                      className="flex flex-col"
+                      initial={{ opacity: 0, x: 5 }} // Daha az hareket
+                      animate={{ 
+                        opacity: 1, 
+                        x: 0,
+                        transition: {
+                          type: "spring",
+                          damping: 12,
+                          stiffness: 800, // Daha sert yay
+                          duration: 0.15 // Daha hızlı
+                        }
                       }}
                     >
-                      <div className="relative">
-                        <Avatar className="h-12 w-12">
-                          {conversation.avatar ? (
-                            <AvatarImage src={conversation.avatar} />
-                          ) : (
-                            <AvatarFallback>{conversation.username.substring(0, 2).toUpperCase()}</AvatarFallback>
-                          )}
-                        </Avatar>
-                        {conversation.online && (
-                          <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2" style={{ borderColor: 'var(--background-card)' }}></span>
+                      <h1 className="text-xl font-semibold">{selectedConversation?.username}</h1>
+                      <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                        {selectedConversation?.online ? (
+                          <span className="flex items-center">
+                            <motion.span 
+                              className="h-2 w-2 rounded-full mr-1"
+                              style={{ background: "linear-gradient(135deg, #4ade80, #22d3ee)" }}
+                              animate={{ 
+                                scale: [1, 1.2, 1], // Daha az ölçeklendirme
+                                opacity: [0.7, 1, 0.7],
+                                boxShadow: [
+                                  "0 0 0px rgba(74, 222, 128, 0)",
+                                  "0 0 5px rgba(74, 222, 128, 0.6)", // Daha az gölge
+                                  "0 0 0px rgba(74, 222, 128, 0)"
+                                ]
+                              }}
+                              transition={{ 
+                                repeat: Infinity, 
+                                duration: 0.8, // Daha hızlı
+                                repeatType: "loop" 
+                              }}
+                            ></motion.span>
+                            Çevrimiçi
+                          </span>
+                        ) : (
+                          `Son görülme: ${formatLastSeen(selectedConversation?.lastSeen)}`
                         )}
-                      </div>
-                      <div className="flex-grow overflow-hidden">
-                        <div className="font-medium">{conversation.username}</div>
-                        <div className="text-sm truncate opacity-70">{conversation.lastMessage}</div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <div className="text-xs opacity-70">
-                          {new Date(conversation.lastSeen).toLocaleDateString([], { day: '2-digit', month: '2-digit' })}
-                        </div>
-                        {conversation.unreadCount > 0 && (
-                          <div className="mt-1 bg-blue-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                            {conversation.unreadCount}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* Mesaj Görünümü */}
-            {!showConversations && selectedConversation && (
-              <div className="flex flex-col flex-grow">
-                {/* Mesaj Listesi */}
-                <div className="flex-grow overflow-y-auto p-4">
-                  {Object.keys(messageGroups).map(date => (
-                    <div key={date}>
-                      <div className="flex justify-center my-3">
-                        <span className="text-xs px-3 py-1 rounded-full" style={{ backgroundColor: 'var(--background-tertiary)', color: 'var(--text-secondary)' }}>
-                          {date === new Date().toLocaleDateString() ? 'Bugün' : date}
-                        </span>
-                      </div>
-                      
-                      {messageGroups[date].map((message) => (
-                        <ChatBubble
-                          key={message.id}
-                          variant={message.sender === "currentUser" ? "sent" : "received"}
-                        >
-                          <ChatBubbleAvatar
-                            className="h-8 w-8 shrink-0"
-                            src={
-                              message.sender === "currentUser"
-                                ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=64&h=64&q=80&crop=faces&fit=crop"
-                                : selectedConversation.avatar
-                            }
-                            fallback={message.sender === "currentUser" ? "ME" : selectedConversation.username.substring(0, 2).toUpperCase()}
-                          />
-                          <ChatBubbleMessage
-                            variant={message.sender === "currentUser" ? "sent" : "received"}
-                            style={{
-                              backgroundColor: message.sender === "currentUser" ? 'var(--accent-blue)' : 'var(--background-secondary)',
-                              color: message.sender === "currentUser" ? 'var(--text-inverted)' : 'var(--text-primary)'
-                            }}
-                          >
-                            <div className="flex flex-col">
-                              <div>{message.content}</div>
-                              <div className="text-xs opacity-70 text-right mt-1">
-                                {formatMessageTime(message.timestamp)}
-                              </div>
-                            </div>
-                          </ChatBubbleMessage>
-                        </ChatBubble>
-                      ))}
-                    </div>
-                  ))}
-                  
-                  {typing && (
-                    <ChatBubble variant="received">
-                      <ChatBubbleAvatar
-                        className="h-8 w-8 shrink-0"
-                        src={selectedConversation.avatar}
-                        fallback={selectedConversation.username.substring(0, 2).toUpperCase()}
-                      />
-                      <ChatBubbleMessage isLoading />
-                    </ChatBubble>
-                  )}
-                  
-                  <div ref={messagesEndRef} />
+                      </p>
+                    </motion.div>
+                  </div>
+                  <motion.div
+                    whileHover={{ 
+                      rotate: 90,
+                      scale: 1.05 // Daha az büyüme
+                    }}
+                    transition={{ duration: 0.1 }} // Daha hızlı
+                  >
+                    <Button
+                      className="p-2 rounded-full hover:bg-purple-500/20"
+                      onClick={togglePanel}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </motion.div>
                 </div>
+              )}
+            </motion.div>
 
-                {/* Mesaj Giriş Alanı */}
-                <div 
-                  className="border-t p-4"
-                  style={{ borderColor: 'var(--border-color)' }}
-                >
-                  <form 
-                    onSubmit={handleSubmit}
-                    className="relative rounded-lg border focus-within:ring-1 focus-within:ring-ring"
-                    style={{ 
-                      backgroundColor: 'var(--input-bg)', 
-                      borderColor: 'var(--input-border)' 
+            {/* Panel Content */}
+            <div className="flex flex-grow overflow-hidden">
+              {/* Konuşma Listesi (Sidebar) ve Mesaj Görünümü tek AnimatePresence içinde */}
+              <AnimatePresence mode="wait" initial={false}>
+                {showConversations ? (
+                  // Konuşma Listesi
+                  <motion.div 
+                    key="conversations"
+                    variants={conversationListVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="w-full overflow-y-auto hide-scrollbar"
+                    ref={conversationsRef}
+                    style={{
+                      background: "linear-gradient(135deg, rgba(149, 76, 233, 0.05), rgba(43, 192, 228, 0.05))"
                     }}
                   >
-                    <div className="flex items-center">
-                      <div className="p-2">
-                        <Button 
-                          type="button" 
-                          className="p-2 rounded-full hover:bg-opacity-10 hover:bg-gray-500"
-                        >
-                          <Smile className="h-5 w-5" />
-                        </Button>
-                      </div>
-                      
-                      <input
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="Mesajınızı yazın..."
-                        className="w-full p-3 bg-transparent border-0 outline-none"
-                        style={{ color: 'var(--input-text)' }}
-                      />
-                      
-                      <div className="flex items-center">
-                        <Button 
-                          type="button" 
-                          className="p-2 rounded-full hover:bg-opacity-10 hover:bg-gray-500"
-                        >
-                          <Paperclip className="h-5 w-5" />
-                        </Button>
-                        
-                        <Button 
-                          type="button" 
-                          className="p-2 rounded-full hover:bg-opacity-10 hover:bg-gray-500 mr-1"
-                        >
-                          <Image className="h-5 w-5" />
-                        </Button>
-                        
-                        <Button 
-                          type="submit" 
-                          className="flex items-center justify-center p-2 rounded-full mx-1"
-                          style={{
-                            background: input.trim() ? 'var(--accent-blue)' : 'var(--background-tertiary)',
-                            color: input.trim() ? 'var(--text-inverted)' : 'var(--text-secondary)'
+                    {/* Arama */}
+                    <motion.div 
+                      className="p-3 sticky top-0 z-10 backdrop-blur-md" 
+                      style={{ background: "rgba(13, 13, 20, 0.7)" }}
+                      initial={{ opacity: 0, y: -5 }} // Daha az hareket
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15 }} // Daha hızlı
+                    >
+                      <div className="relative">
+                        <motion.div 
+                          className="absolute inset-0 rounded-md opacity-20"
+                          animate={{
+                            boxShadow: [
+                              "0 0 0 rgba(149, 76, 233, 0)",
+                              "0 0 5px rgba(149, 76, 233, 0.4)", // Daha az gölge
+                              "0 0 0 rgba(149, 76, 233, 0)"
+                            ]
                           }}
-                          disabled={isLoading || !input.trim()}
-                        >
-                          <Send className="h-5 w-5" />
-                        </Button>
+                          transition={{ 
+                            repeat: Infinity, 
+                            duration: 1, // Daha hızlı
+                            repeatType: "loop"
+                          }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Ara..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full p-2 rounded-md border bg-transparent"
+                          style={{ 
+                            borderColor: 'rgba(149, 76, 233, 0.3)',
+                            color: 'white'
+                          }}
+                        />
                       </div>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+                    </motion.div>
+                    
+                    {filteredConversations.length === 0 ? (
+                      <motion.div 
+                        className="flex flex-col items-center justify-center h-64 text-center p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ 
+                          opacity: 1,
+                          transition: { duration: 0.15 } // Daha hızlı
+                        }}
+                      >
+                        <motion.div
+                          animate={{
+                            opacity: [0.4, 0.7, 0.4], // Daha az opacity değişimi
+                            scale: [1, 1.03, 1], // Daha az ölçeklendirme
+                            rotate: [0, 3, 0] // Daha az dönme
+                          }}
+                          transition={{
+                            repeat: Infinity,
+                            duration: 1.5, // Daha hızlı
+                            repeatType: "reverse",
+                            ease: "easeInOut"
+                          }}
+                        >
+                          <User className="h-16 w-16 mb-3" style={{ color: "rgba(149, 76, 233, 0.5)" }} />
+                        </motion.div>
+                        <motion.p 
+                          className="text-lg font-medium"
+                          animate={{
+                            textShadow: [
+                              "0 0 0px rgba(149, 76, 233, 0)",
+                              "0 0 3px rgba(149, 76, 233, 0.6)", // Daha az gölge
+                              "0 0 0px rgba(149, 76, 233, 0)",
+                            ]
+                          }}
+                          transition={{
+                            repeat: Infinity,
+                            duration: 1.2, // Daha hızlı
+                            repeatType: "mirror"
+                          }}
+                        >
+                          Sonuç bulunamadı
+                        </motion.p>
+                        <p className="text-sm opacity-70">Farklı bir arama terimi deneyin</p>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        variants={{ 
+                          visible: { 
+                            transition: { 
+                              staggerChildren: 0.01 // Daha kısa gecikme
+                            } 
+                          } 
+                        }}
+                        initial="hidden"
+                        animate="visible"
+                      >
+                        {filteredConversations.map((conversation, index) => (
+                          <motion.div 
+                            key={conversation.id}
+                            custom={index}
+                            variants={conversationListVariants}
+                            whileHover="hover"
+                            className="flex items-center gap-3 p-3 cursor-pointer relative m-2 rounded-lg"
+                            onClick={() => selectConversation(conversation)}
+                            style={{
+                              backgroundColor: conversation.unreadCount > 0 
+                                ? 'rgba(149, 76, 233, 0.15)' 
+                                : 'rgba(13, 13, 20, 0.4)',
+                              backdropFilter: 'blur(8px)',
+                              borderLeft: conversation.unreadCount > 0 
+                                ? '3px solid rgba(149, 76, 233, 0.7)' 
+                                : '1px solid rgba(149, 76, 233, 0.1)'
+                            }}
+                          >
+                            <div className="relative">
+                              <Avatar className="h-12 w-12">
+                                {conversation.avatar ? (
+                                  <AvatarImage src={conversation.avatar} />
+                                ) : (
+                                  <AvatarFallback>{conversation.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                                )}
+                              </Avatar>
+                              {conversation.online && (
+                                <motion.span 
+                                  className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2" 
+                                  style={{ 
+                                    background: "linear-gradient(135deg, #4ade80, #22d3ee)",
+                                    borderColor: 'rgba(13, 13, 20, 0.8)'
+                                  }}
+                                  animate={{ 
+                                    scale: [1, 1.2, 1], // Daha az ölçeklendirme
+                                    opacity: [0.8, 1, 0.8],
+                                    boxShadow: [
+                                      "0 0 0px rgba(74, 222, 128, 0)",
+                                      "0 0 5px rgba(74, 222, 128, 0.6)", // Daha az gölge
+                                      "0 0 0px rgba(74, 222, 128, 0)"
+                                    ]
+                                  }}
+                                  transition={{ 
+                                    repeat: Infinity, 
+                                    duration: 1, // Daha hızlı
+                                    repeatType: "loop" 
+                                  }}
+                                ></motion.span>
+                              )}
+                            </div>
+                            <div className="flex-grow overflow-hidden">
+                              <motion.div 
+                                className="font-medium"
+                                initial={{ opacity: 0, y: 3 }} // Daha az hareket
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.02 + index * 0.01, duration: 0.15 }} // Daha hızlı
+                              >
+                                {conversation.username}
+                              </motion.div>
+                              <motion.div 
+                                className="text-sm truncate opacity-70"
+                                initial={{ opacity: 0, y: 3 }} // Daha az hareket
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.05 + index * 0.01, duration: 0.15 }} // Daha hızlı
+                              >
+                                {conversation.lastMessage}
+                              </motion.div>
+                            </div>
+                            <div className="flex flex-col items-end">
+                              <motion.div 
+                                className="text-xs opacity-70"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 0.7 }}
+                                transition={{ delay: 0.08 + index * 0.01, duration: 0.15 }} // Daha hızlı
+                              >
+                                {new Date(conversation.lastSeen).toLocaleDateString([], { day: '2-digit', month: '2-digit' })}
+                              </motion.div>
+                              {conversation.unreadCount > 0 && (
+                                <motion.div 
+                                  className="mt-1 rounded-full min-w-5 h-5 flex items-center justify-center text-xs px-1"
+                                  style={{ 
+                                    background: "linear-gradient(135deg, #954ce9, #2bc0e4)",
+                                    boxShadow: "0 0 8px rgba(149, 76, 233, 0.4)" // Daha az gölge
+                                  }}
+                                  initial={{ scale: 0, opacity: 0 }}
+                                  animate={{ 
+                                    scale: 1, 
+                                    opacity: 1,
+                                    transition: {
+                                      type: "spring",
+                                      damping: 8,
+                                      stiffness: 600, // Daha sert yay
+                                      delay: 0.1 + index * 0.01, // Daha kısa gecikme
+                                      duration: 0.15 // Daha hızlı
+                                    }
+                                  }}
+                                >
+                                  {conversation.unreadCount}
+                                </motion.div>
+                              )}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </motion.div>
+                ) : (
+                  // Mesaj Görünümü
+                  selectedConversation && (
+                    <motion.div 
+                      key="messages"
+                      variants={messageViewVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      className="flex flex-col flex-grow w-full"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(149, 76, 233, 0.05), rgba(43, 192, 228, 0.05))"
+                      }}
+                    >
+                      {/* Mesaj Listesi */}
+                      <div className="flex-grow overflow-y-auto p-4 hide-scrollbar">
+                        {Object.keys(messageGroups).map(date => (
+                          <div key={date}>
+                            <motion.div 
+                              className="flex justify-center my-4"
+                              initial={{ opacity: 0, y: 3 }} // Daha az hareket
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ 
+                                type: "spring",
+                                damping: 8,
+                                stiffness: 1000, // Daha sert yay
+                                duration: 0.08 // Daha hızlı
+                              }}
+                            >
+                              <motion.span 
+                                className="text-xs px-4 py-1 rounded-full backdrop-blur-sm"
+                                style={{ 
+                                  background: "rgba(149, 76, 233, 0.2)",
+                                  border: "1px solid rgba(149, 76, 233, 0.3)",
+                                  color: 'white',
+                                  boxShadow: "0 4px 12px rgba(149, 76, 233, 0.15)"
+                                }}
+                                whileHover={{
+                                  scale: 1.03, // Daha az büyüme
+                                  boxShadow: "0 4px 15px rgba(149, 76, 233, 0.25)", // Daha az gölge
+                                  transition: { duration: 0.08 } // Daha hızlı
+                                }}
+                              >
+                                {date === new Date().toLocaleDateString() ? 'Bugün' : date}
+                              </motion.span>
+                            </motion.div>
+                            
+                            {messageGroups[date].map((message, index) => (
+                              <div key={message.id} className="relative mb-2">
+                                <ChatBubble variant={message.sender === "currentUser" ? "sent" : "received"}>
+                                  <ChatBubbleAvatar
+                                    className="h-8 w-8 shrink-0"
+                                    src={
+                                      message.sender === "currentUser"
+                                        ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=64&h=64&q=80&crop=faces&fit=crop"
+                                        : selectedConversation.avatar
+                                    }
+                                    fallback={message.sender === "currentUser" ? "ME" : selectedConversation.username.substring(0, 2).toUpperCase()}
+                                  />
+                                  <ChatBubbleMessage
+                                    variant={message.sender === "currentUser" ? "sent" : "received"}
+                                  >
+                                    <div className="flex flex-col">
+                                      <div className="message-content">
+                                        <KeyboardEffect text={message.content} speed={0.005} delay={0.001} />
+                                      </div>
+                                      <div className="text-xs opacity-70 text-right mt-1">
+                                        {formatMessageTime(message.timestamp)}
+                                      </div>
+                                    </div>
+                                  </ChatBubbleMessage>
+                                </ChatBubble>
+                                {message.isNew && (
+                                  <MessageBubbleTrail variant={message.sender === "currentUser" ? "sent" : "received"} />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                        
+                        {typing && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 3 }} // Daha az hareket
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 2 }} // Daha az hareket
+                            transition={{ duration: 0.08 }} // Daha hızlı
+                          >
+                            <ChatBubble variant="received">
+                              <ChatBubbleAvatar
+                                className="h-8 w-8 shrink-0"
+                                src={selectedConversation.avatar}
+                                fallback={selectedConversation.username.substring(0, 2).toUpperCase()}
+                              />
+                              <ChatBubbleMessage isLoading />
+                            </ChatBubble>
+                          </motion.div>
+                        )}
+                        
+                        <div ref={messagesEndRef} />
+                      </div>
+
+                      {/* Mesaj Giriş Alanı */}
+                      <motion.div 
+                        className="p-4"
+                        style={{ 
+                          background: "rgba(13, 13, 20, 0.7)",
+                          borderTop: '1px solid rgba(149, 76, 233, 0.2)',
+                          backdropFilter: 'blur(5px)'
+                        }}
+                        initial={{ opacity: 0, y: 8 }} // Daha az hareket
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ 
+                          duration: 0.15, // Daha hızlı
+                          type: "spring",
+                          damping: 12,
+                          stiffness: 800 // Daha sert yay
+                        }}
+                      >
+                        <form 
+                          onSubmit={handleSubmit}
+                          className="relative rounded-lg backdrop-blur-md overflow-hidden"
+                          style={{ 
+                            backgroundColor: 'rgba(149, 76, 233, 0.1)', 
+                            border: '1px solid rgba(149, 76, 233, 0.3)',
+                            boxShadow: "0 4px 15px rgba(149, 76, 233, 0.2), inset 0 0 15px rgba(149, 76, 233, 0.05)" // Daha az gölge
+                          }}
+                        >
+                          <motion.div
+                            className="absolute inset-0 z-0 opacity-20"
+                            animate={{
+                              background: [
+                                "linear-gradient(120deg, rgba(149, 76, 233, 0.4), rgba(43, 192, 228, 0.4))",
+                                "linear-gradient(320deg, rgba(149, 76, 233, 0.4), rgba(43, 192, 228, 0.4))",
+                              ],
+                            }}
+                            transition={{ 
+                              duration: 1.5, // Daha hızlı
+                              repeat: Infinity,
+                              repeatType: "mirror"
+                            }}
+                          />
+                          <div className="flex items-center relative z-10">
+                            <motion.div 
+                              className="p-2"
+                              whileHover={{ 
+                                scale: 1.05, // Daha az büyüme
+                                rotate: 5, // Daha az dönme
+                                transition: { type: "spring", stiffness: 800, damping: 6, duration: 0.1 } // Daha hızlı
+                              }}
+                              whileTap={{ scale: 0.95 }} // Daha az küçültme
+                            >
+                              <Button type="button" className="p-2 rounded-full hover:bg-white/10">
+                                <Smile className="h-5 w-5" style={{ color: "rgba(149, 76, 233, 0.9)" }} />
+                              </Button>
+                            </motion.div>
+                            
+                            <input
+                              type="text"
+                              value={input}
+                              onChange={(e) => setInput(e.target.value)}
+                              placeholder="Mesajınızı yazın..."
+                              className="w-full p-3 bg-transparent border-0 outline-none"
+                              style={{ color: 'white' }}
+                            />
+                            
+                            <div className="flex items-center">
+                              <motion.div 
+                                whileHover={{ 
+                                  scale: 1.05, // Daha az büyüme
+                                  rotate: -3, // Daha az dönme
+                                  transition: { type: "spring", stiffness: 800, damping: 6, duration: 0.1 } // Daha hızlı
+                                }}
+                                whileTap={{ scale: 0.95 }} // Daha az küçültme
+                              >
+                                <Button type="button" className="p-2 rounded-full hover:bg-white/10">
+                                  <Paperclip className="h-5 w-5" style={{ color: "rgba(149, 76, 233, 0.9)" }} />
+                                </Button>
+                              </motion.div>
+                              
+                              <motion.div 
+                                whileHover={{ 
+                                  scale: 1.05, // Daha az büyüme
+                                  rotate: 3, // Daha az dönme
+                                  transition: { type: "spring", stiffness: 800, damping: 6, duration: 0.1 } // Daha hızlı
+                                }}
+                                whileTap={{ scale: 0.95 }} // Daha az küçültme
+                              >
+                                <Button type="button" className="p-2 rounded-full hover:bg-white/10 mr-1">
+                                  <Image className="h-5 w-5" style={{ color: "rgba(149, 76, 233, 0.9)" }} />
+                                </Button>
+                              </motion.div>
+                              
+                              <SendButton 
+                                onClick={handleSubmit} 
+                                disabled={isLoading || !input.trim()} 
+                              />
+                            </div>
+                          </div>
+                        </form>
+                      </motion.div>
+                    </motion.div>
+                  )
+                )}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Mesaj Paneli Açma/Kapama Butonu */}
-      <Button
-        onClick={togglePanel}
-        className="w-14 h-14 rounded-full shadow-md flex items-center justify-center hover:shadow-lg hover:shadow-black/30 transition-all duration-300"
-        style={{
-          background: 'var(--accent-blue)',
-          color: 'var(--text-inverted)'
+      <motion.div
+        variants={buttonVariants}
+        initial="rest"
+        whileHover="hover"
+        whileTap="tap"
+        className="rounded-full overflow-hidden"
+        animate={{
+          boxShadow: [
+            "0 0 10px rgba(149, 76, 233, 0.4), 0 0 0 1px rgba(149, 76, 233, 0.2)",
+            "0 0 20px rgba(149, 76, 233, 0.5), 0 0 10px rgba(43, 192, 228, 0.3)", // Daha az gölge
+            "0 0 10px rgba(149, 76, 233, 0.4), 0 0 0 1px rgba(149, 76, 233, 0.2)"
+          ]
+        }}
+        transition={{
+          repeat: Infinity,
+          duration: 1.2, // Daha hızlı
+          repeatType: "mirror"
         }}
       >
-        {isOpen ? <X className="h-6 w-6" /> : <Users className="h-6 w-6" />}
-      </Button>
+        <Button
+          onClick={togglePanel}
+          className="w-14 h-14 rounded-full shadow-lg flex items-center justify-center"
+          style={{
+            background: 'linear-gradient(135deg, #954ce9, #2bc0e4)',
+          }}
+        >
+          <motion.div
+            animate={{ 
+              rotate: isOpen ? 180 : 0,
+              transition: {
+                rotate: { duration: 0.15, ease: "easeOut" }, // Daha hızlı
+              }
+            }}
+          >
+            <motion.div
+              animate={{
+                scale: [1, 1.03, 1], // Daha az ölçeklendirme
+                filter: [
+                  "drop-shadow(0 0 0px rgba(255, 255, 255, 0))",
+                  "drop-shadow(0 0 3px rgba(255, 255, 255, 0.8))", // Daha az gölge
+                  "drop-shadow(0 0 0px rgba(255, 255, 255, 0))"
+                ]
+              }}
+              transition={{
+                repeat: Infinity,
+                duration: 0.8, // Daha hızlı
+                repeatType: "mirror"
+              }}
+            >
+              {isOpen ? <X className="h-6 w-6" /> : <Users className="h-6 w-6" />}
+            </motion.div>
+          </motion.div>
+        </Button>
+      </motion.div>
+
+      {/* Global CSS - skrollbarı gizlemek için */}
+      <style jsx global>{`
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .hide-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
     </div>
   );
 }

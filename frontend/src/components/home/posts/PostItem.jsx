@@ -348,8 +348,8 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
             if (c.id === comment.id) {
               return {
                 ...c,
-                isLiked: !c.isLiked, // Mevcut durumun tersini al
-                likeCount: c.isLiked ? (c.likeCount - 1) : (c.likeCount + 1) // Beğeni durumuna göre sayıyı güncelle
+                isLiked: response.data.isLiked,
+                likeCount: response.data.likeCount
               };
             }
             
@@ -359,8 +359,8 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
                 if (r.id === comment.id) {
                   return {
                     ...r,
-                    isLiked: !r.isLiked, // Mevcut durumun tersini al
-                    likeCount: r.isLiked ? (r.likeCount - 1) : (r.likeCount + 1) // Beğeni durumuna göre sayıyı güncelle
+                    isLiked: response.data.isLiked,
+                    likeCount: response.data.likeCount
                   };
                 }
                 return r;

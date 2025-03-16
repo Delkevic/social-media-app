@@ -45,6 +45,13 @@ func GetComments(c *gin.Context) {
 			Count(&count)
 		comments[i].IsLiked = count > 0
 
+		// Ana yorumun beğeni sayısını hesapla
+		var likeCount int64
+		database.DB.Model(&models.CommentLike{}).
+			Where("comment_id = ? AND deleted_at IS NULL", comments[i].ID).
+			Count(&likeCount)
+		comments[i].LikeCount = int(likeCount)
+
 		// Alt yorumların beğeni durumunu kontrol et
 		for j := range comments[i].Replies {
 			var replyCount int64
@@ -52,6 +59,13 @@ func GetComments(c *gin.Context) {
 				Where("comment_id = ? AND user_id = ?", comments[i].Replies[j].ID, userID).
 				Count(&replyCount)
 			comments[i].Replies[j].IsLiked = replyCount > 0
+
+			// Alt yorumun beğeni sayısını hesapla
+			var replyLikeCount int64
+			database.DB.Model(&models.CommentLike{}).
+				Where("comment_id = ? AND deleted_at IS NULL", comments[i].Replies[j].ID).
+				Count(&replyLikeCount)
+			comments[i].Replies[j].LikeCount = int(replyLikeCount)
 		}
 	}
 
@@ -188,7 +202,7 @@ func ToggleCommentLike(c *gin.Context) {
 	// Önce silinmiş (soft-deleted) beğenileri kontrol et
 	var deletedLike models.CommentLike
 	delResult := database.DB.Unscoped().Where("comment_id = ? AND user_id = ? AND deleted_at IS NOT NULL", commentID, userID).First(&deletedLike)
-	
+
 	if delResult.RowsAffected > 0 {
 		// Silinmiş kaydı tamamen sil (hard delete)
 		database.DB.Unscoped().Delete(&deletedLike)
