@@ -61,7 +61,7 @@ export const SparklesCore = (props) => {
               enable: false,
               zIndex: 1,
             },
-            fpsLimit: 120,
+            fpsLimit: 60,
             interactivity: {
               events: {
                 onClick: {
@@ -95,7 +95,7 @@ export const SparklesCore = (props) => {
               },
               collisions: {
                 absorb: {
-                  speed: 2,
+                  speed: 1,
                 },
                 bounce: {
                   horizontal: {
@@ -106,7 +106,7 @@ export const SparklesCore = (props) => {
                   },
                 },
                 enable: false,
-                maxSpeed: 50,
+                maxSpeed: 30,
                 mode: "bounce",
                 overlap: {
                   enable: true,
@@ -196,8 +196,8 @@ export const SparklesCore = (props) => {
                 random: false,
                 size: false,
                 speed: {
-                  min: 0.1,
-                  max: speed || 1,
+                  min: 0.05,
+                  max: speed || 0.3,
                 },
                 spin: {
                   acceleration: 0,

@@ -10,10 +10,12 @@ import (
 type Comment struct {
 	gorm.Model
 	Content   string        `json:"content"`
-	PostID    uint          `json:"postId"`
+	PostID    uint          `json:"postId,omitempty"`
+	ReelID    uint          `json:"reelId,omitempty"`
 	UserID    uint          `json:"userId"`
 	ParentID  *uint         `json:"parentId,omitempty"`
 	Post      Post          `json:"-" gorm:"foreignKey:PostID"`
+	Reel      Reels         `json:"-" gorm:"foreignKey:ReelID"`
 	User      User          `json:"user"`
 	Replies   []Comment     `json:"replies,omitempty" gorm:"foreignKey:ParentID"`
 	Likes     []CommentLike `json:"-" gorm:"foreignKey:CommentID"`
@@ -27,7 +29,8 @@ type CommentResponse struct {
 	ID        uint      `json:"id"`
 	Content   string    `json:"content"`
 	UserID    uint      `json:"userId"`
-	PostID    uint      `json:"postId"`
+	PostID    uint      `json:"postId,omitempty"`
+	ReelID    uint      `json:"reelId,omitempty"`
 	ParentID  *uint     `json:"parentId,omitempty"`
 	User      User      `json:"user"`
 	Replies   []Comment `json:"replies,omitempty"`
