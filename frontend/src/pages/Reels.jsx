@@ -17,7 +17,9 @@ import {
   X,
   Video,
   Camera,
-  AlertCircle
+  AlertCircle,
+  VolumeX,
+  Volume2
 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +41,11 @@ const convertBooleanProps = (props) => {
   
   return result;
 };
+
+// Video uzantısı için izin verilen dosya türleri
+const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
+// Maksimum dosya boyutu (20MB)
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
 // Yedek video verisi - API'den veri çekilemediğinde gösterilir
 const FALLBACK_REELS = [
@@ -114,6 +121,7 @@ const Reels = () => {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [muted, setMuted] = useState({});
   const [videoErrors, setVideoErrors] = useState({});
+  const reelsContainerRef = useRef(null);
 
   // Token durumunu debug için console'a yazdır
   useEffect(() => {
@@ -372,6 +380,37 @@ const Reels = () => {
 
     touchStartY.current = null;
   };
+
+  // Touchpad ve fare tekerleği ile kaydırma işlevselliği
+  const handleWheel = (e) => {
+    // Doğal kaydırma davranışını engelle
+    e.preventDefault();
+    
+    // Touchpad veya fare tekerleği ile yukarı/aşağı kaydırma
+    if (e.deltaY > 20) {
+      // Aşağı kaydırma - bir sonraki reel'e geç
+      handleScroll('down');
+    } else if (e.deltaY < -20) {
+      // Yukarı kaydırma - bir önceki reel'e geç
+      handleScroll('up');
+    }
+  };
+
+  // Fare ve touchpad kaydırma işlevselliğini etkinleştir
+  useEffect(() => {
+    // Reels konteynerini al
+    const reelsContainer = document.getElementById('reels-container');
+    
+    if (reelsContainer) {
+      // Wheel (kaydırma) olayını dinlemeye başla
+      reelsContainer.addEventListener('wheel', handleWheel, { passive: false });
+      
+      // Temizleme fonksiyonu
+      return () => {
+        reelsContainer.removeEventListener('wheel', handleWheel);
+      };
+    }
+  }, [currentReelIndex, reels.length]);
 
   // handleVideoLoad fonksiyonunu düzenliyorum
   const handleVideoLoad = (index) => {
@@ -674,6 +713,8 @@ const Reels = () => {
       className="relative h-screen w-full overflow-hidden"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      id="reels-container" // Wheel olayı için ID ekleme
+      ref={reelsContainerRef}
     >
       {/* Toast bildirimlerini ekleyelim */}
       <Toaster position="bottom-center" />
@@ -806,18 +847,28 @@ const Reels = () => {
           </div>
         ) : (
           <div className="h-full">
-            {/* Video Görüntüleyici */}
-            <div className="h-full relative flex justify-center">
-              {/* TikTok Tarzı 9:16 Oranında Video Konteyneri */}
-              <div className="h-full aspect-[9/16] max-w-[500px] relative">
+            {/* Video Görüntüleyici - TikTok Tarzı Dikey Kaydırma */}
+            <div className="h-full relative flex justify-center overflow-hidden">
+              {/* Video konteyneri */}
+              <div 
+                className="h-full aspect-[9/16] max-w-[500px] relative" 
+                style={{
+                  transition: 'transform 0.4s cubic-bezier(0.19, 1, 0.22, 1)'
+                }}
+              >
+                {/* Videolar */}
                 {reels.map((reel, index) => (
                   <div 
                     key={reel.id}
-                    className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ease-in-out ${
-                      index === currentReelIndex ? 'opacity-100 z-20' : 'opacity-0 z-10'
+                    className={`absolute inset-0 w-full h-full bg-black transition-all duration-500 ${
+                      index === currentReelIndex 
+                        ? 'opacity-100 z-20 transform-none' 
+                        : index < currentReelIndex 
+                          ? 'opacity-0 z-10 transform -translate-y-full' 
+                          : 'opacity-0 z-10 transform translate-y-full'
                     }`}
                   >
-                    <div className="relative w-full h-full flex items-center justify-center bg-black">
+                    <div className="relative w-full h-full flex items-center justify-center">
                       {/* Video yüklenene kadar gösterilecek yükleme ekranı */}
                       {videoRefs.current[index]?.readyState < 3 && !videoErrors[index] && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black bg-opacity-60 backdrop-blur-sm">
@@ -826,58 +877,65 @@ const Reels = () => {
                         </div>
                       )}
                       
+                      {/* Video oynatma hatası durumunda gösterilecek ekran */}
+                      {videoErrors[index] && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black bg-opacity-60 backdrop-blur-sm">
+                          <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+                          <p className="text-white text-lg font-medium mb-2">Video yüklenemedi</p>
+                          <p className="text-white/70 text-sm text-center max-w-xs mb-4">
+                            Video yüklenirken bir sorun oluştu. Yedek video otomatik olarak yükleniyor.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {/* Video elementi */}
                       <video
                         ref={el => { videoRefs.current[index] = el; }}
-                        className="max-h-full max-w-full object-contain"
+                        className="h-full w-full object-contain bg-black"
+                        src={getProperVideoURL(reel.videoURL)}
                         loop
                         playsInline
                         muted={muted[index] ?? true}
                         onClick={() => togglePlay(index)}
                         onLoadedData={() => handleVideoLoad(index)}
                         onError={(e) => {
-                          // Detaylı hata bilgisi
-                          console.error('Video yüklenirken hata:', reel.videoURL, e);
-                          console.error('Video element:', videoRefs.current[index]);
+                          console.error('Video yüklenirken hata:', e);
                           setVideoErrors(prev => ({
                             ...prev,
                             [index]: true
                           }));
                           
-                          toast.error('Video yüklenemedi, yedek video deneniyor');
+                          toast.error('Video yüklenemedi, yedek video yükleniyor');
                           
-                          // Hata durumunda yedek video kaynağını dene
+                          // Hata durumunda yedek video
                           if (videoRefs.current[index]) {
-                            const fallbackUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
+                            const fallbackUrl = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
                             videoRefs.current[index].src = fallbackUrl;
-                            videoRefs.current[index].load(); // Videoyu yeniden yükle
+                            videoRefs.current[index].load();
                           }
                         }}
+                      />
+                      
+                      {/* Ses açma/kapatma butonu */}
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMute(index);
+                        }}
+                        className="absolute bottom-20 right-4 z-20 p-2 rounded-full bg-black/40 backdrop-blur-sm"
                       >
-                        {/* Video URL'sini doğru şekilde oluştur */}
-                        {reel.videoURL && (
-                          <source 
-                            src={getProperVideoURL(reel.videoURL)}
-                            type="video/mp4" 
-                          />
+                        {muted[index] ? (
+                          <VolumeX className="h-6 w-6 text-white" />
+                        ) : (
+                          <Volume2 className="h-6 w-6 text-white" />
                         )}
-                        
-                        {/* Fallback video kaynağı - her zaman çalışacak güvenilir kaynak */}
-                        <source 
-                          src="https://www.w3schools.com/html/mov_bbb.mp4" 
-                          type="video/mp4" 
-                        />
-                        
-                        {/* Video oynatılamadığında gösterilecek mesaj */}
-                        <div className="text-white bg-black/70 p-4 rounded-lg text-center">
-                          <p>Video formatı desteklenmiyor veya video dosyası erişilemez.</p>
-                          <p className="text-sm text-gray-400 mt-2">Desteklenen formatlar: MP4, WebM</p>
-                        </div>
-                      </video>
-
-                      {/* Video İçerik Katmanı */}
-                      <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                      </button>
+                      
+                      {/* Video içerik katmanı */}
+                      <div className="absolute inset-0 flex flex-col justify-between pointer-events-none z-30">
                         {/* Bilgiler ve açıklama */}
                         <div className="mt-auto p-4 pointer-events-auto">
+                          {/* Kullanıcı bilgileri ve video açıklaması */}
                           <div className="flex items-center mb-3">
                             <motion.div 
                               className="relative rounded-full overflow-hidden h-12 w-12 mr-3 border-2" 
@@ -886,17 +944,17 @@ const Reels = () => {
                               whileTap={{ scale: 0.95 }}
                             >
                               <img 
-                                src={reel.user.profileImage} 
-                                alt={reel.user.username}
+                                src={reel.user?.profileImage} 
+                                alt={reel.user?.username}
                                 className="h-full w-full object-cover"
                                 onError={(e) => {
-                                  e.target.src = "https://ui-avatars.com/api/?name=" + reel.user.username + "&background=random";
+                                  e.target.src = "https://ui-avatars.com/api/?name=" + reel.user?.username + "&background=random";
                                 }}
                               />
                             </motion.div>
                             <div className="flex-1">
                               <div className="flex items-center">
-                                <h3 className="text-white font-semibold mr-2">@{reel.user.username}</h3>
+                                <h3 className="text-white font-semibold mr-2">@{reel.user?.username}</h3>
                                 <motion.button
                                   className={`px-3 py-1 rounded-full text-xs font-medium ${
                                     reel.isLiked 
@@ -905,7 +963,10 @@ const Reels = () => {
                                   }`}
                                   whileHover={{ scale: 1.05 }}
                                   whileTap={{ scale: 0.95 }}
-                                  onClick={() => handleLike(reel.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleLike(reel.id);
+                                  }}
                                 >
                                   {reel.isLiked ? 'Beğendim' : 'Beğen'}
                                 </motion.button>
@@ -914,22 +975,27 @@ const Reels = () => {
                             </div>
                           </div>
                           
+                          {/* Müzik bilgisi */}
                           <div className="flex items-center mt-2">
                             <div className="flex items-center bg-black/30 rounded-full px-3 py-1.5">
                               <Music className="h-4 w-4 mr-2 text-white/80" />
-                              <p className="text-white/80 text-xs truncate max-w-[150px]">{reel.music}</p>
+                              <p className="text-white/80 text-xs truncate max-w-[150px]">{reel.music || 'Original Sound'}</p>
                             </div>
                           </div>
                         </div>
                       </div>
                       
-                      {/* Sağ İşlem Butonları */}
-                      <div className="absolute right-4 bottom-24 flex flex-col items-center gap-6 pointer-events-auto">
+                      {/* Video kontrolleri ve işlevleri - sağ taraf */}
+                      <div className="absolute right-4 bottom-24 flex flex-col items-center gap-6 pointer-events-auto z-30">
+                        {/* Beğen butonu */}
                         <motion.button 
                           className="flex flex-col items-center"
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
-                          onClick={() => handleLike(reel.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLike(reel.id);
+                          }}
                         >
                           <div 
                             className="rounded-full bg-black/30 p-3 backdrop-blur-sm"
@@ -942,10 +1008,15 @@ const Reels = () => {
                           <span className="text-white text-xs mt-1">{formatNumber(reel.likeCount)}</span>
                         </motion.button>
                         
+                        {/* Yorum butonu */}
                         <motion.button 
                           className="flex flex-col items-center"
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Yorum fonksiyonu buraya eklenecek
+                          }}
                         >
                           <div className="rounded-full bg-black/30 p-3 backdrop-blur-sm">
                             <MessageCircle className="h-7 w-7 text-white" />
@@ -953,11 +1024,15 @@ const Reels = () => {
                           <span className="text-white text-xs mt-1">{formatNumber(reel.commentCount)}</span>
                         </motion.button>
                         
+                        {/* Paylaş butonu */}
                         <motion.button 
                           className="flex flex-col items-center"
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
-                          onClick={() => handleShare(reel.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShare(reel.id);
+                          }}
                         >
                           <div className="rounded-full bg-black/30 p-3 backdrop-blur-sm">
                             <Share2 className="h-7 w-7 text-white" />
@@ -969,31 +1044,54 @@ const Reels = () => {
                   </div>
                 ))}
               </div>
-
-              {/* Kaydırma Butonları */}
-              <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20">
-                <div className="flex flex-col gap-4">
-                  {currentReelIndex > 0 && (
-                    <motion.button
-                      className="p-2 rounded-full backdrop-blur-sm bg-black/30"
-                      onClick={() => handleScroll('up')}
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <ChevronUp className="h-6 w-6 text-white" />
-                    </motion.button>
-                  )}
-                  {currentReelIndex < reels.length - 1 && (
-                    <motion.button
-                      className="p-2 rounded-full backdrop-blur-sm bg-black/30"
-                      onClick={() => handleScroll('down')}
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <ChevronDown className="h-6 w-6 text-white" />
-                    </motion.button>
-                  )}
+              
+              {/* Kaydırma ipucu animasyonu */}
+              {currentReelIndex < reels.length - 1 && (
+                <div className="absolute bottom-14 left-1/2 transform -translate-x-1/2 z-30">
+                  <motion.div
+                    initial={{ opacity: 0.5, y: 0 }}
+                    animate={{ opacity: 1, y: 10 }}
+                    transition={{ 
+                      repeat: Infinity, 
+                      repeatType: "reverse", 
+                      duration: 1.5 
+                    }}
+                  >
+                    <ChevronDown className="h-6 w-6 text-white/70" />
+                  </motion.div>
                 </div>
+              )}
+              
+              {/* Video sayacı */}
+              <div className="absolute top-4 left-4 bg-black/30 backdrop-blur-sm rounded-full px-3 py-1 z-30">
+                <p className="text-white text-xs">
+                  {currentReelIndex + 1} / {reels.length}
+                </p>
+              </div>
+              
+              {/* Masaüstü için ekstra kontroller */}
+              <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-30 hidden md:flex gap-4">
+                <motion.button
+                  className="p-2 rounded-full bg-black/30 backdrop-blur-sm"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => handleScroll('up')}
+                  disabled={currentReelIndex === 0}
+                  style={{ opacity: currentReelIndex === 0 ? 0.5 : 1 }}
+                >
+                  <ChevronUp className="h-6 w-6 text-white" />
+                </motion.button>
+                
+                <motion.button
+                  className="p-2 rounded-full bg-black/30 backdrop-blur-sm"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => handleScroll('down')}
+                  disabled={currentReelIndex === reels.length - 1}
+                  style={{ opacity: currentReelIndex === reels.length - 1 ? 0.5 : 1 }}
+                >
+                  <ChevronDown className="h-6 w-6 text-white" />
+                </motion.button>
               </div>
             </div>
           </div>
@@ -1012,22 +1110,6 @@ const Reels = () => {
       >
         <Plus className="h-6 w-6" />
       </motion.button>
-
-      {/* İlerleme Göstergesi */}
-      <div className="absolute top-[105px] left-4 right-4 z-30 flex justify-center">
-        <div className="flex gap-1">
-          {reels.map((_, index) => (
-            <motion.div
-              key={index}
-              className="h-1 rounded-full"
-              style={{
-                width: index === currentReelIndex ? '20px' : '8px',
-                backgroundColor: index === currentReelIndex ? 'rgba(149, 76, 233, 0.8)' : 'rgba(255, 255, 255, 0.3)'
-              }}
-            />
-          ))}
-        </div>
-      </div>
 
       {/* Modal Dialog */}
       <AnimatePresence>
@@ -1213,4 +1295,4 @@ const Reels = () => {
   );
 };
 
-export default Reels; 
+export default Reels;
