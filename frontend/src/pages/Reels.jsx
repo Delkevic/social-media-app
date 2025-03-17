@@ -373,40 +373,49 @@ const Reels = () => {
     touchStartY.current = null;
   };
 
+  // handleVideoLoad fonksiyonunu düzenliyorum
   const handleVideoLoad = (index) => {
+    console.log(`Video ${index} yüklendi`);
+    
     // Video yükleme başarılı olduğunda hata durumunu temizle
     setVideoErrors(prev => ({
       ...prev,
       [index]: false
     }));
-  };
-
-  // Eksik olan togglePlay fonksiyonunu ekliyorum
-  const togglePlay = (index) => {
-    const video = videoRefs.current[index];
     
-    if (!video) return;
-    
-    if (video.paused) {
-      // Videoyu oynat
-      video.play().catch(err => {
-        console.warn('Video oynatma hatası:', err);
+    // Otomatik oynatmayı başlat
+    if (index === currentReelIndex && videoRefs.current[index]) {
+      videoRefs.current[index].play().catch(err => {
+        console.warn('Otomatik oynatma başlatılamadı:', err);
         
+        // Hata durumunda sessiz modda oynatmayı dene
         if (err.name === 'NotAllowedError') {
-          // Otomatik oynatma engellendiyse sessiz modda tekrar dene
           setMuted(prev => ({ ...prev, [index]: true }));
-          video.muted = true;
-          video.play().catch(innerErr => {
-            console.error('Sessiz modda da oynatılamadı:', innerErr);
-            toast.error('Video oynatılamadı');
-          });
-        } else {
-          toast.error('Video oynatılırken bir sorun oluştu');
+          videoRefs.current[index].muted = true;
+          videoRefs.current[index].play().catch(e => 
+            console.error('Sessiz modda da oynatılamadı:', e)
+          );
         }
       });
+    }
+  };
+
+  // Video oynatma/duraklatma işlevi
+  const togglePlay = (index) => {
+    if (!videoRefs.current[index]) return;
+    
+    if (videoRefs.current[index].paused) {
+      videoRefs.current[index].play()
+        .then(() => {
+          console.log(`Video ${index} başlatıldı`);
+        })
+        .catch(err => {
+          console.error(`Video ${index} başlatılamadı:`, err);
+          toast.error('Video oynatılırken bir hata oluştu');
+        });
     } else {
-      // Videoyu durdur
-      video.pause();
+      videoRefs.current[index].pause();
+      console.log(`Video ${index} duraklatıldı`);
     }
   };
 
@@ -651,6 +660,15 @@ const Reels = () => {
     return fullUrl;
   };
 
+  // Başlangıçta videoların sesini kapatma
+  useEffect(() => {
+    // Kullanıcı tercihi varsa kullan, yoksa varsayılan olarak ses kapalı
+    setMuted(reels.reduce((acc, _, index) => {
+      acc[index] = true; // Varsayılan olarak sessiz başlat
+      return acc;
+    }, {}));
+  }, [reels.length]);
+
   return (
     <div 
       className="relative h-screen w-full overflow-hidden"
@@ -795,148 +813,158 @@ const Reels = () => {
                 {reels.map((reel, index) => (
                   <div 
                     key={reel.id}
-                    className={`absolute inset-0 h-full w-full transition-opacity duration-300 ease-in-out ${
+                    className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ease-in-out ${
                       index === currentReelIndex ? 'opacity-100 z-20' : 'opacity-0 z-10'
                     }`}
                   >
-                    <video
-                      ref={el => { videoRefs.current[index] = el; }}
-                      className="h-full w-full object-cover"
-                      loop
-                      playsInline
-                      muted={muted[index] ?? true}
-                      onClick={() => togglePlay(index)}
-                      onLoadedData={() => handleVideoLoad(index)}
-                      onError={(e) => {
-                        // Detaylı hata bilgisi
-                        console.error('Video yüklenirken hata:', reel.videoURL, e);
-                        console.error('Video element:', videoRefs.current[index]);
-                        setVideoErrors(prev => ({
-                          ...prev,
-                          [index]: true
-                        }));
-                        
-                        toast.error('Video yüklenemedi, yedek video deneniyor');
-                        
-                        // Hata durumunda yedek video kaynağını dene
-                        if (videoRefs.current[index]) {
-                          const fallbackUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
-                          videoRefs.current[index].src = fallbackUrl;
-                          videoRefs.current[index].load(); // Videoyu yeniden yükle
-                        }
-                      }}
-                    >
-                      {/* Video URL'sini doğru şekilde oluştur */}
-                      {reel.videoURL && (
-                        <source 
-                          src={getProperVideoURL(reel.videoURL)}
-                          type="video/mp4" 
-                        />
+                    <div className="relative w-full h-full flex items-center justify-center bg-black">
+                      {/* Video yüklenene kadar gösterilecek yükleme ekranı */}
+                      {videoRefs.current[index]?.readyState < 3 && !videoErrors[index] && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black bg-opacity-60 backdrop-blur-sm">
+                          <div className="w-16 h-16 border-4 border-t-transparent border-purple-500 rounded-full animate-spin mb-4"></div>
+                          <p className="text-white text-sm">Video yükleniyor...</p>
+                        </div>
                       )}
                       
-                      {/* Fallback video kaynağı - her zaman çalışacak güvenilir kaynak */}
-                      <source 
-                        src="https://www.w3schools.com/html/mov_bbb.mp4" 
-                        type="video/mp4" 
-                      />
-                      
-                      {/* Video oynatılamadığında gösterilecek mesaj */}
-                      <div className="text-white bg-black/70 p-4 rounded-lg text-center">
-                        <p>Video formatı desteklenmiyor veya video dosyası erişilemez.</p>
-                        <p className="text-sm text-gray-400 mt-2">Desteklenen formatlar: MP4, WebM</p>
-                      </div>
-                    </video>
-
-                    {/* Video İçerik Katmanı */}
-                    <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-                      {/* Bilgiler ve açıklama */}
-                      <div className="mt-auto p-4 pointer-events-auto">
-                        <div className="flex items-center mb-3">
-                          <motion.div 
-                            className="relative rounded-full overflow-hidden h-12 w-12 mr-3 border-2" 
-                            style={{ borderColor: "rgba(149, 76, 233, 0.7)" }}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                          >
-                            <img 
-                              src={reel.user.profileImage} 
-                              alt={reel.user.username}
-                              className="h-full w-full object-cover"
-                              onError={(e) => {
-                                e.target.src = "https://ui-avatars.com/api/?name=" + reel.user.username + "&background=random";
-                              }}
-                            />
-                          </motion.div>
-                          <div className="flex-1">
-                            <div className="flex items-center">
-                              <h3 className="text-white font-semibold mr-2">@{reel.user.username}</h3>
-                              <motion.button
-                                className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                  reel.isLiked 
-                                    ? 'bg-white/20 text-white' 
-                                    : 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
-                                }`}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => handleLike(reel.id)}
-                              >
-                                {reel.isLiked ? 'Beğendim' : 'Beğen'}
-                              </motion.button>
-                            </div>
-                            <p className="text-white/80 text-sm line-clamp-2 mt-1">{reel.caption}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center mt-2">
-                          <div className="flex items-center bg-black/30 rounded-full px-3 py-1.5">
-                            <Music className="h-4 w-4 mr-2 text-white/80" />
-                            <p className="text-white/80 text-xs truncate max-w-[150px]">{reel.music}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Sağ İşlem Butonları */}
-                    <div className="absolute right-4 bottom-24 flex flex-col items-center gap-6 pointer-events-auto">
-                      <motion.button 
-                        className="flex flex-col items-center"
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleLike(reel.id)}
+                      <video
+                        ref={el => { videoRefs.current[index] = el; }}
+                        className="max-h-full max-w-full object-contain"
+                        loop
+                        playsInline
+                        muted={muted[index] ?? true}
+                        onClick={() => togglePlay(index)}
+                        onLoadedData={() => handleVideoLoad(index)}
+                        onError={(e) => {
+                          // Detaylı hata bilgisi
+                          console.error('Video yüklenirken hata:', reel.videoURL, e);
+                          console.error('Video element:', videoRefs.current[index]);
+                          setVideoErrors(prev => ({
+                            ...prev,
+                            [index]: true
+                          }));
+                          
+                          toast.error('Video yüklenemedi, yedek video deneniyor');
+                          
+                          // Hata durumunda yedek video kaynağını dene
+                          if (videoRefs.current[index]) {
+                            const fallbackUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
+                            videoRefs.current[index].src = fallbackUrl;
+                            videoRefs.current[index].load(); // Videoyu yeniden yükle
+                          }
+                        }}
                       >
-                        <div 
-                          className="rounded-full bg-black/30 p-3 backdrop-blur-sm"
-                          style={reel.isLiked ? { background: 'rgba(255, 55, 95, 0.3)' } : {}}
-                        >
-                          <Heart 
-                            className={`h-7 w-7 ${reel.isLiked ? 'text-red-500 fill-red-500' : 'text-white'}`}
+                        {/* Video URL'sini doğru şekilde oluştur */}
+                        {reel.videoURL && (
+                          <source 
+                            src={getProperVideoURL(reel.videoURL)}
+                            type="video/mp4" 
                           />
+                        )}
+                        
+                        {/* Fallback video kaynağı - her zaman çalışacak güvenilir kaynak */}
+                        <source 
+                          src="https://www.w3schools.com/html/mov_bbb.mp4" 
+                          type="video/mp4" 
+                        />
+                        
+                        {/* Video oynatılamadığında gösterilecek mesaj */}
+                        <div className="text-white bg-black/70 p-4 rounded-lg text-center">
+                          <p>Video formatı desteklenmiyor veya video dosyası erişilemez.</p>
+                          <p className="text-sm text-gray-400 mt-2">Desteklenen formatlar: MP4, WebM</p>
                         </div>
-                        <span className="text-white text-xs mt-1">{formatNumber(reel.likeCount)}</span>
-                      </motion.button>
+                      </video>
+
+                      {/* Video İçerik Katmanı */}
+                      <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                        {/* Bilgiler ve açıklama */}
+                        <div className="mt-auto p-4 pointer-events-auto">
+                          <div className="flex items-center mb-3">
+                            <motion.div 
+                              className="relative rounded-full overflow-hidden h-12 w-12 mr-3 border-2" 
+                              style={{ borderColor: "rgba(149, 76, 233, 0.7)" }}
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              <img 
+                                src={reel.user.profileImage} 
+                                alt={reel.user.username}
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  e.target.src = "https://ui-avatars.com/api/?name=" + reel.user.username + "&background=random";
+                                }}
+                              />
+                            </motion.div>
+                            <div className="flex-1">
+                              <div className="flex items-center">
+                                <h3 className="text-white font-semibold mr-2">@{reel.user.username}</h3>
+                                <motion.button
+                                  className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                    reel.isLiked 
+                                      ? 'bg-white/20 text-white' 
+                                      : 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
+                                  }`}
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => handleLike(reel.id)}
+                                >
+                                  {reel.isLiked ? 'Beğendim' : 'Beğen'}
+                                </motion.button>
+                              </div>
+                              <p className="text-white/80 text-sm line-clamp-2 mt-1">{reel.caption}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center mt-2">
+                            <div className="flex items-center bg-black/30 rounded-full px-3 py-1.5">
+                              <Music className="h-4 w-4 mr-2 text-white/80" />
+                              <p className="text-white/80 text-xs truncate max-w-[150px]">{reel.music}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                       
-                      <motion.button 
-                        className="flex flex-col items-center"
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                      >
-                        <div className="rounded-full bg-black/30 p-3 backdrop-blur-sm">
-                          <MessageCircle className="h-7 w-7 text-white" />
-                        </div>
-                        <span className="text-white text-xs mt-1">{formatNumber(reel.commentCount)}</span>
-                      </motion.button>
-                      
-                      <motion.button 
-                        className="flex flex-col items-center"
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => handleShare(reel.id)}
-                      >
-                        <div className="rounded-full bg-black/30 p-3 backdrop-blur-sm">
-                          <Share2 className="h-7 w-7 text-white" />
-                        </div>
-                        <span className="text-white text-xs mt-1">{formatNumber(reel.shareCount)}</span>
-                      </motion.button>
+                      {/* Sağ İşlem Butonları */}
+                      <div className="absolute right-4 bottom-24 flex flex-col items-center gap-6 pointer-events-auto">
+                        <motion.button 
+                          className="flex flex-col items-center"
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => handleLike(reel.id)}
+                        >
+                          <div 
+                            className="rounded-full bg-black/30 p-3 backdrop-blur-sm"
+                            style={reel.isLiked ? { background: 'rgba(255, 55, 95, 0.3)' } : {}}
+                          >
+                            <Heart 
+                              className={`h-7 w-7 ${reel.isLiked ? 'text-red-500 fill-red-500' : 'text-white'}`}
+                            />
+                          </div>
+                          <span className="text-white text-xs mt-1">{formatNumber(reel.likeCount)}</span>
+                        </motion.button>
+                        
+                        <motion.button 
+                          className="flex flex-col items-center"
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                        >
+                          <div className="rounded-full bg-black/30 p-3 backdrop-blur-sm">
+                            <MessageCircle className="h-7 w-7 text-white" />
+                          </div>
+                          <span className="text-white text-xs mt-1">{formatNumber(reel.commentCount)}</span>
+                        </motion.button>
+                        
+                        <motion.button 
+                          className="flex flex-col items-center"
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => handleShare(reel.id)}
+                        >
+                          <div className="rounded-full bg-black/30 p-3 backdrop-blur-sm">
+                            <Share2 className="h-7 w-7 text-white" />
+                          </div>
+                          <span className="text-white text-xs mt-1">{formatNumber(reel.shareCount)}</span>
+                        </motion.button>
+                      </div>
                     </div>
                   </div>
                 ))}
