@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"social-media-app/backend/models" // Proje ismini kendi dizinine göre değiştir
 
@@ -18,15 +19,33 @@ func ConnectDatabase() {
 	// .env dosyasını yükle
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal("Error loading .env file:", err)
+		log.Println("Uyarı: .env dosyası yüklenemedi:", err)
+		// Varsayılan değerleri kullanacağız
 	}
 
 	// Veritabanı bağlantı bilgilerini .env dosyasından al
 	dbUser := os.Getenv("DB_USER")
+	if dbUser == "" {
+		dbUser = "root" // Varsayılan kullanıcı
+	}
+
 	dbPassword := os.Getenv("DB_PASSWORD")
+	// Şifre boş olabilir
+
 	dbHost := os.Getenv("DB_HOST")
+	if dbHost == "" {
+		dbHost = "localhost" // Varsayılan host
+	}
+
 	dbPort := os.Getenv("DB_PORT")
+	if dbPort == "" {
+		dbPort = "3306" // Varsayılan port
+	}
+
 	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		dbName = "social_media_app" // Varsayılan veritabanı adı
+	}
 
 	// DSN (Data Source Name) oluştur
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
@@ -35,7 +54,34 @@ func ConnectDatabase() {
 	// Veritabanına bağlan
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatal("Database bağlantısı başarısız:", err)
+		// Veritabanı yoksa oluşturmayı dene
+		if strings.Contains(err.Error(), "Unknown database") {
+			log.Printf("Veritabanı '%s' bulunamadı, oluşturulmaya çalışılacak...", dbName)
+
+			// Veritabanı olmadan DSN oluştur
+			rootDsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/", dbUser, dbPassword, dbHost, dbPort)
+			rootDb, rootErr := gorm.Open(mysql.Open(rootDsn), &gorm.Config{})
+
+			if rootErr != nil {
+				log.Fatal("Ana veritabanına bağlantı başarısız:", rootErr)
+			}
+
+			// Veritabanını oluştur
+			createDbSQL := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", dbName)
+			if err := rootDb.Exec(createDbSQL).Error; err != nil {
+				log.Fatal("Veritabanı oluşturma hatası:", err)
+			}
+
+			log.Printf("Veritabanı '%s' başarıyla oluşturuldu!", dbName)
+
+			// Yeni oluşturulan veritabanına bağlan
+			db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+			if err != nil {
+				log.Fatal("Yeni oluşturulan veritabanına bağlantı başarısız:", err)
+			}
+		} else {
+			log.Fatal("Database bağlantısı başarısız:", err)
+		}
 	}
 
 	DB = db
@@ -54,6 +100,9 @@ func ConnectDatabase() {
 		&models.PostImage{},
 		&models.Like{},
 		&models.SavedPost{},
+		&models.Reels{},     // Reels modelini ekle
+		&models.ReelLike{},  // ReelLike modelini ekle
+		&models.SavedReel{}, // SavedReel modelini ekle
 	)
 
 	if err != nil {

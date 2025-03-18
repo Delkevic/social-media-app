@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -10,12 +11,21 @@ import (
 	"social-media-app/backend/models"
 )
 
+type Response struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
+}
+
 // GetComments bir gönderinin yorumlarını getirir
 func GetComments(c *gin.Context) {
 	// Gönderi ID'sini al
 	postID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz gönderi ID'si"})
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz gönderi ID'si",
+		})
 		return
 	}
 
@@ -32,7 +42,10 @@ func GetComments(c *gin.Context) {
 		Find(&comments)
 
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Yorumlar alınırken bir hata oluştu"})
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Yorumlar alınırken bir hata oluştu",
+		})
 		return
 	}
 
@@ -69,9 +82,9 @@ func GetComments(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Data: gin.H{
 			"comments": comments,
 		},
 	})
@@ -82,7 +95,10 @@ func AddComment(c *gin.Context) {
 	// Gönderi ID'sini al
 	postID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz gönderi ID'si"})
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz gönderi ID'si",
+		})
 		return
 	}
 
@@ -96,14 +112,20 @@ func AddComment(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz yorum verisi"})
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz yorum verisi",
+		})
 		return
 	}
 
 	// Gönderiyi kontrol et
 	var post models.Post
 	if err := database.DB.First(&post, postID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Gönderi bulunamadı"})
+		c.JSON(http.StatusNotFound, Response{
+			Success: false,
+			Message: "Gönderi bulunamadı",
+		})
 		return
 	}
 
@@ -111,7 +133,19 @@ func AddComment(c *gin.Context) {
 	if request.ParentID != nil {
 		var parentComment models.Comment
 		if err := database.DB.First(&parentComment, request.ParentID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Üst yorum bulunamadı"})
+			c.JSON(http.StatusNotFound, Response{
+				Success: false,
+				Message: "Üst yorum bulunamadı",
+			})
+			return
+		}
+
+		// Üst yorumun aynı gönderiye ait olduğunu kontrol et
+		if parentComment.PostID != uint(postID) {
+			c.JSON(http.StatusBadRequest, Response{
+				Success: false,
+				Message: "Üst yorum başka bir gönderiye ait",
+			})
 			return
 		}
 	}
@@ -126,20 +160,35 @@ func AddComment(c *gin.Context) {
 
 	// Yorumu veritabanına kaydet
 	if err := database.DB.Create(&comment).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Yorum kaydedilirken bir hata oluştu"})
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Yorum kaydedilirken bir hata oluştu",
+		})
 		return
 	}
 
 	// Kullanıcı bilgilerini yükle
-	database.DB.Preload("User").First(&comment, comment.ID)
+	var commentWithUser models.Comment
+	if err := database.DB.Preload("User").First(&commentWithUser, comment.ID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Yorum bilgileri yüklenirken hata oluştu",
+		})
+		return
+	}
 
 	// Gönderi yorum sayısını güncelle
-	database.DB.Model(&post).UpdateColumn("comment_count", post.CommentCount+1)
+	if err := database.DB.Model(&post).UpdateColumn("comment_count", post.CommentCount+1).Error; err != nil {
+		// Sadece log'a yaz, kullanıcıya hata döndürme
+		log.Printf("Gönderi yorum sayısı güncellenirken hata: %v", err)
+	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"success": true,
-		"data": gin.H{
-			"comment": comment,
+	// Response formatını oluştur
+	c.JSON(http.StatusCreated, Response{
+		Success: true,
+		Message: "Yorum başarıyla eklendi",
+		Data: gin.H{
+			"comment": commentWithUser,
 		},
 	})
 }
@@ -150,9 +199,9 @@ func ToggleCommentLike(c *gin.Context) {
 	commentIDStr := c.Param("id")
 	commentID, err := strconv.Atoi(commentIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Geçersiz yorum ID'si",
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz yorum ID'si",
 		})
 		return
 	}
@@ -163,9 +212,9 @@ func ToggleCommentLike(c *gin.Context) {
 	// Yorumu kontrol et
 	var comment models.Comment
 	if err := database.DB.First(&comment, commentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Yorum bulunamadı",
+		c.JSON(http.StatusNotFound, Response{
+			Success: false,
+			Message: "Yorum bulunamadı",
 		})
 		return
 	}
@@ -176,9 +225,9 @@ func ToggleCommentLike(c *gin.Context) {
 	if result.RowsAffected > 0 {
 		// Beğeniyi kaldır
 		if err := database.DB.Delete(&existingLike).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Beğeni kaldırılırken bir hata oluştu: " + err.Error(),
+			c.JSON(http.StatusInternalServerError, Response{
+				Success: false,
+				Message: "Beğeni kaldırılırken bir hata oluştu",
 			})
 			return
 		}
@@ -188,10 +237,10 @@ func ToggleCommentLike(c *gin.Context) {
 			database.DB.Model(&comment).Update("like_count", comment.LikeCount-1)
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Yorum beğenisi başarıyla kaldırıldı",
-			"data": gin.H{
+		c.JSON(http.StatusOK, Response{
+			Success: true,
+			Message: "Yorum beğenisi başarıyla kaldırıldı",
+			Data: gin.H{
 				"isLiked":   false,
 				"likeCount": comment.LikeCount - 1,
 			},
@@ -216,9 +265,9 @@ func ToggleCommentLike(c *gin.Context) {
 
 	// Beğeniyi ekle
 	if err := database.DB.Create(&like).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Beğeni eklenirken bir hata oluştu: " + err.Error(),
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Beğeni eklenirken bir hata oluştu",
 		})
 		return
 	}
@@ -226,10 +275,10 @@ func ToggleCommentLike(c *gin.Context) {
 	// Yorum beğeni sayısını artır
 	database.DB.Model(&comment).Update("like_count", comment.LikeCount+1)
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Yorum başarıyla beğenildi",
-		"data": gin.H{
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Yorum başarıyla beğenildi",
+		Data: gin.H{
 			"isLiked":   true,
 			"likeCount": comment.LikeCount + 1,
 		},
@@ -242,9 +291,9 @@ func DeleteComment(c *gin.Context) {
 	commentIDStr := c.Param("id")
 	commentID, err := strconv.Atoi(commentIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Geçersiz yorum ID'si",
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz yorum ID'si",
 		})
 		return
 	}
@@ -255,34 +304,34 @@ func DeleteComment(c *gin.Context) {
 	// Yorumu kontrol et
 	var comment models.Comment
 	if err := database.DB.First(&comment, commentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Yorum bulunamadı",
+		c.JSON(http.StatusNotFound, Response{
+			Success: false,
+			Message: "Yorum bulunamadı",
 		})
 		return
 	}
 
 	// Kullanıcının yorumu silme yetkisi var mı kontrol et
 	if comment.UserID != userID {
-		c.JSON(http.StatusForbidden, gin.H{
-			"success": false,
-			"message": "Bu yorumu silme yetkiniz yok",
+		c.JSON(http.StatusForbidden, Response{
+			Success: false,
+			Message: "Bu yorumu silme yetkiniz yok",
 		})
 		return
 	}
 
 	// Yorumu sil
 	if err := database.DB.Delete(&comment).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Yorum silinirken bir hata oluştu",
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Yorum silinirken bir hata oluştu",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Yorum başarıyla silindi",
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Yorum başarıyla silindi",
 	})
 }
 
@@ -291,9 +340,9 @@ func ReportComment(c *gin.Context) {
 	commentIDStr := c.Param("id")
 	commentID, err := strconv.Atoi(commentIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Geçersiz yorum ID'si",
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz yorum ID'si",
 		})
 		return
 	}
@@ -303,18 +352,18 @@ func ReportComment(c *gin.Context) {
 	// Yorumu kontrol et
 	var comment models.Comment
 	if err := database.DB.First(&comment, commentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Yorum bulunamadı",
+		c.JSON(http.StatusNotFound, Response{
+			Success: false,
+			Message: "Yorum bulunamadı",
 		})
 		return
 	}
 
 	// Kullanıcı kendi yorumunu şikayet edemez
 	if comment.UserID == userID {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Kendi yorumunuzu şikayet edemezsiniz",
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Kendi yorumunuzu şikayet edemezsiniz",
 		})
 		return
 	}
@@ -324,9 +373,9 @@ func ReportComment(c *gin.Context) {
 	result := database.DB.Where("comment_id = ? AND user_id = ?", commentID, userID).First(&existingReport)
 
 	if result.RowsAffected > 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Bu yorumu zaten şikayet ettiniz",
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Bu yorumu zaten şikayet ettiniz",
 		})
 		return
 	}
@@ -338,15 +387,15 @@ func ReportComment(c *gin.Context) {
 	}
 
 	if err := database.DB.Create(&newReport).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Şikayet kaydedilirken bir hata oluştu",
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Şikayet kaydedilirken bir hata oluştu",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Yorum başarıyla şikayet edildi",
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Yorum başarıyla şikayet edildi",
 	})
 }
