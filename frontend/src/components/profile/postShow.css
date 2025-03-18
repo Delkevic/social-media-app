@@ -1,0 +1,134 @@
+.post-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.post-modal-content {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  width: 80%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.close-button {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 28px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: white;
+  z-index: 10;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.4);
+  border-radius: 50%;
+}
+
+.post-modal-body {
+  display: flex;
+  height: 500px;
+  max-height: calc(90vh - 40px);
+}
+
+.post-modal-image {
+  flex: 3;
+  background-color: #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.post-modal-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.post-modal-details {
+  flex: 2;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #eee;
+  overflow-y: auto;
+}
+
+.post-modal-text-only {
+  flex: 1;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+}
+
+.post-user-info {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
+.username {
+  font-weight: bold;
+}
+
+.post-content-text {
+  flex: 1;
+  margin-bottom: 15px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.post-stats {
+  display: flex;
+  justify-content: space-between;
+  color: #666;
+  font-size: 0.85rem;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .post-modal-body {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .post-modal-image {
+    flex: none;
+    height: 300px;
+  }
+
+  .post-modal-details {
+    border-left: none;
+    border-top: 1px solid #eee;
+  }
+}

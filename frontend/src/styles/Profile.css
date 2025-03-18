@@ -99,7 +99,9 @@
   line-height: 1.5;
 }
 
-.bio, .location, .website {
+.bio,
+.location,
+.website {
   margin: 8px 0;
 }
 
@@ -294,7 +296,9 @@
 }
 
 /* Adjust these as they're now inside content-display */
-.user-posts, .user-reels, .user-writings {
+.user-posts,
+.user-reels,
+.user-writings {
   width: 100%;
 }
 
@@ -303,7 +307,7 @@
   .content-section {
     flex-direction: column;
   }
-  
+
   .tab-navigation {
     flex-direction: row;
     overflow-x: auto;
@@ -311,18 +315,18 @@
     margin-top: 0;
     margin-bottom: 20px;
   }
-  
+
   .tab-button {
     border-left: none;
     border-bottom: 3px solid transparent;
     white-space: nowrap;
   }
-  
+
   .tab-button.active {
     border-left: none;
     border-bottom: 3px solid #1da1f2;
   }
-  
+
   .profile-container {
     padding: 10px;
   }
@@ -334,7 +338,7 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 20px;
   }
-  
+
   .profile-image {
     width: 170px;
     height: 170px;
