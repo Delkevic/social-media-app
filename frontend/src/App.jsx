@@ -1,17 +1,28 @@
-// React ve React Router gerekli bileşenlerini içe aktarıyoruz
+// React ve React Router gerekli bileşenlerini içe aktarıyoruz
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
+import Reels from './pages/Reels';
+import { ChatPanel } from './components/chat/ChatPanel';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { TOKEN_NAME } from './config/constants';
 
-// Korumalı Route bileşeni oluşturuyoruz
+// Korumalı Route bileşeni oluşturuyoruz
 const ProtectedRoute = ({ children }) => {
-  const isAuthenticated = sessionStorage.getItem('token') || localStorage.getItem('token');
+  const { token, loading } = useAuth();
   
-  if (!isAuthenticated) {
-    // Kullanıcı giriş yapmamışsa login sayfasına yönlendir
+  // Yükleme devam ediyorsa, henüz yönlendirme yapmayalım
+  if (loading) {
+    return <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="animate-pulse text-blue-400">Yükleniyor...</div>
+    </div>;
+  }
+  
+  if (!token) {
+    // Kullanıcı giriş yapmamışsa login sayfasına yönlendir
     return <Navigate to="/login" />;
   }
   
@@ -19,12 +30,12 @@ const ProtectedRoute = ({ children }) => {
 };
 
 function App() {
-  // Sistem tercihine göre temayı başlatıyoruz
+  // Sistem tercihine göre temayı başlatıyoruz
   const [theme, setTheme] = useState(
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   );
   
-  // Sistem tema değişikliklerini dinliyoruz
+  // Sistem tema değişikliklerini dinliyoruz
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     
@@ -34,33 +45,33 @@ function App() {
     
     mediaQuery.addEventListener('change', handleThemeChange);
     
-    // Bileşen kaldırıldığında dinleyiciyi temizliyoruz
+    // Bileşen kaldırıldığında dinleyiciyi temizliyoruz
     return () => {
       mediaQuery.removeEventListener('change', handleThemeChange);
     };
   }, []);
   
-  // Temayı HTML kök elemanına uyguluyoruz
+  // Temayı HTML kök elemanına uyguluyoruz
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
   
   return (
-    <Router>
-      <Routes>
-        {/* Ana sayfa için koruma ekledik */}
-        <Route 
-          path="/" 
-          element={
-            <ProtectedRoute>
-              <Home />
-            </ProtectedRoute>
-          } 
-        />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        {/* Profil sayfası için username parametresi ekledik */}
-        <Route 
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* Ana sayfa için koruma ekledik */}
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route 
           path="/profile/:username" 
           element={
             <ProtectedRoute>
@@ -68,8 +79,18 @@ function App() {
             </ProtectedRoute>
           } 
         />
-      </Routes>
-    </Router>
+          <Route 
+            path="/reels" 
+            element={
+              <ProtectedRoute>
+                <Reels />
+              </ProtectedRoute>
+            } 
+          />
+        </Routes>
+        <ChatPanel />
+      </Router>
+    </AuthProvider>
   );
 }
 

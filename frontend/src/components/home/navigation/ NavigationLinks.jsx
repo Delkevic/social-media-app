@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 const NavigationLinks = () => {
   const location = useLocation();
   
-  // Navigasyon bağlantıları
+  // Navigasyon bağlantıları
   const links = [
     {
       to: '/',
@@ -22,13 +22,13 @@ const NavigationLinks = () => {
           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z" clipRule="evenodd"></path>
         </svg>
       ),
-      label: 'Keşfet'
+      label: 'Keşfet'
     },
     {
       to: '/favorites',
       icon: (
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-          <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
+          <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path>
         </svg>
       ),
       label: 'Favoriler'
@@ -45,17 +45,18 @@ const NavigationLinks = () => {
   ];
 
   return (
-    <div 
+    <div
       className="rounded-2xl overflow-hidden"
       style={{
         backgroundColor: 'var(--background-card)',
         backdropFilter: 'var(--backdrop-blur)',
         boxShadow: 'var(--shadow-lg)',
+        border: '1px solid var(--border-color)'
       }}
     >
       <div className="p-4">
         <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>
-          Hızlı Erişim
+          Hızlı Erişim
         </h3>
         
         <div className="space-y-2">
@@ -66,10 +67,11 @@ const NavigationLinks = () => {
               <Link
                 key={link.to}
                 to={link.to}
-                className="flex items-center p-2 rounded-lg transition-colors"
+                className="flex items-center p-2 rounded-lg transition-colors hover:bg-opacity-80"
                 style={{
-                  backgroundColor: isActive ? 'var(--background-tertiary)' : 'transparent',
-                  color: isActive ? 'var(--accent-red)' : 'var(--text-primary)',
+                  backgroundColor: isActive ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                  color: isActive ? 'var(--accent-blue)' : 'var(--text-primary)',
+                  borderLeft: isActive ? '2px solid var(--accent-blue)' : '2px solid transparent'
                 }}
               >
                 <div className="mr-3">

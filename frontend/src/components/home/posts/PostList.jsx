@@ -1,7 +1,7 @@
 import React from 'react';
 import PostItem from './PostItem';
 
-const PostList = ({ posts, onLike, onSave, currentUser }) => {
+const PostList = ({ posts, onLike, onSave, onDelete, currentUser }) => {
   if (posts.length === 0) {
     return (
       <div 
@@ -27,10 +27,10 @@ const PostList = ({ posts, onLike, onSave, currentUser }) => {
           <path d="M15 7h1a2 2 0 012 2v5.5a1.5 1.5 0 01-3 0V7z"></path>
         </svg>
         <h3 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
-          Henüz gönderi yok
+          Henüz gönderi yok
         </h3>
         <p className="mt-2" style={{ color: 'var(--text-tertiary)' }}>
-          İlk gönderiyi paylaşan sen ol!
+          İlk gönderiyi paylaşan sen ol!
         </p>
       </div>
     );
@@ -44,6 +44,7 @@ const PostList = ({ posts, onLike, onSave, currentUser }) => {
           post={post}
           onLike={onLike}
           onSave={onSave}
+          onDelete={onDelete}
           currentUser={currentUser}
         />
       ))}

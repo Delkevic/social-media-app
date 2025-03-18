@@ -7,14 +7,14 @@ const MessageList = ({ messages }) => {
   if (messages.length === 0) {
     return (
       <div className="text-center py-8" style={{ color: 'var(--text-tertiary)' }}>
-        Hiç mesajınız bulunmuyor.
+        Hiç mesajınız bulunmuyor.
       </div>
     );
   }
 
   const handleMessageClick = (messageId) => {
-    // Mesaj detay sayfasına yönlendir
-    navigate(`/messages/${messageId}`);
+    // Mesaj detay sayfasına yönlendir
+    navigate(/messages/$`{messageId}`);
   };
 
   return (
@@ -38,7 +38,7 @@ const MessageList = ({ messages }) => {
           }}
           onClick={() => navigate('/messages')}
         >
-          Tüm Mesajları Gör
+          Tüm Mesajları Gör
         </button>
       </div>
     </div>
@@ -52,7 +52,7 @@ const MessageItem = ({ message, onClick }) => {
 
   return (
     <div 
-      className={`flex items-center p-3 rounded-lg transition-colors ${message.unread ? 'bg-opacity-10' : ''}`}
+      className={"flex items-center p-3 rounded-lg transition-colors ${message.unread ? 'bg-opacity-10' : ''}"}
       style={{ 
         backgroundColor: message.unread ? 'var(--background-tertiary)' : 'transparent',
         cursor: 'pointer'

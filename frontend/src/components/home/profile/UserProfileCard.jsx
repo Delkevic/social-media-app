@@ -1,44 +1,42 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useNavigate} from 'react-router-dom';
 
 const UserProfileCard = ({ user, stats, loading }) => {
   // Arka plan resmini belirle
   const coverImage = user.coverImage || 'https://via.placeholder.com/500x200';
-  const navigate = useNavigate();
   
   return (
-    <div 
+    <div
       className="rounded-2xl overflow-hidden"
       style={{
         backgroundColor: 'var(--background-card)',
         backdropFilter: 'var(--backdrop-blur)',
         boxShadow: 'var(--shadow-lg)',
+        border: '1px solid var(--border-color)'
       }}
     >
-      {/* Profil kapak fotoğrafı */}
-      <div 
+      {/* Profil kapak fotoğrafı */}
+      <div
         className="h-24 bg-cover bg-center"
-        style={{ backgroundImage: `url(${coverImage})` }}
+        style={{ backgroundImage: url($`{coverImage}`) }}
       ></div>
       
       {/* Kullanıcı bilgileri */}
-      <div className="px-4 pb-4 pt-12 -mt-10 relative" onClick={()=>
-                navigate("/profile/Delkevic")}> 
-        {/* Profil fotoğrafı */}
+      <div className="px-4 pb-4 pt-12 -mt-10 relative">
+        {/* Profil fotoğrafı */}
         <div className="absolute -top-10 left-4">
           {user.profileImage ? (
-            <img 
+            <img
               src={user.profileImage}
               alt={user.username}
               className="w-16 h-16 rounded-full object-cover border-4"
               style={{ borderColor: 'var(--background-card)' }}
             />
           ) : (
-            <div 
+            <div
               className="w-16 h-16 rounded-full flex items-center justify-center border-4"
-              style={{ 
-                backgroundColor: 'var(--accent-red)',
+              style={{
+                backgroundColor: 'var(--accent-blue)',
                 borderColor: 'var(--background-card)'
               }}
             >
@@ -49,7 +47,7 @@ const UserProfileCard = ({ user, stats, loading }) => {
           )}
         </div>
         
-        {/* Kullanıcı adı ve diğer bilgiler */}
+        {/* Kullanıcı adı ve diğer bilgiler */}
         <h2 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
           {user.fullName || user.username}
         </h2>
@@ -70,14 +68,14 @@ const UserProfileCard = ({ user, stats, loading }) => {
             <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
               {loading ? '-' : stats.postCount}
             </p>
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Gönderi</p>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Gönderi</p>
           </div>
           
           <div className="text-center">
             <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
               {loading ? '-' : stats.followerCount}
             </p>
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Takipçi</p>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Takipçi</p>
           </div>
           
           <div className="text-center">
@@ -88,16 +86,21 @@ const UserProfileCard = ({ user, stats, loading }) => {
           </div>
         </div>
         
-        {/* Profil düzenleme butonu */}
+        {/* Profil linki */}
         <Link
-          to="/profile/edit"
-          className="mt-4 block py-2 text-center rounded-lg text-sm font-medium"
+          to="/profile"
+          className="mt-4 block py-2 text-center rounded-lg text-sm font-medium transition-colors"
           style={{
             backgroundColor: 'var(--background-tertiary)',
             color: 'var(--text-primary)',
+            borderWidth: '1px',
+            borderStyle: 'solid',
+            borderColor: 'var(--border-color)'
           }}
+          onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--accent-blue-dark)'}
+          onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--background-tertiary)'}
         >
-          Profili Düzenle
+          Profile Git
         </Link>
       </div>
     </div>

@@ -23,20 +23,20 @@ const NotificationList = ({ notifications, onMarkAsRead }) => {
 };
 
 const NotificationItem = ({ notification, onMarkAsRead }) => {
-  // Bildirime tıklandığında okundu olarak işaretle
+  // Bildirime tıklandığında okundu olarak işaretle
   const handleClick = () => {
     if (!notification.isRead) {
       onMarkAsRead(notification.id);
     }
     
-    // Bildirimin türüne göre farklı sayfaya yönlendirme yapılabilir
-    // örneğin:
+    // Bildirimin türüne göre farklı sayfaya yönlendirme yapılabilir
+    // örneğin:
     // if (notification.type === 'like' && notification.postId) {
-    //   navigate(`/post/${notification.postId}`);
+    //   navigate(/post/${notification.postId});
     // }
   };
 
-  // Bildirim türüne göre ikon belirle
+  // Bildirim türüne göre ikon belirle
   const getIcon = (type) => {
     switch (type) {
       case 'like':

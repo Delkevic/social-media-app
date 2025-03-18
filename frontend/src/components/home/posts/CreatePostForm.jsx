@@ -11,7 +11,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!content.trim()) {
-      setError("Gönderi içeriği boş olamaz");
+      setError("Gönderi içeriği boş olamaz");
       return;
     }
     
@@ -19,10 +19,10 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       setIsSubmitting(true);
       setError('');
       
-      // Görsel URL'lerini al (eğer varsa)
+      // Görsel URL'lerini al (eğer varsa)
       const imageUrls = images.map(img => img.url);
       
-      // Gönderiyi oluştur
+      // Gönderiyi oluştur
       await onSubmit({
         content: content.trim(),
         images: imageUrls
@@ -33,7 +33,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       setImages([]);
       setUploadProgress(0);
     } catch (err) {
-      setError('Gönderi oluşturulurken bir hata oluştu: ' + err.message);
+      setError('Gönderi oluşturulurken bir hata oluştu: ' + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -49,21 +49,22 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       for (const file of files) {
         // Dosya boyutunu kontrol et (10MB)
         if (file.size > 10 * 1024 * 1024) {
-          setError('Dosya boyutu 10MB\'dan küçük olmalıdır');
+          setError('Dosya boyutu 10MB\'dan küçük olmalıdır');
           continue;
         }
         
-        // Yalnızca görsel dosyalarını kabul et
-        if (!file.type.startsWith('image/')) {
-          setError('Yalnızca görsel dosyaları yükleyebilirsiniz');
+        // Yalnızca görsel dosyalarını kabul et
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+          setError('Yalnızca JPG, JPEG, PNG ve GIF formatındaki görseller yüklenebilir');
           continue;
         }
         
-        // Görsel yükleme işlemi için API çağrısı
+        // Görsel yükleme işlemi için API çağrısı
         const response = await api.uploadImage(file);
         
         if (response.success) {
-          // Yüklenen görseli listeye ekle
+          // Yüklenen görseli listeye ekle
           setImages(prevImages => [
             ...prevImages,
             {
@@ -75,7 +76,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         }
       }
     } catch (err) {
-      setError('Görsel yüklenirken bir hata oluştu: ' + err.message);
+      setError('Görsel yüklenirken bir hata oluştu: ' + err.message);
     }
   };
 
@@ -99,7 +100,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       )}
       
       <textarea
-        placeholder="Ne düşünüyorsun?"
+        placeholder="Ne düşünüyorsun?"
         value={content}
         onChange={(e) => setContent(e.target.value)}
         className="w-full h-24 p-3 rounded-lg resize-none"
@@ -110,14 +111,14 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         }}
       />
       
-      {/* Görsel önizleme */}
+      {/* Görsel önizleme */}
       {images.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {images.map(image => (
             <div key={image.id} className="relative">
               <img 
                 src={image.preview} 
-                alt="Gönderi görseli" 
+                alt="Gönderi görseli" 
                 className="rounded-md w-full h-32 object-cover"
               />
               <button
@@ -142,7 +143,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         </div>
       )}
       
-      {/* Alt işlem butonları */}
+      {/* Alt işlem butonları */}
       <div className="flex justify-between items-center">
         <div className="flex space-x-2">
           <label 
@@ -179,20 +180,20 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
             }}
             onClick={onCancel}
           >
-            İptal
+            İptal
           </button>
           
           <button 
             type="submit"
-            className="px-3 py-1.5 rounded-lg font-medium"
+            className="px-3 py-1.5 rounded-lg font-medium transition-colors"
             style={{
-              backgroundColor: 'var(--accent-red)',
+              backgroundColor: 'var(--accent-blue)',
               color: 'white',
               opacity: (!content.trim() && images.length === 0) || isSubmitting ? 0.7 : 1,
             }}
             disabled={(!content.trim() && images.length === 0) || isSubmitting}
           >
-            {isSubmitting ? 'Paylaşılıyor...' : 'Paylaş'}
+            {isSubmitting ? 'Paylaşılıyor...' : 'Paylaş'}
           </button>
         </div>
       </div>
