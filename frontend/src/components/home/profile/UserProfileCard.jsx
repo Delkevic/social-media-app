@@ -18,7 +18,7 @@ const UserProfileCard = ({ user, stats, loading }) => {
       {/* Profil kapak fotoğrafı */}
       <div
         className="h-24 bg-cover bg-center"
-        style={{ backgroundImage: url($`{coverImage}`) }}
+        style={{ backgroundImage: `url(${coverImage})` }}
       ></div>
       
       {/* Kullanıcı bilgileri */}
@@ -88,7 +88,7 @@ const UserProfileCard = ({ user, stats, loading }) => {
         
         {/* Profil linki */}
         <Link
-          to="/profile"
+          to={`/profile/${user.username}`}
           className="mt-4 block py-2 text-center rounded-lg text-sm font-medium transition-colors"
           style={{
             backgroundColor: 'var(--background-tertiary)',

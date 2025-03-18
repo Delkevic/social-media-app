@@ -5,7 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
-import Reels from './pages/Reels';
+//import Reels from './pages/Reels';
 import { ChatPanel } from './components/chat/ChatPanel';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TOKEN_NAME } from './config/constants';
@@ -72,13 +72,14 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route 
-          path="/profile/:username" 
+          path="/profile/:username"
           element={
             <ProtectedRoute>
               <Profile />
             </ProtectedRoute>
           } 
         />
+        {/*
           <Route 
             path="/reels" 
             element={
@@ -87,6 +88,7 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          */}
         </Routes>
         <ChatPanel />
       </Router>

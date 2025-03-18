@@ -5,7 +5,7 @@ import { HoverButton } from '../../components/ui/HoverButton';
 import { MagnetizeButton } from '../../components/ui/MagnetizeButton';
 import api from '../../services/api';
 import UserProfileCard from './profile/UserProfileCard';
-import NavigationLinks from './navigation/NavigationLinks';
+import NavigationLinks from './navigation/ NavigationLinks';
 
 const RightPanel = ({ user, isProfilePage = false }) => {
   const navigate = useNavigate();

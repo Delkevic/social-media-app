@@ -14,7 +14,7 @@ const MessageList = ({ messages }) => {
 
   const handleMessageClick = (messageId) => {
     // Mesaj detay sayfasına yönlendir
-    navigate(/messages/$`{messageId}`);
+    navigate("/messages/$`{messageId}`");
   };
 
   return (

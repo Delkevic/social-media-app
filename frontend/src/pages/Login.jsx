@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { SparklesCore } from "../components/ui/sparkles";
+import { HoverButton } from "../components/ui/HoverButton";
+import { GlowingEffect } from "../components/ui/GlowingEffect";
 
 const Login = () => {
   const [identifier, setIdentifier] = useState("");
@@ -16,11 +19,11 @@ const Login = () => {
       return false;
     }
     if (!password) {
-      setError("Şifre gereklidir");
+      setError("Şifre gereklidir");
       return false;
     }
     if (password.length < 6) {
-      setError("Şifre en az 6 karakter olmalıdır");
+      setError("Şifre en az 6 karakter olmalıdır");
       return false;
     }
     return true;
@@ -58,47 +61,68 @@ const Login = () => {
           sessionStorage.setItem("user", JSON.stringify(data.data.user));
         }
 
-        // Kullanıcıyı ana sayfaya yönlendir
+        // Kullanıcıyı ana sayfaya yönlendir
         setLoading(false);
         navigate("/");
       } catch (error) {
-        setError("Sunucu bağlantısı sırasında bir hata oluştu");
+        setError("Sunucu bağlantısı sırasında bir hata oluştu");
         setLoading(false);
       }
     }
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ background: "var(--background-gradient)" }}
-    >
-      <div className="absolute inset-0 w-full h-full">
-        <div className="absolute w-[200%] h-[200%] bg-gradient-45 from-white/20 to-transparent bg-[length:100px_100px] -rotate-45 animate-slowMove"></div>
+    <div className="min-h-screen relative w-full flex items-center justify-center overflow-hidden">
+      {/* Sparkles arkaplan */}
+      <div className="w-full absolute inset-0 h-screen">
+        <SparklesCore
+          id="loginParticles"
+          background="transparent"
+          minSize={0.6}
+          maxSize={1.4}
+          particleDensity={100}
+          className="w-full h-full"
+          particleColor="#FFFFFF"
+          speed={0.8}
+        />
       </div>
+
+      {/* Radyal gradient maskesi */}
+      <div 
+        className="absolute inset-0 w-full h-full bg-slate-950 opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
+        style={{ backdropFilter: "blur(3px)" }}
+      ></div>
 
       <div className="relative z-10 w-full max-w-lg px-4 py-8">
         <div
-          className="rounded-2xl p-8"
+          className="relative rounded-2xl p-8 backdrop-blur-lg"
           style={{
-            backgroundColor: "var(--background-card)",
-            backdropFilter: "var(--backdrop-blur)",
-            boxShadow: "var(--shadow-lg)",
+            backgroundColor: "rgba(20, 24, 36, 0.7)",
+            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+            border: "1px solid rgba(255, 255, 255, 0.1)"
           }}
         >
+          {/* Kırmızı parlayan efekt */}
+          <GlowingEffect
+            spread={40}
+            glow={true}
+            disabled={false}
+            proximity={64}
+            inactiveZone={0.01}
+            borderWidth={2}
+          />
+          
           <div className="text-center mb-8">
             <h1
-              className="text-2xl font-bold inline-block relative tracking-widest"
-              style={{ color: "var(--text-primary)" }}
+              className="text-4xl font-bold inline-block relative tracking-widest text-white"
             >
               BUZZIFY
               <span
-                className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-0.5 mt-2"
-                style={{ background: "var(--accent-blue)" }}
+                className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-32 h-0.5 mt-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"
               ></span>
             </h1>
-            <p className="mt-4" style={{ color: "var(--text-tertiary)" }}>
-              Hesabınıza Giriş Yapın
+            <p className="mt-6 text-blue-100 opacity-80">
+              Hesabınıza Giriş Yapın
             </p>
           </div>
 
@@ -107,9 +131,9 @@ const Login = () => {
               <div
                 className="p-3 rounded-lg text-sm border text-center"
                 style={{
-                  backgroundColor: "rgba(239, 68, 68, 0.1)",
-                  color: "var(--accent-red)",
-                  borderColor: "var(--accent-red)",
+                  backgroundColor: "rgba(239, 68, 68, 0.2)",
+                  color: "#ef4444",
+                  borderColor: "rgba(239, 68, 68, 0.5)",
                 }}
               >
                 {error}
@@ -118,15 +142,13 @@ const Login = () => {
 
             <div className="space-y-2">
               <label
-                className="block text-sm font-medium"
-                style={{ color: "var(--text-secondary)" }}
+                className="block text-sm font-medium text-blue-100"
               >
                 E-posta Adresi veya Kullanıcı Adı
               </label>
               <div className="relative">
                 <div
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                  style={{ color: "var(--text-tertiary)" }}
+                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-300"
                 >
                   <svg
                     className="w-5 h-5"
@@ -141,12 +163,7 @@ const Login = () => {
                   type="text"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg"
-                  style={{
-                    backgroundColor: "var(--input-bg)",
-                    borderColor: "var(--input-border)",
-                    color: "var(--input-text)",
-                  }}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
                   placeholder="ornek@email.com veya kullanıcı_adı"
                   required
                 />
@@ -155,15 +172,13 @@ const Login = () => {
 
             <div className="space-y-2">
               <label
-                className="block text-sm font-medium"
-                style={{ color: "var(--text-secondary)" }}
+                className="block text-sm font-medium text-blue-100"
               >
-                Şifre
+                Şifre
               </label>
               <div className="relative">
                 <div
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                  style={{ color: "var(--text-tertiary)" }}
+                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-300"
                 >
                   <svg
                     className="w-5 h-5"
@@ -181,20 +196,14 @@ const Login = () => {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 rounded-lg"
-                  style={{
-                    backgroundColor: "var(--input-bg)",
-                    borderColor: "var(--input-border)",
-                    color: "var(--input-text)",
-                  }}
+                  className="w-full pl-10 pr-10 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
                   placeholder="••••••••"
                   autoComplete="current-password"
                   required
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  style={{ color: "var(--text-tertiary)" }}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-blue-300 hover:text-blue-100"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
@@ -235,38 +244,32 @@ const Login = () => {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded"
-                  style={{
-                    borderColor: "var(--input-border)",
-                    accentColor: "var(--accent-blue)",
-                  }}
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-600 text-blue-500"
                 />
                 <label
                   htmlFor="remember"
-                  className="ml-2 text-sm"
-                  style={{ color: "var(--text-tertiary)" }}
+                  className="ml-2 text-sm text-blue-100"
                 >
                   Beni Hatırla
                 </label>
               </div>
               <Link
                 to="/forgot-password"
-                className="text-sm font-medium hover:underline"
-                style={{ color: "var(--accent-blue)" }}
+                className="text-sm font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
               >
-                Şifremi Unuttum
+                Şifremi Unuttum
+                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
               </Link>
             </div>
 
-            <button
+            {/* HoverButton kullanımı */}
+            <HoverButton
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 rounded-lg font-medium transition-all relative overflow-hidden flex items-center justify-center"
+              className="w-full flex items-center justify-center"
               style={{
-                background: "var(--btn-primary-bg)",
-                color: "var(--btn-primary-text)",
-                opacity: loading ? 0.7 : 1,
-                height: "48px",
+                "--circle-start": "#3b82f6", 
+                "--circle-end": "#1e40af"
               }}
             >
               {loading ? (
@@ -291,22 +294,22 @@ const Login = () => {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     ></path>
                   </svg>
-                  Giriş Yapılıyor...
+                  Giriş Yapılıyor...
                 </>
               ) : (
-                "Giriş Yap"
+                "Giriş Yap"
               )}
-            </button>
+            </HoverButton>
 
             <div className="text-center mt-4">
-              <p style={{ color: "var(--text-tertiary)" }}>
+              <p className="text-blue-100">
                 Hesabınız yok mu?{" "}
                 <Link
                   to="/register"
-                  className="font-medium hover:underline"
-                  style={{ color: "var(--accent-blue)" }}
+                  className="font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
                 >
                   Kayıt Ol
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
                 </Link>
               </p>
             </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GlowingEffect } from '../../components/ui/GlowingEffect';
 import NotificationList from './notifications/NotificationList';
 import MessageList from './messages/MessageList';
-import NavigationLinks from './navigation/NavigationLinks';
+import NavigationLinks from './navigation/ NavigationLinks';
 import api from '../../services/api';
 
 const LeftPanel = ({ user }) => {
