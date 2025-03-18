@@ -2,45 +2,52 @@
   --background-primary: #ffffff;
   --background-secondary: #f3f4f6;
   --background-tertiary: #e5e7eb;
-  --background-gradient: linear-gradient(to right top, #047857, #10b981, #34d399);
+  --background-gradient: linear-gradient(
+    to right top,
+    #047857,
+    #10b981,
+    #34d399
+  );
   --background-card: rgba(255, 255, 255, 0.9);
   --background-card-hover: rgba(255, 255, 255, 1);
   --background-glass: rgba(255, 255, 255, 0.1);
   --backdrop-blur: blur(10px);
-  
+
   --text-primary: #111827;
   --text-secondary: #374151;
   --text-tertiary: #6b7280;
   --text-inverted: #ffffff;
-  
+
   --border-color: rgba(229, 231, 235, 0.8);
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
   --accent-green: #10b981; /* Ana yeşil renk (eski --accent-blue) */
   --accent-green-light: #34d399; /* Açık yeşil (eski --accent-blue-light) */
   --accent-green-dark: #047857; /* Koyu yeşil (eski --accent-blue-dark) */
   --accent-red: #ef4444;
   --accent-yellow: #f59e0b;
   --accent-blue: #3b82f6; /* Eski ana renk, belki başka yerlerde kullanmak istersiniz */
-  
+
   --nav-bg: rgba(255, 255, 255, 0.9);
   --nav-text: #111827;
   --nav-border: rgba(229, 231, 235, 0.8);
   --nav-glass: rgba(255, 255, 255, 0.1);
-  
+
   --input-bg: rgba(255, 255, 255, 0.8);
   --input-border: rgba(209, 213, 219, 0.8);
   --input-text: #111827;
   --input-placeholder: #9ca3af;
-  
+
   --btn-primary-bg: linear-gradient(to right, #047857, #10b981);
   --btn-primary-text: #ffffff;
   --btn-secondary-bg: rgba(255, 255, 255, 0.1);
   --btn-secondary-text: #111827;
-  
-  --transition-duration: 0.3s;
+
+  --transition-duration: 0.3s; /* Profilde gönderi takipçi takip statları sayfa ilk açıldığında siyah oluyor. Bu silinirse beyaz olarak başlıyor. */
 }
 
 [data-theme="dark"] {
@@ -48,23 +55,30 @@
   --background-primary: #0a0e17; /* Daha koyu gri ton */
   --background-secondary: #141824; /* Daha derin bir ikincil arka plan */
   --background-tertiary: #1f2633; /* Daha koyu üçüncül arka plan */
-  --background-gradient: linear-gradient(to right top, #064e3b, #065f46, #047857); /* Daha koyu yeşil gradyan */
+  --background-gradient: linear-gradient(
+    to right top,
+    #064e3b,
+    #065f46,
+    #047857
+  ); /* Daha koyu yeşil gradyan */
   --background-card: rgba(20, 24, 36, 0.9); /* Kartlar için daha koyu ton */
   --background-card-hover: rgba(20, 24, 36, 1);
   --background-glass: rgba(10, 14, 23, 0.1); /* Daha koyu cam efekti */
-  
+
   /* Metin renkleri (okunabilirlik için açık bırakıldı) */
   --text-primary: #f9fafb;
   --text-secondary: #d1d5db;
   --text-tertiary: #9ca3af;
   --text-inverted: #0a0e17;
-  
+
   /* Daha koyu gölgeler ve kenarlıklar */
   --border-color: rgba(31, 38, 51, 0.8); /* Daha koyu bir kenarlık */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
-  
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4),
+    0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4),
+    0 4px 6px -2px rgba(0, 0, 0, 0.3);
+
   /* Daha koyu accent renkler */
   --accent-green: #059669; /* Daha koyu yeşil (eski --accent-blue) */
   --accent-green-light: #10b981; /* Orta yeşil (eski --accent-blue-light) */
@@ -72,21 +86,25 @@
   --accent-red: #dc2626; /* Daha koyu kırmızı */
   --accent-yellow: #d97706; /* Daha koyu sarı */
   --accent-blue: #1d4ed8; /* Eski koyu mavi, belki başka yerlerde kullanmak istersiniz */
-  
+
   /* Daha koyu navigasyon */
   --nav-bg: rgba(10, 14, 23, 0.9); /* Daha koyu nav */
   --nav-text: #f9fafb;
   --nav-border: rgba(31, 38, 51, 0.8);
   --nav-glass: rgba(10, 14, 23, 0.1);
-  
+
   /* Daha koyu input alanları */
   --input-bg: rgba(20, 24, 36, 0.8); /* Daha koyu input arka plan */
   --input-border: rgba(55, 65, 81, 0.8); /* Daha koyu kenar */
   --input-text: #f9fafb;
   --input-placeholder: #6b7280;
-  
+
   /* Daha koyu butonlar */
-  --btn-primary-bg: linear-gradient(to right, #064e3b, #065f46); /* Daha koyu bir yeşil gradyan */
+  --btn-primary-bg: linear-gradient(
+    to right,
+    #064e3b,
+    #065f46
+  ); /* Daha koyu bir yeşil gradyan */
   --btn-primary-text: #ffffff;
   --btn-secondary-bg: rgba(20, 24, 36, 0.3);
   --btn-secondary-text: #d1d5db;
@@ -94,15 +112,18 @@
 
 /* Base Styles */
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
   background-color: var(--background-primary);
   color: var(--text-primary);
-  transition: background-color var(--transition-duration), color var(--transition-duration);
+  transition: background-color var(--transition-duration),
+    color var(--transition-duration);
 }
 
 /* Transitions for smooth theme switching */
 * {
-  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-property: background-color, border-color, color, fill, stroke,
+    opacity, box-shadow, transform, filter, backdrop-filter;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: var(--transition-duration);
 }

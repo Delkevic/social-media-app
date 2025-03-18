@@ -1,9 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 
 const UserProfileCard = ({ user, stats, loading }) => {
   // Arka plan resmini belirle
   const coverImage = user.coverImage || 'https://via.placeholder.com/500x200';
+  const navigate = useNavigate();
   
   return (
     <div 
@@ -21,7 +23,8 @@ const UserProfileCard = ({ user, stats, loading }) => {
       ></div>
       
       {/* Kullanıcı bilgileri */}
-      <div className="px-4 pb-4 pt-12 -mt-10 relative">
+      <div className="px-4 pb-4 pt-12 -mt-10 relative" onClick={()=>
+                navigate("/profile/Delkevic")}> 
         {/* Profil fotoğrafı */}
         <div className="absolute -top-10 left-4">
           {user.profileImage ? (

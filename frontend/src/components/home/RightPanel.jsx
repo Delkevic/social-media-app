@@ -4,7 +4,7 @@ import UserProfileCard from './profile/UserProfileCard';
 import NavigationLinks from './navigation/ NavigationLinks';
 import api from '../../services/api';
 
-const RightPanel = ({ user }) => {
+const RightPanel = ({ user, isProfilePage = false }) => {
   const navigate = useNavigate();
   const [profileStats, setProfileStats] = useState({
     postCount: 0,
@@ -15,31 +15,34 @@ const RightPanel = ({ user }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Kullanıcı profilini ve istatistiklerini getir
-    const fetchUserProfile = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await api.user.getProfile();
-        
-        if (response.success && response.data && response.data.user) {
-          // Profil istatistiklerini ayarla
-          setProfileStats({
-            postCount: response.data.user.postCount || 0,
-            followerCount: response.data.user.followerCount || 0,
-            followingCount: response.data.user.followingCount || 0
-          });
+    // Only fetch profile stats if we're not on the profile page
+    if (!isProfilePage && user) {
+      // Kullanıcı profilini ve istatistiklerini getir
+      const fetchUserProfile = async () => {
+        try {
+          setLoading(true);
+          setError(null);
+          
+          const response = await api.user.getProfile();
+          
+          if (response.success && response.data && response.data.user) {
+            // Profil istatistiklerini ayarla
+            setProfileStats({
+              postCount: response.data.user.postCount || 0,
+              followerCount: response.data.user.followerCount || 0,
+              followingCount: response.data.user.followingCount || 0
+            });
+          }
+        } catch (err) {
+          setError('Profil bilgileri yüklenirken bir hata oluştu: ' + err.message);
+        } finally {
+          setLoading(false);
         }
-      } catch (err) {
-        setError('Profil bilgileri yüklenirken bir hata oluştu: ' + err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchUserProfile();
-  }, [user.id]);
+      };
+      
+      fetchUserProfile();
+    }
+  }, [user, isProfilePage]);
 
   const handleLogout = () => {
     // Çıkış işlemi
@@ -66,12 +69,14 @@ const RightPanel = ({ user }) => {
         </div>
       )}
       
-      {/* Kullanıcı Profil Kartı */}
-      <UserProfileCard
-        user={user}
-        stats={profileStats}
-        loading={loading}
-      />
+      {/* Kullanıcı Profil Kartı - Sadece profil sayfasında değilse göster */}
+      {!isProfilePage && (
+        <UserProfileCard
+          user={user}
+          stats={profileStats}
+          loading={loading}
+        />
+      )}
       
       {/* Navigasyon Bağlantıları */}
       <NavigationLinks />
