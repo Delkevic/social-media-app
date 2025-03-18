@@ -3,13 +3,73 @@ import { useNavigate } from 'react-router-dom';
 import LeftPanel from '../components/home/LeftPanel';
 import MainContent from '../components/home/MainContent';
 import RightPanel from '../components/home/RightPanel';
+import { SparklesCore } from '../components/ui/sparkles';
+import { GlowingEffect } from '../components/ui/GlowingEffect';
 import api from '../services/api';
+import { motion } from 'framer-motion';
 
 const Home = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  // Animasyon varyantları
+  const leftPanelVariants = {
+    hidden: { x: -100, opacity: 0 },
+    visible: { 
+      x: 0, 
+      opacity: 1,
+      transition: { 
+        type: "spring", 
+        stiffness: 300, 
+        damping: 24,
+        delay: 0.3
+      } 
+    }
+  };
+
+  const rightPanelVariants = {
+    hidden: { x: 100, opacity: 0 },
+    visible: { 
+      x: 0, 
+      opacity: 1,
+      transition: { 
+        type: "spring", 
+        stiffness: 300, 
+        damping: 24,
+        delay: 0.3
+      } 
+    }
+  };
+
+  const searchVariants = {
+    hidden: { y: -50, opacity: 0 },
+    visible: { 
+      y: 0, 
+      opacity: 1,
+      transition: { 
+        type: "spring", 
+        stiffness: 300, 
+        damping: 24,
+        delay: 0.2
+      } 
+    }
+  };
+
+  const contentVariants = {
+    hidden: { y: 50, opacity: 0 },
+    visible: { 
+      y: 0, 
+      opacity: 1,
+      transition: { 
+        type: "spring", 
+        stiffness: 300, 
+        damping: 24,
+        delay: 0.4
+      } 
+    }
+  };
 
   useEffect(() => {
     // Kullanıcı oturum bilgilerini kontrol et
@@ -63,69 +123,143 @@ const Home = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center"
-           style={{ background: 'var(--background-gradient)' }}>
-        <div className="animate-spin h-12 w-12 border-4 rounded-full"
-             style={{ 
-               borderColor: 'var(--accent-red) transparent transparent transparent',
-             }}></div>
+      <div className="min-h-screen relative flex items-center justify-center overflow-hidden">
+        {/* Sparkles arkaplan */}
+        <div className="w-full absolute inset-0 h-screen">
+          <SparklesCore
+            id="homeLoaderParticles"
+            background="transparent"
+            minSize={0.6}
+            maxSize={1.4}
+            particleDensity={70}
+            className="w-full h-full"
+            particleColor="#FFFFFF"
+            speed={0.8}
+          />
+        </div>
+        
+        {/* Radyal gradient maskesi */}
+        <div 
+          className="absolute inset-0 w-full h-full bg-slate-950 opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
+          style={{ backdropFilter: "blur(3px)" }}
+        ></div>
+        
+        <div className="relative z-10">
+          <div className="animate-spin h-12 w-12 border-4 rounded-full border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent"></div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center flex-col"
-           style={{ background: 'var(--background-gradient)' }}>
+      <div className="min-h-screen relative flex items-center justify-center overflow-hidden">
+        {/* Sparkles arkaplan */}
+        <div className="w-full absolute inset-0 h-screen">
+          <SparklesCore
+            id="homeErrorParticles"
+            background="transparent"
+            minSize={0.6}
+            maxSize={1.4}
+            particleDensity={70}
+            className="w-full h-full"
+            particleColor="#FFFFFF"
+            speed={0.5}
+          />
+        </div>
+        
+        {/* Radyal gradient maskesi */}
         <div 
-          className="p-6 rounded-lg max-w-md text-center"
-          style={{
-            backgroundColor: 'var(--background-card)',
-            backdropFilter: 'var(--backdrop-blur)',
-            boxShadow: 'var(--shadow-lg)',
-          }}
-        >
-          <svg className="w-16 h-16 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" style={{ color: 'var(--accent-red)' }}>
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"></path>
+          className="absolute inset-0 w-full h-full bg-slate-950 opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
+          style={{ backdropFilter: "blur(3px)" }}
+        ></div>
+        
+        <div className="relative z-10 max-w-md p-6 rounded-2xl" style={{ backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <svg className="w-12 h-12 mx-auto mb-4" style={{ color: '#ef4444' }} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-            Bir Hata Oluştu
-          </h2>
-          <p className="mb-4" style={{ color: 'var(--text-secondary)' }}>
-            {error}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="py-2 px-4 rounded-lg font-medium"
-            style={{
-              backgroundColor: 'var(--accent-red)',
-              color: 'white',
-            }}
-          >
-            Yeniden Dene
-          </button>
+          <h2 className="text-xl font-semibold text-center mb-2">Hata Oluştu</h2>
+          <p className="text-center mb-4" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>{error}</p>
+          <div className="flex justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 rounded-lg font-medium transition-colors"
+              style={{ backgroundColor: '#3b82f6', color: 'white' }}
+            >
+              Tekrar Dene
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen"
-         style={{ background: 'var(--background-primary)' }}>
-      <div className="container mx-auto flex flex-col lg:flex-row">
-        {/* Sol Panel - Bildirimler ve Mesajlar */}
-        <div className="w-full lg:w-1/4 p-4">
-          <LeftPanel user={user} />
-        </div>
-        
-        {/* Orta İçerik - Arama ve Gönderiler */}
-        <div className="w-full lg:w-2/4 p-4">
-          <MainContent user={user} />
-        </div>
-        
-        {/* Sağ Panel - Profil ve Ayarlar */}
-        <div className="w-full lg:w-1/4 p-4">
-          <RightPanel user={user} />
+    <div className="min-h-screen relative">
+      {/* Sparkles arkaplan */}
+      <div className="w-full absolute inset-0 h-screen">
+        <SparklesCore
+          id="homeBackgroundParticles"
+          background="transparent"
+          minSize={0.6}
+          maxSize={1.4}
+          particleDensity={50}
+          className="w-full h-full"
+          particleColor="#FFFFFF"
+          speed={0.3}
+        />
+      </div>
+      
+      {/* Radyal gradient maskesi */}
+      <div 
+        className="absolute inset-0 w-full h-full bg-slate-950 opacity-95 [mask-image:radial-gradient(circle_at_center,transparent_10%,black)]"
+        style={{ backdropFilter: "blur(3px)" }}
+      ></div>
+      
+      <div className="container mx-auto relative z-10 p-4">
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Sol Panel - Bildirimler ve Mesajlar - Soldan giriş */}
+          <motion.div 
+            className="w-full lg:w-1/4"
+            variants={leftPanelVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <LeftPanel user={user} />
+          </motion.div>
+          
+          {/* Orta İçerik - Arama ve Gönderiler - Arama yukarıdan, içerik aşağıdan giriş */}
+          <div className="w-full lg:w-2/4">
+            <motion.div
+              variants={searchVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              {/* Arama Çubuğu - yukarıdan gelecek */}
+              <div className="mb-4">
+                <MainContent user={user} showSearchOnly={true} />
+              </div>
+            </motion.div>
+            
+            <motion.div
+              variants={contentVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              {/* İçerik - aşağıdan gelecek */}
+              <MainContent user={user} hideSearch={true} />
+            </motion.div>
+          </div>
+          
+          {/* Sağ Panel - Profil ve Ayarlar - Sağdan giriş */}
+          <motion.div 
+            className="w-full lg:w-1/4"
+            variants={rightPanelVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <RightPanel user={user} />
+          </motion.div>
         </div>
       </div>
     </div>

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import UserProfileCard from './profile/UserProfileCard';
-import NavigationLinks from './navigation/ NavigationLinks';
+import { GlowingEffect } from '../../components/ui/GlowingEffect';
+import { HoverButton } from '../../components/ui/HoverButton';
+import { MagnetizeButton } from '../../components/ui/MagnetizeButton';
 import api from '../../services/api';
+import UserProfileCard from './profile/UserProfileCard';
 
 const RightPanel = ({ user, isProfilePage = false }) => {
   const navigate = useNavigate();
@@ -13,7 +15,7 @@ const RightPanel = ({ user, isProfilePage = false }) => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
+  
   useEffect(() => {
     // Only fetch profile stats if we're not on the profile page
     if (!isProfilePage && user) {
@@ -42,8 +44,8 @@ const RightPanel = ({ user, isProfilePage = false }) => {
       
       fetchUserProfile();
     }
-  }, [user, isProfilePage]);
-
+  }, [user.id]);
+  
   const handleLogout = () => {
     // Çıkış işlemi
     sessionStorage.removeItem('token');
@@ -52,7 +54,7 @@ const RightPanel = ({ user, isProfilePage = false }) => {
     localStorage.removeItem('user');
     navigate('/login');
   };
-
+  
   return (
     <div className="space-y-4">
       {/* Hata mesajı */}
@@ -69,45 +71,99 @@ const RightPanel = ({ user, isProfilePage = false }) => {
         </div>
       )}
       
-      {/* Kullanıcı Profil Kartı - Sadece profil sayfasında değilse göster */}
-      {!isProfilePage && (
+      {/* Kullanıcı Profil Kartı */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <GlowingEffect
+          spread={40}
+          glow={true}
+          disabled={false}
+          proximity={64}
+          inactiveZone={0.01}
+          borderWidth={2}
+        />
         <UserProfileCard
           user={user}
           stats={profileStats}
           loading={loading}
         />
-      )}
+      </div>
       
-      {/* Navigasyon Bağlantıları */}
-      <NavigationLinks />
-      
-      {/* Çıkış Butonu */}
-      <div 
-        className="rounded-2xl overflow-hidden p-4"
-        style={{
-          backgroundColor: 'var(--background-card)',
-          backdropFilter: 'var(--backdrop-blur)',
-          boxShadow: 'var(--shadow-lg)',
-        }}
-      >
-        <button
-          onClick={handleLogout}
-          className="w-full py-2 rounded-lg flex items-center justify-center"
+      {/* Reels Bölümü - MagnetizeButton ile güncellendi */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <GlowingEffect
+          spread={40}
+          glow={true}
+          disabled={false}
+          proximity={64}
+          inactiveZone={0.01}
+          borderWidth={2}
+        />
+        <div 
+          className="rounded-2xl p-4 backdrop-blur-lg"
           style={{
-            backgroundColor: 'var(--background-tertiary)',
-            color: 'var(--text-primary)',
+            backgroundColor: "rgba(20, 24, 36, 0.7)",
+            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+            border: "1px solid rgba(255, 255, 255, 0.1)"
           }}
         >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-            ></path>
-          </svg>
-          Çıkış Yap
-        </button>
+          <MagnetizeButton
+            onClick={() => navigate('/reels')}
+            className="w-full flex items-center justify-center"
+            particleCount={14}
+            attractRadius={50}
+          >
+            <span className="flex items-center justify-center">
+              <svg 
+                className="w-5 h-5 mr-2" 
+                fill="currentColor" 
+                viewBox="0 0 24 24" 
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+              </svg>
+              Reels
+            </span>
+          </MagnetizeButton>
+        </div>
+      </div>
+      
+      {/* Çıkış Butonu */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <GlowingEffect
+          spread={40}
+          glow={true}
+          disabled={false}
+          proximity={64}
+          inactiveZone={0.01}
+          borderWidth={2}
+        />
+        <div
+          className="rounded-2xl p-4 backdrop-blur-lg"
+          style={{
+            backgroundColor: "rgba(20, 24, 36, 0.7)",
+            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+            border: "1px solid rgba(255, 255, 255, 0.1)"
+          }}
+        >
+          <HoverButton
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center"
+            style={{
+              "--circle-start": "#3b82f6", 
+              "--circle-end": "#1e40af"
+            }}
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+              ></path>
+            </svg>
+            Çıkış Yap
+          </HoverButton>
+        </div>
       </div>
     </div>
   );

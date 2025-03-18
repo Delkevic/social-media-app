@@ -8,16 +8,17 @@ const UserProfileCard = ({ user, stats, loading }) => {
   const navigate = useNavigate();
   
   return (
-    <div 
+    <div
       className="rounded-2xl overflow-hidden"
       style={{
         backgroundColor: 'var(--background-card)',
         backdropFilter: 'var(--backdrop-blur)',
         boxShadow: 'var(--shadow-lg)',
+        border: '1px solid var(--border-color)'
       }}
     >
       {/* Profil kapak fotoğrafı */}
-      <div 
+      <div
         className="h-24 bg-cover bg-center"
         style={{ backgroundImage: `url(${coverImage})` }}
       ></div>
@@ -28,17 +29,17 @@ const UserProfileCard = ({ user, stats, loading }) => {
         {/* Profil fotoğrafı */}
         <div className="absolute -top-10 left-4">
           {user.profileImage ? (
-            <img 
+            <img
               src={user.profileImage}
               alt={user.username}
               className="w-16 h-16 rounded-full object-cover border-4"
               style={{ borderColor: 'var(--background-card)' }}
             />
           ) : (
-            <div 
+            <div
               className="w-16 h-16 rounded-full flex items-center justify-center border-4"
-              style={{ 
-                backgroundColor: 'var(--accent-red)',
+              style={{
+                backgroundColor: 'var(--accent-blue)',
                 borderColor: 'var(--background-card)'
               }}
             >
@@ -88,16 +89,21 @@ const UserProfileCard = ({ user, stats, loading }) => {
           </div>
         </div>
         
-        {/* Profil düzenleme butonu */}
+        {/* Profil linki */}
         <Link
-          to="/profile/edit"
-          className="mt-4 block py-2 text-center rounded-lg text-sm font-medium"
+          to="/profile"
+          className="mt-4 block py-2 text-center rounded-lg text-sm font-medium transition-colors"
           style={{
             backgroundColor: 'var(--background-tertiary)',
             color: 'var(--text-primary)',
+            borderWidth: '1px',
+            borderStyle: 'solid',
+            borderColor: 'var(--border-color)'
           }}
+          onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--accent-blue-dark)'}
+          onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--background-tertiary)'}
         >
-          Profili Düzenle
+          Profile Git
         </Link>
       </div>
     </div>

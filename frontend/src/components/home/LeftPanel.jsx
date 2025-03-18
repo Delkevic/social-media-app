@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { GlowingEffect } from '../../components/ui/GlowingEffect';
 import NotificationList from './notifications/NotificationList';
 import MessageList from './messages/MessageList';
+import NavigationLinks from './navigation/NavigationLinks';
 import api from '../../services/api';
 
 const LeftPanel = ({ user }) => {
@@ -62,98 +64,123 @@ const LeftPanel = ({ user }) => {
   };
 
   return (
-    <div 
-      className="rounded-2xl overflow-hidden"
-      style={{
-        backgroundColor: 'var(--background-card)',
-        backdropFilter: 'var(--backdrop-blur)',
-        boxShadow: 'var(--shadow-lg)',
-      }}
-    >
-      {/* Tab Başlıkları */}
-      <div className="flex border-b" style={{ borderColor: 'var(--border-color)' }}>
-        <button
-          className={`flex-1 py-3 text-center font-medium transition-colors ${
-            activeTab === 'notifications' 
-              ? 'border-b-2' 
-              : 'opacity-70'
-          }`}
-          style={{ 
-            borderColor: activeTab === 'notifications' ? 'var(--accent-red)' : 'transparent',
-            color: 'var(--text-primary)' 
+    <div className="space-y-4">
+      {/* Bildirimler ve Mesajlar Paneli */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <GlowingEffect
+          spread={40}
+          glow={true}
+          disabled={false}
+          proximity={64}
+          inactiveZone={0.01}
+          borderWidth={2}
+        />
+        <div 
+          className="rounded-2xl overflow-hidden backdrop-blur-lg"
+          style={{
+            backgroundColor: "rgba(20, 24, 36, 0.7)",
+            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+            border: "1px solid rgba(255, 255, 255, 0.1)"
           }}
-          onClick={() => setActiveTab('notifications')}
         >
-          Bildirimler
-          {notifications.filter(n => !n.isRead).length > 0 && (
-            <span 
-              className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs rounded-full"
-              style={{ backgroundColor: 'var(--accent-red)', color: 'white' }}
+          {/* Tab Başlıkları */}
+          <div className="flex border-b" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+            <button
+              className={`flex-1 py-3 text-center font-medium transition-colors ${
+                activeTab === 'notifications' 
+                  ? 'border-b-2' 
+                  : 'opacity-70'
+              }`}
+              style={{ 
+                borderColor: activeTab === 'notifications' ? '#3b82f6' : 'transparent',
+                color: 'white' 
+              }}
+              onClick={() => setActiveTab('notifications')}
             >
-              {notifications.filter(n => !n.isRead).length}
-            </span>
-          )}
-        </button>
-        
-        <button
-          className={`flex-1 py-3 text-center font-medium transition-colors ${
-            activeTab === 'messages' 
-              ? 'border-b-2' 
-              : 'opacity-70'
-          }`}
-          style={{ 
-            borderColor: activeTab === 'messages' ? 'var(--accent-red)' : 'transparent',
-            color: 'var(--text-primary)' 
-          }}
-          onClick={() => setActiveTab('messages')}
-        >
-          Mesajlar
-          {messages.filter(m => m.unread).length > 0 && (
-            <span 
-              className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs rounded-full"
-              style={{ backgroundColor: 'var(--accent-red)', color: 'white' }}
+              Bildirimler
+              {notifications.filter(n => !n.isRead).length > 0 && (
+                <span 
+                  className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs rounded-full"
+                  style={{ backgroundColor: '#3b82f6', color: 'white' }}
+                >
+                  {notifications.filter(n => !n.isRead).length}
+                </span>
+              )}
+            </button>
+            
+            <button
+              className={`flex-1 py-3 text-center font-medium transition-colors ${
+                activeTab === 'messages' 
+                  ? 'border-b-2' 
+                  : 'opacity-70'
+              }`}
+              style={{ 
+                borderColor: activeTab === 'messages' ? '#3b82f6' : 'transparent',
+                color: 'white' 
+              }}
+              onClick={() => setActiveTab('messages')}
             >
-              {messages.filter(m => m.unread).length}
-            </span>
+              Mesajlar
+              {messages.filter(m => m.unread).length > 0 && (
+                <span 
+                  className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs rounded-full"
+                  style={{ backgroundColor: '#3b82f6', color: 'white' }}
+                >
+                  {messages.filter(m => m.unread).length}
+                </span>
+              )}
+            </button>
+          </div>
+          
+          {/* Hata mesajı */}
+          {error && (
+            <div 
+              className="p-3 m-4 rounded-lg text-sm border text-center"
+              style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#ef4444',
+                borderColor: '#ef4444',
+              }}
+            >
+              {error}
+            </div>
           )}
-        </button>
+          
+          {/* Tab İçeriği */}
+          <div className="p-4">
+            {loading ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin h-6 w-6 border-2 rounded-full border-blue-500 border-t-transparent"></div>
+              </div>
+            ) : (
+              <>
+                {activeTab === 'notifications' && (
+                  <NotificationList 
+                    notifications={notifications}
+                    onMarkAsRead={handleMarkNotificationAsRead}
+                  />
+                )}
+                
+                {activeTab === 'messages' && (
+                  <MessageList messages={messages} />
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
       
-      {/* Hata mesajı */}
-      {error && (
-        <div 
-          className="p-3 m-4 rounded-lg text-sm border text-center"
-          style={{
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            color: 'var(--accent-red)',
-            borderColor: 'var(--accent-red)',
-          }}
-        >
-          {error}
-        </div>
-      )}
-      
-      {/* Tab İçeriği */}
-      <div className="p-4">
-        {loading ? (
-          <div className="flex justify-center py-6">
-            <div className="animate-spin h-6 w-6 border-2 rounded-full"
-                style={{ borderColor: 'var(--accent-red) transparent transparent transparent' }}></div>
-          </div>
-        ) : (
-          <>
-            {activeTab === 'notifications' && (
-              <NotificationList 
-                notifications={notifications}
-                onMarkAsRead={handleMarkNotificationAsRead}
-              />
-            )}
-            
-            {activeTab === 'messages' && (
-              <MessageList messages={messages} />
-            )}
-          </>
-        )}
+      {/* Hızlı Erişim Bölümü - NavigationLinks */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <GlowingEffect
+          spread={40}
+          glow={true}
+          disabled={false}
+          proximity={64}
+          inactiveZone={0.01}
+          borderWidth={2}
+        />
+        <NavigationLinks />
       </div>
     </div>
   );

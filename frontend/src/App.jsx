@@ -5,12 +5,23 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
+import Reels from './pages/Reels';
+import { ChatPanel } from './components/chat/ChatPanel';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { TOKEN_NAME } from './config/constants';
 
 // Korumalı Route bileşeni oluşturuyoruz
 const ProtectedRoute = ({ children }) => {
-  const isAuthenticated = sessionStorage.getItem('token') || localStorage.getItem('token');
+  const { token, loading } = useAuth();
   
-  if (!isAuthenticated) {
+  // Yükleme devam ediyorsa, henüz yönlendirme yapmayalım
+  if (loading) {
+    return <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="animate-pulse text-blue-400">Yükleniyor...</div>
+    </div>;
+  }
+  
+  if (!token) {
     // Kullanıcı giriş yapmamışsa login sayfasına yönlendir
     return <Navigate to="/login" />;
   }
@@ -46,21 +57,21 @@ function App() {
   }, [theme]);
   
   return (
-    <Router>
-      <Routes>
-        {/* Ana sayfa için koruma ekledik */}
-        <Route 
-          path="/" 
-          element={
-            <ProtectedRoute>
-              <Home />
-            </ProtectedRoute>
-          } 
-        />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        {/* Profil sayfası için username parametresi ekledik */}
-        <Route 
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* Ana sayfa için koruma ekledik */}
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route 
           path="/profile/:username" 
           element={
             <ProtectedRoute>
@@ -68,8 +79,18 @@ function App() {
             </ProtectedRoute>
           } 
         />
-      </Routes>
-    </Router>
+          <Route 
+            path="/reels" 
+            element={
+              <ProtectedRoute>
+                <Reels />
+              </ProtectedRoute>
+            } 
+          />
+        </Routes>
+        <ChatPanel />
+      </Router>
+    </AuthProvider>
   );
 }
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import PostItem from './PostItem';
 
-const PostList = ({ posts, onLike, onSave, currentUser }) => {
+const PostList = ({ posts, onLike, onSave, onDelete, currentUser }) => {
   if (posts.length === 0) {
     return (
       <div 
@@ -44,6 +44,7 @@ const PostList = ({ posts, onLike, onSave, currentUser }) => {
           post={post}
           onLike={onLike}
           onSave={onSave}
+          onDelete={onDelete}
           currentUser={currentUser}
         />
       ))}

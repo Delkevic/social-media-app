@@ -54,8 +54,9 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         }
         
         // Yalnızca görsel dosyalarını kabul et
-        if (!file.type.startsWith('image/')) {
-          setError('Yalnızca görsel dosyaları yükleyebilirsiniz');
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+          setError('Yalnızca JPG, JPEG, PNG ve GIF formatındaki görseller yüklenebilir');
           continue;
         }
         
@@ -184,9 +185,9 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
           
           <button 
             type="submit"
-            className="px-3 py-1.5 rounded-lg font-medium"
+            className="px-3 py-1.5 rounded-lg font-medium transition-colors"
             style={{
-              backgroundColor: 'var(--accent-red)',
+              backgroundColor: 'var(--accent-blue)',
               color: 'white',
               opacity: (!content.trim() && images.length === 0) || isSubmitting ? 0.7 : 1,
             }}

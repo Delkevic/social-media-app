@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { SparklesCore } from "../components/ui/sparkles";
+import { HoverButton } from "../components/ui/HoverButton";
+import { GlowingEffect } from "../components/ui/GlowingEffect";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -98,35 +101,56 @@ const Register = () => {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ background: 'var(--background-gradient)' }}
-    >
-      <div className="absolute inset-0 w-full h-full">
-        <div className="absolute w-[200%] h-[200%] bg-gradient-45 from-white/20 to-transparent bg-[length:100px_100px] -rotate-45 animate-slowMove"></div>
+    <div className="min-h-screen relative w-full flex items-center justify-center overflow-hidden">
+      {/* Sparkles arkaplan */}
+      <div className="w-full absolute inset-0 h-screen">
+        <SparklesCore
+          id="registerParticles"
+          background="transparent"
+          minSize={0.6}
+          maxSize={1.4}
+          particleDensity={120}
+          className="w-full h-full"
+          particleColor="#00BFFF" // Mavi partiküller
+          speed={0.5}
+        />
       </div>
+
+      {/* Radyal gradient maskesi */}
+      <div 
+        className="absolute inset-0 w-full h-full bg-slate-950 opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
+        style={{ backdropFilter: "blur(3px)" }}
+      ></div>
 
       <div className="relative z-10 w-full max-w-lg px-4 py-8">
         <div
-          className="rounded-2xl p-8"
+          className="relative rounded-2xl p-8 backdrop-blur-lg"
           style={{
-            backgroundColor: 'var(--background-card)',
-            backdropFilter: 'var(--backdrop-blur)',
-            boxShadow: 'var(--shadow-lg)',
+            backgroundColor: "rgba(20, 24, 36, 0.7)",
+            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+            border: "1px solid rgba(255, 255, 255, 0.1)"
           }}
         >
+          {/* Kırmızı parlayan efekt */}
+          <GlowingEffect
+            spread={40}
+            glow={true}
+            disabled={false}
+            proximity={64}
+            inactiveZone={0.01}
+            borderWidth={2}
+          />
+          
           <div className="text-center mb-6">
             <h1
-              className="text-2xl font-bold inline-block relative tracking-widest"
-              style={{ color: 'var(--text-primary)' }}
+              className="text-4xl font-bold inline-block relative tracking-widest text-white"
             >
               BUZZIFY
               <span
-                className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-0.5 mt-2"
-                style={{ background: 'var(--accent-blue)' }}
+                className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-32 h-0.5 mt-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"
               ></span>
             </h1>
-            <p className="mt-4" style={{ color: 'var(--text-tertiary)' }}>
+            <p className="mt-6 text-blue-100 opacity-80">
               Yeni Hesap Oluşturun
             </p>
           </div>
@@ -136,9 +160,9 @@ const Register = () => {
               <div
                 className="p-3 rounded-lg text-sm border text-center"
                 style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                  color: 'var(--accent-red)',
-                  borderColor: 'var(--accent-red)',
+                  backgroundColor: "rgba(239, 68, 68, 0.2)",
+                  color: "#ef4444",
+                  borderColor: "rgba(239, 68, 68, 0.5)",
                 }}
               >
                 {error}
@@ -147,15 +171,13 @@ const Register = () => {
 
             <div className="space-y-2">
               <label
-                className="block text-sm font-medium"
-                style={{ color: 'var(--text-secondary)' }}
+                className="block text-sm font-medium text-blue-100"
               >
                 Kullanıcı Adı
               </label>
               <div className="relative">
                 <div
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                  style={{ color: 'var(--text-tertiary)' }}
+                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-300"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path
@@ -170,12 +192,7 @@ const Register = () => {
                   name="username"
                   value={formData.username}
                   onChange={handleChange}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg"
-                  style={{
-                    backgroundColor: 'var(--input-bg)',
-                    borderColor: 'var(--input-border)',
-                    color: 'var(--input-text)',
-                  }}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
                   placeholder="kullanici_adi"
                   required
                 />
@@ -184,15 +201,13 @@ const Register = () => {
 
             <div className="space-y-2">
               <label
-                className="block text-sm font-medium"
-                style={{ color: 'var(--text-secondary)' }}
+                className="block text-sm font-medium text-blue-100"
               >
                 E-posta Adresi
               </label>
               <div className="relative">
                 <div
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                  style={{ color: 'var(--text-tertiary)' }}
+                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-300"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
@@ -204,12 +219,7 @@ const Register = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg"
-                  style={{
-                    backgroundColor: 'var(--input-bg)',
-                    borderColor: 'var(--input-border)',
-                    color: 'var(--input-text)',
-                  }}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
                   placeholder="ornek@email.com"
                   autoComplete="email"
                   required
@@ -219,15 +229,13 @@ const Register = () => {
 
             <div className="space-y-2">
               <label
-                className="block text-sm font-medium"
-                style={{ color: 'var(--text-secondary)' }}
+                className="block text-sm font-medium text-blue-100"
               >
                 Şifre
               </label>
               <div className="relative">
                 <div
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                  style={{ color: 'var(--text-tertiary)' }}
+                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-300"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path
@@ -242,20 +250,14 @@ const Register = () => {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  className="w-full pl-10 pr-10 py-3 rounded-lg"
-                  style={{
-                    backgroundColor: 'var(--input-bg)',
-                    borderColor: 'var(--input-border)',
-                    color: 'var(--input-text)',
-                  }}
+                  className="w-full pl-10 pr-10 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
                   placeholder="••••••••"
                   autoComplete="new-password"
                   required
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  style={{ color: 'var(--text-tertiary)' }}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-blue-300 hover:text-blue-100"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
@@ -283,15 +285,13 @@ const Register = () => {
 
             <div className="space-y-2">
               <label
-                className="block text-sm font-medium"
-                style={{ color: 'var(--text-secondary)' }}
+                className="block text-sm font-medium text-blue-100"
               >
                 Şifre Tekrar
               </label>
               <div className="relative">
                 <div
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                  style={{ color: 'var(--text-tertiary)' }}
+                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-300"
                 >
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path
@@ -306,12 +306,7 @@ const Register = () => {
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg"
-                  style={{
-                    backgroundColor: 'var(--input-bg)',
-                    borderColor: 'var(--input-border)',
-                    color: 'var(--input-text)',
-                  }}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
                   placeholder="••••••••"
                   autoComplete="new-password"
                   required
@@ -326,47 +321,41 @@ const Register = () => {
                   type="checkbox"
                   checked={agreeTerms}
                   onChange={(e) => setAgreeTerms(e.target.checked)}
-                  className="w-4 h-4 rounded"
-                  style={{
-                    borderColor: 'var(--input-border)',
-                    accentColor: 'var(--accent-blue)',
-                  }}
+                  className="w-4 h-4 rounded bg-slate-800 border-slate-600 text-blue-500"
                   required
                 />
               </div>
               <label
                 htmlFor="terms"
-                className="ml-2 text-sm"
-                style={{ color: 'var(--text-tertiary)' }}
+                className="ml-2 text-sm text-blue-100"
               >
                 <a
                   href="#"
-                  className="font-medium hover:underline"
-                  style={{ color: 'var(--accent-blue)' }}
+                  className="font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
                 >
                   Kullanım Şartları
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
                 </a>
                 'nı ve{' '}
                 <a
                   href="#"
-                  className="font-medium hover:underline"
-                  style={{ color: 'var(--accent-blue)' }}
+                  className="font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
                 >
                   Gizlilik Politikası
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
                 </a>
                 'nı kabul ediyorum
               </label>
             </div>
 
-            <button
+            {/* HoverButton kullanımı */}
+            <HoverButton
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 rounded-lg font-medium transition-all relative overflow-hidden flex items-center justify-center"
+              className="w-full flex items-center justify-center"
               style={{
-                background: 'var(--btn-primary-bg)',
-                color: 'var(--btn-primary-text)',
-                opacity: loading ? 0.7 : 1,
-                height: '48px',
+                "--circle-start": "#3b82f6", 
+                "--circle-end": "#1e40af"
               }}
             >
               {loading ? (
@@ -396,21 +385,32 @@ const Register = () => {
               ) : (
                 'Kayıt Ol'
               )}
-            </button>
+            </HoverButton>
 
             <div className="text-center mt-4">
-              <p style={{ color: 'var(--text-tertiary)' }}>
+              <p className="text-blue-100">
                 Zaten hesabınız var mı?{' '}
                 <Link
                   to="/login"
-                  className="font-medium hover:underline"
-                  style={{ color: 'var(--accent-blue)' }}
+                  className="font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
                 >
                   Giriş Yap
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
                 </Link>
               </p>
             </div>
           </form>
+        </div>
+      </div>
+
+      {/* Alt kısımda güzelleştirme amaçlı gradyant çizgiler */}
+      <div className="absolute bottom-10 left-0 right-0 flex justify-center pointer-events-none z-20">
+        <div className="w-full max-w-md relative h-10">
+          {/* Gradients */}
+          <div className="absolute inset-x-20 top-0 bg-gradient-to-r from-transparent via-blue-500 to-transparent h-[2px] w-3/4 blur-sm" />
+          <div className="absolute inset-x-20 top-0 bg-gradient-to-r from-transparent via-blue-500 to-transparent h-px w-3/4" />
+          <div className="absolute inset-x-60 top-0 bg-gradient-to-r from-transparent via-cyan-500 to-transparent h-[5px] w-1/4 blur-sm" />
+          <div className="absolute inset-x-60 top-0 bg-gradient-to-r from-transparent via-cyan-500 to-transparent h-px w-1/4" />
         </div>
       </div>
     </div>
