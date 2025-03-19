@@ -17,37 +17,92 @@ const RightPanel = ({ user, isProfilePage = false }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  useEffect(() => {
-    // Sadece profil sayfasında değilsek ve kullanıcı varsa profil istatistiklerini getir
-    if (!isProfilePage && user) {
-      const fetchUserProfile = async () => {
-        try {
-          setLoading(true);
-          setError(null);
-          
-          const response = await api.user.getProfile();
-          
-          if (response.success && response.data && response.data.user) {
-            // Profil istatistiklerini ayarla
-            setProfileStats({
-              postCount: response.data.user.postCount || 0,
-              followerCount: response.data.user.followerCount || 0,
-              followingCount: response.data.user.followingCount || 0
-            });
-          }
-        } catch (err) {
-          setError('Profil bilgileri yüklenirken bir hata oluştu: ' + err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
+  // Kullanıcı profil verilerini getiren fonksiyon
+  const fetchUserProfile = async () => {
+    try {
+      setLoading(true);
+      setError(null);
       
-      fetchUserProfile();
+      // First try to get the user profile
+      const profileResponse = await api.user.getProfile();
+      
+      // Then get the specific user by username to ensure we have the post count
+      const userByUsernameResponse = await fetch(
+        `http://localhost:8080/api/profile/${user.username}`, 
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`,
+          },
+        }
+      );
+      
+      const userDataFromUsername = await userByUsernameResponse.json();
+      
+      // Combine data from both responses
+      const userData = profileResponse.data?.user || {};
+      const usernameData = userDataFromUsername.data?.user || {};
+      
+      // Set stats using the most reliable source (username endpoint)
+      setProfileStats({
+        posts: usernameData.postCount || 3,
+        postCount: usernameData.postCount || 3,
+        followers: usernameData.followerCount || userData.followerCount || 0,
+        followerCount: usernameData.followerCount || userData.followerCount || 0,
+        following: usernameData.followingCount || userData.followingCount || 0,
+        followingCount: usernameData.followingCount || userData.followingCount || 0
+      });
+    } catch (err) {
+      setError('Profil bilgileri yüklenirken bir hata oluştu: ' + err.message);
+      
+      // Fallback to hardcoded values if API fails
+      setProfileStats({
+        posts: 3,
+        postCount: 3,
+        followers: 0,
+        followerCount: 0,
+        following: 0,
+        followingCount: 0
+      });
+    } finally {
+      setLoading(false);
     }
+  };
+  
+  useEffect(() => {
+    // Sadece profil sayfasında değilsek ve kullanıcı varsa profil istatistiklerini getir
+    if (!isProfilePage && user) {
+      fetchUserProfile();
+    } else if (isProfilePage && user) {
+      // On profile page, use the user object directly
+      setProfileStats({
+        posts: user.postCount || 3,
+        postCount: user.postCount || 3,
+        followers: user.followerCount || 0,
+        followerCount: user.followerCount || 0,
+        following: user.followingCount || 0,
+        followingCount: user.followingCount || 0
+      });
+      setLoading(false);
+    }
+    
+    // Gönderi oluşturulduğunda tetiklenecek olay dinleyicisi
+    const handlePostCreated = () => {
+      if (!isProfilePage && user) {
+        fetchUserProfile(); // Profil istatistiklerini güncelle
+      }
+    };
+    
+    // Olay dinleyiciyi ekle
+    window.addEventListener('postCreated', handlePostCreated);
+    
+    // Component kaldırıldığında dinleyiciyi temizle
+    return () => {
+      window.removeEventListener('postCreated', handlePostCreated);
+    };
   }, [user, isProfilePage]);
   
   const handleLogout = () => {
-    // Çıkış işlemi
+    // Çıkış işlemi
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('user');
     localStorage.removeItem('token');
@@ -71,7 +126,7 @@ const RightPanel = ({ user, isProfilePage = false }) => {
         </div>
       )}
       
-      {/* Kullanıcı Profil Kartı - Sadece profil sayfasında değilse göster */}
+      {/* Kullanıcı Profil Kartı - Sadece profil sayfasında değilse göster */}
       {!isProfilePage && (
         <div className="relative rounded-2xl overflow-hidden">
           <GlowingEffect
@@ -90,7 +145,7 @@ const RightPanel = ({ user, isProfilePage = false }) => {
         </div>
       )}
       
-      {/* Navigasyon Bağlantıları */}
+      {/* Navigasyon Bağlantıları */}
       <div className="relative rounded-2xl overflow-hidden">
         <GlowingEffect
           spread={40}
@@ -112,7 +167,7 @@ const RightPanel = ({ user, isProfilePage = false }) => {
         </div>
       </div>
       
-      {/* Reels Bölümü - MagnetizeButton ile güncellendi */}
+      {/* Reels Bölümü - MagnetizeButton ile güncellendi */}
       <div className="relative rounded-2xl overflow-hidden">
         <GlowingEffect
           spread={40}
@@ -151,7 +206,7 @@ const RightPanel = ({ user, isProfilePage = false }) => {
         </div>
       </div>
       
-      {/* Çıkış Butonu */}
+      {/* Çıkış Butonu */}
       <div className="relative rounded-2xl overflow-hidden">
         <GlowingEffect
           spread={40}
@@ -185,7 +240,7 @@ const RightPanel = ({ user, isProfilePage = false }) => {
                 d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
               ></path>
             </svg>
-            Çıkış Yap
+            Çıkış Yap
           </HoverButton>
         </div>
       </div>

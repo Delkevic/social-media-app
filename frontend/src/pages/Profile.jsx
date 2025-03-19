@@ -297,6 +297,7 @@ const Profile = () => {
         post={selectedPost} 
         isOpen={isModalOpen} 
         onClose={closeModal}
+        profileUser={user}  // Pass the profile user information
       />
 
       <div className="container mx-auto px-4 flex justify-between">
@@ -320,6 +321,7 @@ const Profile = () => {
                 <section className="profile-info">
                   <div className="profile-top">
                     <div className="profile-image-container">
+                      {/*Profil Fotoğrafı*/}
                       {user.profileImage ? (
                         <img
                           src={user.profileImage}
@@ -348,6 +350,8 @@ const Profile = () => {
                       )}
                     </div>
 
+                    {/* Kullanıcı adı ve diğer bilgiler */}
+
                     <div className="profile-details">
                       <div className="profile-name-actions">
                         <h1 className="profile-name">
@@ -362,6 +366,8 @@ const Profile = () => {
                           </button>
                         )}
                       </div>
+
+                      {/*Profil Statları*/}
 
                       <div className="profile-stats">
                         <div className="stat-item">
