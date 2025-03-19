@@ -38,7 +38,7 @@ type Reels struct {
 	ViewCount    int       `gorm:"default:0"`
 	LikedBy      []User    `gorm:"many2many:reel_likes;"`
 	SavedBy      []User    `gorm:"many2many:saved_reels;"`
-	Comments     []Comment `gorm:"foreignKey:ReelID"`
+	Comments     []Comment `gorm:"-"` // Use - to tell GORM to ignore this field for now
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	DeletedAt    gorm.DeletedAt `gorm:"index"`

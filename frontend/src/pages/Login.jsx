@@ -64,6 +64,7 @@ const Login = () => {
         // Kullanıcıyı ana sayfaya yönlendir
         setLoading(false);
         navigate("/");
+        console.log("Giriş başarılı:", data);
       } catch (error) {
         setError("Sunucu bağlantısı sırasında bir hata oluştu");
         setLoading(false);
