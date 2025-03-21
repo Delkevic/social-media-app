@@ -204,8 +204,8 @@ const MessageBubbleTrail = ({ variant }) => {
               background: variant === "sent" 
                 ? "rgba(149, 76, 233, 0.7)" 
                 : "rgba(255, 255, 255, 0.3)",
-              width: $`{4 - i}px`,
-              height: $`{4 - i}px`,
+              width: `${4 - i}px`,
+              height: `${4 - i}px`,
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.7 }}
