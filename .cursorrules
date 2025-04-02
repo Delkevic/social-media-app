@@ -92,3 +92,5 @@ uyarılar:
   - Kullanılmayan değişkenler temizlenmeli
   - Dosya yapısına sadık kalınmalı
   - API çağrıları merkezi bir dosyadan yönetilmeli
+
+tasarımlar için ant.design kullanılabilir
