@@ -728,10 +728,13 @@ const Reels = () => {
       <div className="absolute inset-0 z-0">
         <SparklesCore
           id="reelsSparkles"
-          background="rgba(0,0,0,0.2)"
-          speed={0.2}
-          particleColor="#8888ff"
-          className="h-full w-full"
+          background="transparent"
+          minSize={0.4}
+          maxSize={1.4}
+          particleColor="#FFF"
+          particleDensity={30}
+          speed={0.6}
+          className="w-full h-full"
         />
         <GlowingEffect className="h-full w-full" />
       </div>

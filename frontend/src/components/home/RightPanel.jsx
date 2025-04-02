@@ -5,7 +5,7 @@ import { HoverButton } from '../../components/ui/HoverButton';
 import { MagnetizeButton } from '../../components/ui/MagnetizeButton';
 import api from '../../services/api';
 import UserProfileCard from './profile/UserProfileCard';
-import NavigationLinks from './navigation/ NavigationLinks';
+import NavigationLinks from './navigation/NavigationLinks';
 
 const RightPanel = ({ user, isProfilePage = false }) => {
   const navigate = useNavigate();
@@ -144,28 +144,6 @@ const RightPanel = ({ user, isProfilePage = false }) => {
           />
         </div>
       )}
-      
-      {/* Navigasyon Bağlantıları */}
-      <div className="relative rounded-2xl overflow-hidden">
-        <GlowingEffect
-          spread={40}
-          glow={true}
-          disabled={false}
-          proximity={64}
-          inactiveZone={0.01}
-          borderWidth={2}
-        />
-        <div 
-          className="rounded-2xl p-4 backdrop-blur-lg"
-          style={{
-            backgroundColor: "rgba(20, 24, 36, 0.7)",
-            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-            border: "1px solid rgba(255, 255, 255, 0.1)"
-          }}
-        >
-          <NavigationLinks />
-        </div>
-      </div>
       
       {/* Reels Bölümü - MagnetizeButton ile güncellendi */}
       <div className="relative rounded-2xl overflow-hidden">

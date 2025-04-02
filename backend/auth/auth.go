@@ -4,13 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 )
-
-var jwtKey = []byte("gizli_anahtar") // Gerçek bir uygulamada bu anahtarı güvenli bir şekilde saklayın
 
 // JWT claims struct
 type Claims struct {
@@ -34,7 +33,20 @@ func CheckPassword(password, hashedPassword string) error {
 
 // JWT token oluşturma
 func GenerateToken(userID uint) (string, error) {
-	expirationTime := time.Now().Add(24 * time.Hour)
+	// .env'den süresi al veya varsayılan olarak 24 saat kullan
+	tokenExpiry := os.Getenv("TOKEN_EXPIRY")
+	var expirationTime time.Time
+
+	if tokenExpiry == "" {
+		expirationTime = time.Now().Add(24 * time.Hour)
+	} else {
+		duration, err := time.ParseDuration(tokenExpiry)
+		if err != nil {
+			duration = 24 * time.Hour // Varsayılan süre
+		}
+		expirationTime = time.Now().Add(duration)
+	}
+
 	claims := &Claims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -43,8 +55,14 @@ func GenerateToken(userID uint) (string, error) {
 		},
 	}
 
+	// JWT anahtarını .env'den al veya varsayılan kullan
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "gizli_anahtar" // Varsayılan anahtar
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtKey)
+	tokenString, err := token.SignedString([]byte(jwtSecret))
 	if err != nil {
 		return "", err
 	}
@@ -56,8 +74,14 @@ func GenerateToken(userID uint) (string, error) {
 func ValidateToken(tokenString string) (*Claims, error) {
 	claims := &Claims{}
 
+	// JWT anahtarını .env'den al veya varsayılan kullan
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "gizli_anahtar" // Varsayılan anahtar
+	}
+
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return jwtKey, nil
+		return []byte(jwtSecret), nil
 	})
 
 	if err != nil {
