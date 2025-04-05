@@ -1,93 +1,72 @@
 package database
 
 import (
-	"fmt"
 	"log"
 	"os"
-	"strings"
+	"time"
 
 	"social-media-app/backend/models" // Proje ismini kendi dizinine göre değiştir
 
 	"github.com/joho/godotenv"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/sqlite" // SQLite sürücüsünü kullanacağız
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var DB *gorm.DB
 
 func ConnectDatabase() {
-	// .env dosyasını yükle
+	// .env dosyasını yükle
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Println("Uyarı: .env dosyası yüklenemedi:", err)
-		// Varsayılan değerleri kullanacağız
+		log.Println("Uyarı: .env dosyası yüklenemedi:", err)
 	}
 
-	// Veritabanı bağlantı bilgilerini .env dosyasından al
-	dbUser := os.Getenv("DB_USER")
-	if dbUser == "" {
-		dbUser = "root" // Varsayılan kullanıcı
+	// GORM logger ayarları
+	newLogger := logger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		logger.Config{
+			SlowThreshold:             time.Second,
+			LogLevel:                  logger.Info,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  true,
+		},
+	)
+
+	// GORM yapılandırması
+	config := &gorm.Config{
+		Logger: newLogger,
+		NowFunc: func() time.Time {
+			return time.Now().Local()
+		},
 	}
 
-	dbPassword := os.Getenv("DB_PASSWORD")
-	// Şifre boş olabilir
-
-	dbHost := os.Getenv("DB_HOST")
-	if dbHost == "" {
-		dbHost = "localhost" // Varsayılan host
-	}
-
-	dbPort := os.Getenv("DB_PORT")
-	if dbPort == "" {
-		dbPort = "3306" // Varsayılan port
-	}
-
-	dbName := os.Getenv("DB_NAME")
-	if dbName == "" {
-		dbName = "social_media_app" // Varsayılan veritabanı adı
-	}
-
-	// DSN (Data Source Name) oluştur
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		dbUser, dbPassword, dbHost, dbPort, dbName)
-
-	// Veritabanına bağlan
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	// SQLite veritabanına bağlan
+	dbName := "social_media_app.db"
+	db, err := gorm.Open(sqlite.Open(dbName), config)
 	if err != nil {
-		// Veritabanı yoksa oluşturmayı dene
-		if strings.Contains(err.Error(), "Unknown database") {
-			log.Printf("Veritabanı '%s' bulunamadı, oluşturulmaya çalışılacak...", dbName)
-
-			// Veritabanı olmadan DSN oluştur
-			rootDsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/", dbUser, dbPassword, dbHost, dbPort)
-			rootDb, rootErr := gorm.Open(mysql.Open(rootDsn), &gorm.Config{})
-
-			if rootErr != nil {
-				log.Fatal("Ana veritabanına bağlantı başarısız:", rootErr)
-			}
-
-			// Veritabanını oluştur
-			createDbSQL := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", dbName)
-			if err := rootDb.Exec(createDbSQL).Error; err != nil {
-				log.Fatal("Veritabanı oluşturma hatası:", err)
-			}
-
-			log.Printf("Veritabanı '%s' başarıyla oluşturuldu!", dbName)
-
-			// Yeni oluşturulan veritabanına bağlan
-			db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
-			if err != nil {
-				log.Fatal("Yeni oluşturulan veritabanına bağlantı başarısız:", err)
-			}
-		} else {
-			log.Fatal("Database bağlantısı başarısız:", err)
-		}
+		log.Fatal("SQLite veritabanı bağlantısı başarısız:", err)
 	}
+
+	// Bağlantı havuzu ayarları
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatal("Veritabanı bağlantı havuzu ayarlanamadı:", err)
+	}
+
+	// SetMaxIdleConns sets the maximum number of connections in the idle connection pool.
+	sqlDB.SetMaxIdleConns(10)
+
+	// SetMaxOpenConns sets the maximum number of open connections to the database.
+	sqlDB.SetMaxOpenConns(100)
+
+	// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
+	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	DB = db
-	log.Println("Database bağlantısı başarılı!")
+	log.Println("SQLite veritabanı bağlantısı başarılı!")
 
-	// Tabloları otomatik oluştur
+	// Tabloları otomatik oluştur
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.Follow{},
@@ -106,8 +85,17 @@ func ConnectDatabase() {
 	)
 
 	if err != nil {
-		log.Fatal("Database migration hatası:", err)
+		log.Fatal("Veritabanı migration hatası:", err)
 	}
 
-	log.Println("Database migration başarılı!")
+	log.Println("Veritabanı migration başarılı!")
+}
+
+// getEnvWithDefault - Çevre değişkenini varsayılan değerle al
+func getEnvWithDefault(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }

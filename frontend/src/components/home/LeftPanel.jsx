@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GlowingEffect } from '../../components/ui/GlowingEffect';
 import NotificationList from './notifications/NotificationList';
 import MessageList from './messages/MessageList';
-import NavigationLinks from './navigation/ NavigationLinks';
+import NavigationLinks from './navigation/NavigationLinks';
 import api from '../../services/api';
 
 const LeftPanel = ({ user }) => {
@@ -180,7 +180,16 @@ const LeftPanel = ({ user }) => {
           inactiveZone={0.01}
           borderWidth={2}
         />
-        <NavigationLinks />
+        <div 
+          className="rounded-2xl p-4 backdrop-blur-lg"
+          style={{
+            backgroundColor: "rgba(20, 24, 36, 0.7)",
+            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+            border: "1px solid rgba(255, 255, 255, 0.1)"
+          }}
+        >
+          <NavigationLinks />
+        </div>
       </div>
     </div>
   );

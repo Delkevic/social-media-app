@@ -3,6 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { SparklesCore } from "../components/ui/sparkles";
 import { HoverButton } from "../components/ui/HoverButton";
 import { GlowingEffect } from "../components/ui/GlowingEffect";
+import { useAuth } from "../context/AuthContext";
+import axios from "axios";
+import { toast } from "react-hot-toast";
+import { API_URL } from "../config/constants";
 
 const Login = () => {
   const [identifier, setIdentifier] = useState("");
@@ -12,18 +16,15 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const validateForm = () => {
-    if (!identifier) {
-      setError("E-posta adresi veya kullanıcı adı gereklidir");
+    if (!identifier.trim()) {
+      setError("Lütfen e-posta adresi veya kullanıcı adı girin");
       return false;
     }
     if (!password) {
-      setError("Şifre gereklidir");
-      return false;
-    }
-    if (password.length < 6) {
-      setError("Şifre en az 6 karakter olmalıdır");
+      setError("Lütfen şifrenizi girin");
       return false;
     }
     return true;
@@ -36,37 +37,42 @@ const Login = () => {
       setError("");
 
       try {
-        const response = await fetch("http://localhost:8080/api/login", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ identifier, password }),
+        // Axios ile API isteği gönderelim
+        const response = await axios.post(`${API_URL}/login`, {
+          identifier,
+          password,
         });
 
-        const data = await response.json();
+        const data = response.data;
 
         if (!data.success) {
-          setError(data.message);
+          setError(data.message || "Giriş başarısız oldu");
           setLoading(false);
           return;
         }
 
-        // Token'ı localStorage veya sessionStorage'a kaydet
-        if (rememberMe) {
-          localStorage.setItem("token", data.token);
-          localStorage.setItem("user", JSON.stringify(data.data.user));
-        } else {
-          sessionStorage.setItem("token", data.token);
-          sessionStorage.setItem("user", JSON.stringify(data.data.user));
-        }
+        // AuthContext'e kullanıcı bilgilerini gönder
+        login(data.data.user, data.token, rememberMe);
 
-        // Kullanıcıyı ana sayfaya yönlendir
+        // Kullanıcıyı ana sayfaya yönlendir
         setLoading(false);
+        toast.success("Giriş başarılı!");
         navigate("/");
-        console.log("Giriş başarılı:", data);
+        console.log("Giriş başarılı:", data);
       } catch (error) {
-        setError("Sunucu bağlantısı sırasında bir hata oluştu");
+        console.error("Login hatası:", error);
+        
+        if (error.response) {
+          // Sunucudan bir yanıt aldık ama başarısız
+          setError(error.response.data.message || "Kullanıcı adı/şifre hatalı");
+        } else if (error.request) {
+          // İstek gönderildi ama yanıt alınamadı
+          setError("Sunucuya bağlanılamıyor. Lütfen internet bağlantınızı kontrol edin.");
+        } else {
+          // İstek oluşturulurken bir şeyler ters gitti
+          setError("Giriş işlemi sırasında bir hata oluştu");
+        }
+        
         setLoading(false);
       }
     }
