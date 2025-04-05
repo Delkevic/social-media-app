@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './postShow.css';
 
 const PostShow = ({ post, onClose, isOpen, profileUser }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // Reset image index whenever the post changes
+  useEffect(() => {
+    setCurrentImageIndex(0);
+  }, [post]);
   
   if (!isOpen || !post) return null;
 
