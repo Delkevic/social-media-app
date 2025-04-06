@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8080/api';
+import { API_URL, API_BASE_URL } from '../config/constants';
 
 // Token'ı getiren yardımcı fonksiyon
 const getToken = () => {
@@ -22,8 +22,15 @@ const fetchWithAuth = async (endpoint, options = {}) => {
     },
   };
   
+  // API isteğini doğru URL ile oluştur
+  const url = endpoint.startsWith('/api/') 
+    ? `${API_BASE_URL}${endpoint}` 
+    : `${API_URL}${endpoint}`;
+  
+  console.log(`API isteği: ${url}`, config);
+  
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    const response = await fetch(url, config);
     
     if (!response.ok) {
       // Token süresi dolmuşsa veya yetkisiz erişim varsa
@@ -37,10 +44,13 @@ const fetchWithAuth = async (endpoint, options = {}) => {
       }
       
       const errorData = await response.json();
+      console.error(`API Hata (${endpoint}):`, errorData);
       throw new Error(errorData.message || 'Bir hata oluştu');
     }
     
-    return await response.json();
+    const jsonResponse = await response.json();
+    console.log(`API Cevap (${endpoint}):`, jsonResponse);
+    return jsonResponse;
   } catch (error) {
     console.error(`API Hatası (${endpoint}):`, error);
     throw error;
@@ -51,8 +61,8 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 const api = {
   // Kullanıcı ile ilgili işlemler
   user: {
-    getProfile: () => fetchWithAuth('/user'),
-    updateProfile: (data) => fetchWithAuth('/user/profile', {
+    getProfile: () => fetchWithAuth('/api/user'),
+    updateProfile: (data) => fetchWithAuth('/api/user/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
@@ -111,9 +121,10 @@ const api = {
     formData.append('image', file);
     
     const token = getToken();
+    console.log('Görsel yükleniyor:', file.name, 'boyut:', file.size);
     
     try {
-        const response = await fetch(`${API_BASE_URL}/upload/image`, {
+        const response = await fetch(`${API_URL}/upload/image`, {
             method: 'POST',
             headers: {
                 'Authorization': token ? `Bearer ${token}` : '',
@@ -123,15 +134,17 @@ const api = {
         
         if (!response.ok) {
             const error = await response.json();
+            console.error('Görsel yükleme cevap hatası:', error);
             throw new Error(error.message || 'Görsel yüklenirken bir hata oluştu');
         }
         
         const result = await response.json();
+        console.log('Görsel yükleme cevabı:', result);
         
         // Önemli değişiklik: URL'yi tam URL'ye dönüştürüyoruz
         if (result.success && result.data && result.data.url) {
             // Backend URL'sine dönüştür
-            result.data.fullUrl = `http://localhost:8080${result.data.url}`;
+            result.data.fullUrl = getFullImageUrl(result.data.url);
         }
         
         return result;
@@ -171,6 +184,24 @@ const api = {
       method: 'POST',
     }),
   },
+};
+
+// Yardımcı fonksiyonlar
+const getFullImageUrl = (imageUrl) => {
+  if (!imageUrl) return null;
+
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    return imageUrl;
+  }
+
+  // URL'de çift slash varsa düzelt
+  const cleanUrl = imageUrl.replace(/\/+/g, '/');
+  
+  if (cleanUrl.startsWith("/")) {
+    return `${API_BASE_URL}${cleanUrl}`;
+  } else {
+    return `${API_BASE_URL}/${cleanUrl}`;
+  }
 };
 
 export default api;

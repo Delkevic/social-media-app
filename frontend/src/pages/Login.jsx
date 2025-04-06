@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { SparklesCore } from "../components/ui/sparkles";
 import { HoverButton } from "../components/ui/HoverButton";
@@ -7,6 +7,21 @@ import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import { API_URL } from "../config/constants";
+import { motion, AnimatePresence } from "framer-motion";
+
+// Utility function to convert boolean attributes to strings
+const convertBooleanProps = (props) => {
+  const result = { ...props };
+  const attributesToConvert = ['jsx', 'global'];
+  
+  attributesToConvert.forEach(attr => {
+    if (attr in result && typeof result[attr] === 'boolean') {
+      result[attr] = result[attr].toString();
+    }
+  });
+  
+  return result;
+};
 
 const Login = () => {
   const [identifier, setIdentifier] = useState("");
@@ -79,19 +94,23 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen relative w-full flex items-center justify-center overflow-hidden">
-      {/* Sparkles arkaplan */}
-      <div className="w-full absolute inset-0 h-screen">
-        <SparklesCore
-          id="loginParticles"
-          background="transparent"
-          minSize={0.6}
-          maxSize={1.4}
-          particleDensity={100}
-          className="w-full h-full"
-          particleColor="#FFFFFF"
-          speed={0.8}
-        />
+    <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-slate-950">
+      {/* Arkaplan - Sparkles */}
+      <div className="absolute inset-0 w-full h-full">
+        {convertBooleanProps({
+          component: <SparklesCore
+            id="loginSparkles"
+            background="transparent"
+            minSize={0.6}
+            maxSize={1.4}
+            particleDensity={100}
+            className="w-full h-full"
+            particleColor="#FFFFFF"
+            speed={0.3}
+            jsx="true"
+            global="true"
+          />
+        }).component}
       </div>
 
       {/* Radyal gradient maskesi */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../../services/api';
+import { API_BASE_URL } from '../../../config/constants';
 
 const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
   // Prop kontrolleri
@@ -170,6 +171,24 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       setTimeout(() => setError(null), 3000);
     }
     setShowMenu(false);
+  };
+
+  // Görsel URL'lerini tam adrese dönüştürme yardımcı fonksiyonu
+  const getFullImageUrl = (imageUrl) => {
+    if (!imageUrl) return null;
+
+    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+      return imageUrl;
+    }
+
+    // URL'de çift slash varsa düzelt
+    const cleanUrl = imageUrl.replace(/\/+/g, '/');
+    
+    if (cleanUrl.startsWith("/")) {
+      return `${API_BASE_URL}${cleanUrl}`;
+    } else {
+      return `${API_BASE_URL}/${cleanUrl}`;
+    }
   };
 
   const Comment = ({ comment, onReply, currentUser, setComments }) => {
@@ -710,7 +729,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
                 
                 // URL'yi düzelt
                 if (imageUrl && !imageUrl.startsWith('http')) {
-                  imageUrl = `http://localhost:8080/api/images/${imageUrl}`;
+                  imageUrl = getFullImageUrl(imageUrl);
                 }
                 
                 return (

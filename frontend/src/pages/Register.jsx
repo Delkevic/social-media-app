@@ -3,6 +3,24 @@ import { Link, useNavigate } from 'react-router-dom';
 import { SparklesCore } from "../components/ui/sparkles";
 import { HoverButton } from "../components/ui/HoverButton";
 import { GlowingEffect } from "../components/ui/GlowingEffect";
+import { API_URL } from "../config/constants";
+import axios from "axios";
+import { motion } from "framer-motion";
+import { toast } from "react-hot-toast";
+
+// Utility function to convert boolean attributes to strings
+const convertBooleanProps = (props) => {
+  const result = { ...props };
+  const attributesToConvert = ['jsx', 'global'];
+  
+  attributesToConvert.forEach(attr => {
+    if (attr in result && typeof result[attr] === 'boolean') {
+      result[attr] = result[attr].toString();
+    }
+  });
+  
+  return result;
+};
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -101,19 +119,23 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen relative w-full flex items-center justify-center overflow-hidden">
+    <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-slate-950">
       {/* Sparkles arkaplan */}
-      <div className="w-full absolute inset-0 h-screen">
-        <SparklesCore
-          id="registerParticles"
-          background="transparent"
-          minSize={0.6}
-          maxSize={1.4}
-          particleDensity={120}
-          className="w-full h-full"
-          particleColor="#00BFFF" // Mavi partiküller
-          speed={0.5}
-        />
+      <div className="absolute inset-0 w-full h-full">
+        {convertBooleanProps({
+          component: <SparklesCore
+            id="registerSparkles"
+            background="transparent"
+            minSize={0.6}
+            maxSize={1.4}
+            particleDensity={100}
+            className="w-full h-full"
+            particleColor="#FFFFFF"
+            speed={0.3}
+            jsx="true"
+            global="true"
+          />
+        }).component}
       </div>
 
       {/* Radyal gradient maskesi */}

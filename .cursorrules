@@ -93,4 +93,4 @@ uyarılar:
   - Dosya yapısına sadık kalınmalı
   - API çağrıları merkezi bir dosyadan yönetilmeli
 
-tasarımlar için ant.design kullanılabilir
+tasarımlar için ant.design veya material ui gibi küthüphaneler kullanılabilir

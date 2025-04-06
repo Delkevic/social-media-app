@@ -7,6 +7,23 @@ import { SparklesCore } from '../components/ui/sparkles';
 import { GlowingEffect } from '../components/ui/GlowingEffect';
 import api from '../services/api';
 import { motion } from 'framer-motion';
+import { ChatPanel } from '../components/chat/ChatPanel';
+import { API_URL } from '../config/constants';
+import axios from 'axios';
+
+// Utility function to convert boolean attributes to strings
+const convertBooleanProps = (props) => {
+  const result = { ...props };
+  const attributesToConvert = ['jsx', 'global'];
+  
+  attributesToConvert.forEach(attr => {
+    if (attr in result && typeof result[attr] === 'boolean') {
+      result[attr] = result[attr].toString();
+    }
+  });
+  
+  return result;
+};
 
 const Home = () => {
   const [user, setUser] = useState(null);
@@ -126,16 +143,20 @@ const Home = () => {
       <div className="min-h-screen relative flex items-center justify-center overflow-hidden">
         {/* Sparkles arkaplan */}
         <div className="w-full absolute inset-0 h-screen">
-          <SparklesCore
-            id="homeLoaderParticles"
-            background="transparent"
-            minSize={0.6}
-            maxSize={1.4}
-            particleDensity={70}
-            className="w-full h-full"
-            particleColor="#FFFFFF"
-            speed={0.8}
-          />
+          {convertBooleanProps({
+            component: <SparklesCore
+              id="homeLoaderParticles"
+              background="transparent"
+              minSize={0.6}
+              maxSize={1.4}
+              particleDensity={70}
+              className="w-full h-full"
+              particleColor="#FFFFFF"
+              speed={0.8}
+              jsx="true"
+              global="true"
+            />
+          }).component}
         </div>
         
         {/* Radyal gradient maskesi */}
@@ -156,16 +177,20 @@ const Home = () => {
       <div className="min-h-screen relative flex items-center justify-center overflow-hidden">
         {/* Sparkles arkaplan */}
         <div className="w-full absolute inset-0 h-screen">
-          <SparklesCore
-            id="homeErrorParticles"
-            background="transparent"
-            minSize={0.6}
-            maxSize={1.4}
-            particleDensity={70}
-            className="w-full h-full"
-            particleColor="#FFFFFF"
-            speed={0.5}
-          />
+          {convertBooleanProps({
+            component: <SparklesCore
+              id="homeErrorParticles"
+              background="transparent"
+              minSize={0.6}
+              maxSize={1.4}
+              particleDensity={70}
+              className="w-full h-full"
+              particleColor="#FFFFFF"
+              speed={0.5}
+              jsx="true"
+              global="true"
+            />
+          }).component}
         </div>
         
         {/* Radyal gradient maskesi */}
@@ -198,16 +223,20 @@ const Home = () => {
     <div className="min-h-screen relative">
       {/* Sparkles arkaplan */}
       <div className="w-full absolute inset-0 h-screen">
-        <SparklesCore
-          id="homeBackgroundParticles"
-          background="transparent"
-          minSize={0.6}
-          maxSize={1.4}
-          particleDensity={50}
-          className="w-full h-full"
-          particleColor="#FFFFFF"
-          speed={0.3}
-        />
+        {convertBooleanProps({
+          component: <SparklesCore
+            id="homeBackgroundParticles"
+            background="transparent"
+            minSize={0.6}
+            maxSize={1.4}
+            particleDensity={50}
+            className="w-full h-full"
+            particleColor="#FFFFFF"
+            speed={0.3}
+            jsx="true"
+            global="true"
+          />
+        }).component}
       </div>
       
       {/* Radyal gradient maskesi */}

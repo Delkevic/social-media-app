@@ -11,7 +11,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!content.trim()) {
-      setError("Gönderi içeriği boş olamaz");
+      setError("Gönderi içeriği boş olamaz");
       return;
     }
     
@@ -19,10 +19,12 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       setIsSubmitting(true);
       setError('');
       
-      // Görsel URL'lerini al (eğer varsa)
+      // Görsel URL'lerini al (eğer varsa)
       const imageUrls = images.map(img => img.url);
       
-      // Gönderiyi oluştur
+      console.log('Post gönderiliyor:', { content: content.trim(), images: imageUrls });
+      
+      // Gönderiyi oluştur
       await onSubmit({
         content: content.trim(),
         images: imageUrls
@@ -33,7 +35,8 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       setImages([]);
       setUploadProgress(0);
     } catch (err) {
-      setError('Gönderi oluşturulurken bir hata oluştu: ' + err.message);
+      console.error('Post oluşturma hatası:', err);
+      setError('Gönderi oluşturulurken bir hata oluştu: ' + (err.message || err));
     } finally {
       setIsSubmitting(false);
     }
@@ -44,39 +47,55 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
     if (files.length === 0) return;
     
     setError('');
+    console.log('Yüklenecek dosyalar:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
     
     try {
       for (const file of files) {
         // Dosya boyutunu kontrol et (10MB)
         if (file.size > 10 * 1024 * 1024) {
-          setError('Dosya boyutu 10MB\'dan küçük olmalıdır');
+          setError('Dosya boyutu 10MB\'dan küçük olmalıdır');
           continue;
         }
         
-        // Yalnızca görsel dosyalarını kabul et
+        // Yalnızca görsel dosyalarını kabul et
         const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
         if (!allowedTypes.includes(file.type)) {
-          setError('Yalnızca JPG, JPEG, PNG ve GIF formatındaki görseller yüklenebilir');
+          setError('Yalnızca JPG, JPEG, PNG ve GIF formatındaki görseller yüklenebilir');
           continue;
         }
         
-        // Görsel yükleme işlemi için API çağrısı
+        // Görsel yükleme işlemi için API çağrısı
+        console.log('Görsel yükleme başlıyor:', file.name);
         const response = await api.uploadImage(file);
+        console.log('Görsel yükleme tamamlandı:', response);
         
         if (response.success) {
-          // Yüklenen görseli listeye ekle
+          // Yüklenen görseli listeye ekle
+          const imageUrl = response.data.url;
+          console.log('Görsel URL:', imageUrl);
+          
+          // Eğer URL http:// ile başlamıyorsa, tam URL'ye dönüştür
+          const fullImageUrl = imageUrl.startsWith('http') 
+            ? imageUrl 
+            : `http://127.0.0.1:8080${imageUrl}`;
+          
           setImages(prevImages => [
             ...prevImages,
             {
               id: Date.now() + Math.random().toString(36),
-              url: response.data.url,
+              url: imageUrl, // API'ye gönderilecek orijinal URL
+              fullUrl: fullImageUrl, // Görüntülemek için tam URL
               preview: URL.createObjectURL(file)
             }
           ]);
+        } else {
+          console.error('Görsel yükleme başarısız:', response);
+          setError('Görsel yüklenemedi: ' + (response.message || 'Bilinmeyen hata'));
         }
       }
     } catch (err) {
-      setError('Görsel yüklenirken bir hata oluştu: ' + err.message);
+      console.error('Görsel yükleme hatası:', err);
+      setError('Görsel yüklenirken bir hata oluştu: ' + (err.message || err));
     }
   };
 
@@ -100,7 +119,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       )}
       
       <textarea
-        placeholder="Ne düşünüyorsun?"
+        placeholder="Ne düşünüyorsun?"
         value={content}
         onChange={(e) => setContent(e.target.value)}
         className="w-full h-24 p-3 rounded-lg resize-none"
@@ -111,15 +130,19 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         }}
       />
       
-      {/* Görsel önizleme */}
+      {/* Görsel önizleme */}
       {images.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {images.map(image => (
             <div key={image.id} className="relative">
               <img 
                 src={image.preview} 
-                alt="Gönderi görseli" 
+                alt="Gönderi görseli" 
                 className="rounded-md w-full h-32 object-cover"
+                onError={(e) => {
+                  console.error('Görsel yüklenemedi:', image);
+                  e.target.src = 'https://via.placeholder.com/150?text=Yüklenemedi';
+                }}
               />
               <button
                 type="button"
@@ -143,7 +166,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         </div>
       )}
       
-      {/* Alt işlem butonları */}
+      {/* Alt işlem butonları */}
       <div className="flex justify-between items-center">
         <div className="flex space-x-2">
           <label 
@@ -180,7 +203,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
             }}
             onClick={onCancel}
           >
-            İptal
+            İptal
           </button>
           
           <button 
@@ -193,7 +216,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
             }}
             disabled={(!content.trim() && images.length === 0) || isSubmitting}
           >
-            {isSubmitting ? 'Paylaşılıyor...' : 'Paylaş'}
+            {isSubmitting ? 'Paylaşılıyor...' : 'Paylaş'}
           </button>
         </div>
       </div>

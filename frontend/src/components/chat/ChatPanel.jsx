@@ -8,6 +8,20 @@ import {
 } from "./ChatComponents";
 import { motion, AnimatePresence } from "framer-motion";
 
+// Utility function to convert boolean attributes to strings
+const convertBooleanProps = (props) => {
+  const result = { ...props };
+  const attributesToConvert = ['jsx', 'global'];
+  
+  attributesToConvert.forEach(attr => {
+    if (attr in result && typeof result[attr] === 'boolean') {
+      result[attr] = result[attr].toString();
+    }
+  });
+  
+  return result;
+};
+
 // Ana MessagesPanel bileşeni
 export function ChatPanel() {
   const [isOpen, setIsOpen] = useState(false);
@@ -952,16 +966,18 @@ export function ChatPanel() {
         </Button>
       </motion.div>
 
-      {/* Global CSS - skrollbarı gizlemek için */}
-      <style jsx global>{`
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
+      {/* Global CSS - skrollbarı gizlemek için */}
+      {convertBooleanProps({
+        component: <style jsx="true" global="true">{`
+          .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+          }
+          .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+          }
+        `}</style>
+      }).component}
     </div>
   );
 }

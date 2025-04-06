@@ -5,30 +5,51 @@ import CreatePostForm from './posts/CreatePostForm';
 import api from '../../services/api';
 
 const MainContent = ({ user, showSearchOnly, hideSearch }) => {
-  const [activeTab, setActiveTab] = useState('following');
+  const [activeTab, setActiveTab] = useState('general');
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   useEffect(() => {
-    // Gönderi verilerini çek
+    // Gönderi verilerini çek
     const fetchPosts = async () => {
       try {
         setLoading(true);
         setError(null);
         
+        console.log('Gönderiler çekiliyor. Feed tipi:', activeTab);
         const response = await api.posts.getFeeds(activeTab);
-        setPosts(response.data.posts || []);
+        console.log('API Yanıtı (getFeeds):', response);
+        
+        if (response && response.data) {
+          // API yanıtının yapısını kontrol et
+          if (Array.isArray(response.data)) {
+            // Doğrudan dizi döndüyse
+            setPosts(response.data);
+            console.log('Post sayısı (dizi):', response.data.length);
+          } else if (response.data.posts && Array.isArray(response.data.posts)) {
+            // {success: true, data: { posts: [] }} formatında
+            setPosts(response.data.posts);
+            console.log('Post sayısı (posts array):', response.data.posts.length);
+          } else {
+            // Diğer format, boş array varsayalım
+            console.warn('Beklenmeyen API yanıt formatı:', response.data);
+            setPosts([]);
+          }
+        } else {
+          console.warn('API yanıtında data yok:', response);
+          setPosts([]);
+        }
       } catch (err) {
-        setError('Gönderiler yüklenirken bir hata oluştu: ' + err.message);
-        console.error(err);
+        console.error('Gönderiler yüklenirken hata:', err);
+        setError('Gönderiler yüklenirken bir hata oluştu: ' + err.message);
       } finally {
         setLoading(false);
       }
     };
     
-    // Sadece arama çubuğunu göstereceksek, gönderileri yükleme
+    // Sadece arama çubuğunu göstereceksek, gönderileri yükleme
     if (!showSearchOnly) {
       fetchPosts();
     }
@@ -40,16 +61,16 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
     try {
       setLoading(true);
       
-      // Backend API'nız arama özelliğini destekliyorsa burada çağrı yapabilirsiniz
+      // Backend API'nız arama özelliğini destekliyorsa burada çagırı yapabilirsiniz
       // const response = await api.posts.search(searchTerm);
       // setPosts(response.data.posts || []);
       
-      // Şimdilik bilgilendirme amaçlı konsola yazalım
+      // Şimdilik bilgilendirme amacı için konsola yazalım
       console.log('Arama yapılıyor:', searchTerm);
       
-      // Gerçek bir uygulamada, backend'e arama isteği gönderin
+      // Gerçek bir uygulamada, backend'e arama isteği gönderin
     } catch (err) {
-      setError('Arama yapılırken bir hata oluştu: ' + err.message);
+      setError('Arama yapılırken bir hata oluştu: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -60,19 +81,40 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
       setLoading(true);
       setError(null);
       
-      // API'ye gönderi oluşturma isteği gönder
+      console.log('Post oluşturma isteği gönderiliyor:', postData);
+      // API'ye gönderi oluşturma isteği gönder
       const response = await api.posts.create(postData);
+      console.log('Post oluşturma cevabı:', response);
       
       if (response.success) {
         // Formu kapat
         setShowCreateForm(false);
         
-        // Gönderi listesini güncelle
+        // Başarı mesajı göster
+        alert('Gönderi başarıyla oluşturuldu!');
+        
+        // Gönderi listesini güncelle
+        console.log('Güncel gönderileri çekiyorum...');
         const updatedPosts = await api.posts.getFeeds(activeTab);
-        setPosts(updatedPosts.data.posts || []);
+        console.log('Güncel gönderiler API yanıtı:', updatedPosts);
+        
+        if (updatedPosts && updatedPosts.data) {
+          if (Array.isArray(updatedPosts.data)) {
+            setPosts(updatedPosts.data);
+          } else if (updatedPosts.data.posts && Array.isArray(updatedPosts.data.posts)) {
+            setPosts(updatedPosts.data.posts);
+          } else {
+            console.warn('Beklenmeyen API yanıt formatı:', updatedPosts.data);
+          }
+        } else {
+          console.warn('API yanıtında data yok:', updatedPosts);
+        }
+      } else {
+        setError('Gönderi oluşturulamadı: ' + (response.message || 'Bilinmeyen hata'));
       }
     } catch (err) {
-      setError('Gönderi oluşturulurken bir hata oluştu: ' + err.message);
+      console.error('Post oluşturma hatası:', err);
+      setError('Gönderi oluşturulurken bir hata oluştu: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -84,14 +126,14 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
 
   return (
     <div className="space-y-4">
-      {/* Arama Çubuğu - GlowingEffect kaldırıldı */}
+      {/* Arama Çubuğu - GlowingEffect kaldırıldı */}
       {!hideSearch && (
         <div className="relative">
           <SearchBar onSearch={handleSearch} />
         </div>
       )}
       
-      {/* Sadece arama gösterilecekse, geri kalan içeriği gösterme */}
+      {/* Sadece arama gösterilecekse, geri kalan içerik i gösterme */}
       {!showSearchOnly && (
         <>
           {/* Hata mesajı */}
@@ -108,7 +150,7 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
             </div>
           )}
           
-          {/* Gönderi Oluşturma - GlowingEffect kaldırıldı */}
+          {/* Gönderi Oluşturma - GlowingEffect kaldırıldı */}
           <div 
             className="rounded-2xl p-4 backdrop-blur-lg"
             style={{
@@ -147,14 +189,14 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
                 
                 <div className="flex-1">
                   <p className="text-blue-100">
-                    Post atmak için tıklayın, {user.username}?
+                    Post atmak için tıklayın, {user.username}?
                   </p>
                 </div>
               </div>
             )}
           </div>
           
-          {/* Sekme Menüsü - GlowingEffect kaldırıldı */}
+          {/* Sekme Menüsü - GlowingEffect kaldırıldı */}
           <div 
             className="rounded-2xl overflow-hidden backdrop-blur-lg"
             style={{
@@ -181,17 +223,17 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
               
               <button
                 className={`flex-1 py-3 text-center font-medium transition-colors ${
-                  activeTab === 'foryou' 
+                  activeTab === 'general' 
                     ? 'border-b-2' 
                     : 'opacity-70'
                 }`}
                 style={{ 
-                  borderColor: activeTab === 'foryou' ? '#3b82f6' : 'transparent',
+                  borderColor: activeTab === 'general' ? '#3b82f6' : 'transparent',
                   color: 'white' 
                 }}
-                onClick={() => handleTabChange('foryou')}
+                onClick={() => handleTabChange('general')}
               >
-                Keşfet
+                Keşfet
               </button>
               
               <button
@@ -206,12 +248,12 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
                 }}
                 onClick={() => handleTabChange('popular')}
               >
-                Popüler
+                Popüler
               </button>
             </div>
             
             <div className="p-4">
-              {/* İçerik */}
+              {/* İçerik */}
               {loading ? (
                 <div className="flex justify-center py-8">
                   <div className="animate-spin h-8 w-8 border-4 rounded-full border-blue-500 border-t-transparent"></div>
