@@ -580,7 +580,7 @@ const Reels = () => {
       <div className="relative flex h-screen z-20">
         {/* Sol Panel */}
         <div className={`hidden md:block w-64 lg:w-72 h-full border-r border-slate-800/30 p-4 ${showCommentsPanel ? 'animate-slide-left' : ''}`}>
-          <LeftPanel />
+          <LeftPanel showMessagesAndNotifications={false} />
           
           {/* Tab Seçici */}
           <TabSelector activeTab={activeTab} setActiveTab={setActiveTab} />
