@@ -2,8 +2,30 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 const UserProfileCard = ({ user, stats, loading }) => {
-  // Arka plan resmini belirle
-  const coverImage = user.coverImage || 'https://via.placeholder.com/500x200';
+  // Kullanıcı verisinin var olduğunu kontrol et
+  if (!user) {
+    return (
+      <div 
+        className="rounded-2xl overflow-hidden p-4 text-center"
+        style={{
+          backgroundColor: 'var(--background-card)',
+          backdropFilter: 'var(--backdrop-blur)',
+          boxShadow: 'var(--shadow-lg)',
+          border: '1px solid var(--border-color)'
+        }}
+      >
+        <div className="animate-pulse flex flex-col items-center justify-center">
+          <div className="rounded-full bg-gray-700 h-16 w-16 mb-4"></div>
+          <div className="h-4 bg-gray-700 rounded w-3/4 mb-2"></div>
+          <div className="h-3 bg-gray-700 rounded w-1/2 mb-2"></div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Arka plan resmini belirle - Yerel bir gradient kullan
+  const coverImage = user?.coverImage || 'none';
+  const useGradientBg = !user?.coverImage; // coverImage yoksa gradient kullan
   
   // Helper function to get the correct post count
   const getPostCount = () => {
@@ -56,7 +78,11 @@ const UserProfileCard = ({ user, stats, loading }) => {
       {/* Profil kapak fotoğrafı */}
       <div
         className="h-24 bg-cover bg-center"
-        style={{ backgroundImage: `url(${coverImage})` }}
+        style={{ 
+          backgroundImage: useGradientBg 
+            ? 'linear-gradient(to right, #0f172a, #1e3a8a)' 
+            : `url(${coverImage})` 
+        }}
       ></div>
       
       {/* Kullanıcı bilgileri */}
@@ -79,7 +105,7 @@ const UserProfileCard = ({ user, stats, loading }) => {
               }}
             >
               <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>
-                {user.username.charAt(0).toUpperCase()}
+                {user.username?.charAt(0)?.toUpperCase() || '?'}
               </span>
             </div>
           )}

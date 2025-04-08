@@ -115,6 +115,13 @@ func SetupRoutes() *gin.Engine {
 			auth.POST("/reels/:id/share", controllers.ShareReel)
 			auth.DELETE("/reels/:id", controllers.DeleteReel)
 			auth.GET("/profile/:username/reels", controllers.GetUserReels)
+			auth.GET("/reels/explore", controllers.GetExploreReels)
+			auth.POST("/reels/:id/save", controllers.SaveReel)
+			auth.DELETE("/reels/:id/save", controllers.UnsaveReel)
+
+			// Kullanıcı takip rotaları
+			auth.POST("/user/follow/:id", controllers.FollowUser)
+			auth.DELETE("/user/follow/:id", controllers.UnfollowUser)
 		}
 	}
 
