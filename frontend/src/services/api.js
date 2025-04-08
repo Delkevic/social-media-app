@@ -36,24 +36,37 @@ const fetchWithAuth = async (endpoint, options = {}) => {
       // Token süresi dolmuşsa veya yetkisiz erişim varsa
       if (response.status === 401) {
         // Oturumu temizle ve login sayfasına yönlendir
+        console.warn('Oturum süresi dolmuş veya geçersiz. Yeniden giriş yapmanız gerekiyor.');
         sessionStorage.removeItem('token');
         sessionStorage.removeItem('user');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        
+        // Eğer login sayfasında değilsek yönlendirelim
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
+        return { success: false, message: 'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.' };
       }
       
       const errorData = await response.json();
       console.error(`API Hata (${endpoint}):`, errorData);
-      throw new Error(errorData.message || 'Bir hata oluştu');
+      return { success: false, message: errorData.message || 'Bir hata oluştu' };
     }
     
     const jsonResponse = await response.json();
     console.log(`API Cevap (${endpoint}):`, jsonResponse);
+    
+    // Yanıt formatını kontrol et ve standat yanıt yapısına dönüştür
+    if (jsonResponse.success === undefined) {
+      // API success alanı döndürmüyorsa, bir success alanı ekle
+      return { success: true, data: jsonResponse };
+    }
+    
     return jsonResponse;
   } catch (error) {
     console.error(`API Hatası (${endpoint}):`, error);
-    throw error;
+    return { success: false, message: error.message || 'API isteği sırasında beklenmeyen bir hata oluştu' };
   }
 };
 
@@ -87,10 +100,17 @@ const api = {
     unsave: (postId) => fetchWithAuth(`/posts/${postId}/save`, {
       method: 'DELETE',
     }),
-    addComment: (postId, content) => fetchWithAuth(`/posts/${postId}/comments`, {
-      method: 'POST',
-      body: JSON.stringify({ content }),
-    }),
+    addComment: (postId, content, parentId = null) => {
+      const data = { content };
+      if (parentId !== null) {
+        data.parentId = parentId;
+      }
+      
+      return fetchWithAuth(`/posts/${postId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
     getComments: (postId) => fetchWithAuth(`/posts/${postId}/comments`),
     report: (postId) => fetchWithAuth(`/posts/${postId}/report`, {
       method: 'POST',
