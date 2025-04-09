@@ -104,3 +104,18 @@ func GenerateRandomToken() (string, error) {
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
 }
+
+// VerifyToken verilen token'ı doğrulayıp kullanıcı ID'sini döndürür
+func VerifyToken(tokenString string) (uint, error) {
+	// Bearer token formatını kontrol et
+	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+		tokenString = tokenString[7:]
+	}
+
+	claims, err := ValidateToken(tokenString)
+	if err != nil {
+		return 0, err
+	}
+
+	return claims.UserID, nil
+}

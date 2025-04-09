@@ -4,31 +4,22 @@ import { GlowingEffect } from '../../components/ui/GlowingEffect';
 import { HoverButton } from '../../components/ui/HoverButton';
 import { MagnetizeButton } from '../../components/ui/MagnetizeButton';
 import api from '../../services/api';
-import UserProfileCard from './profile/UserProfileCard';
-import NavigationLinks from './navigation/NavigationLinks';
+import MiniReelsPlayer from '../../components/profile/MiniReelsPlayer';
 
 const RightPanel = ({ user, isProfilePage = false }) => {
   const navigate = useNavigate();
-  const [profileStats, setProfileStats] = useState({
-    postCount: 0,
-    followerCount: 0,
-    followingCount: 0
-  });
+  const [exploreReels, setExploreReels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Kullanıcı profil verilerini getiren fonksiyon
-  const fetchUserProfile = async () => {
+  // Keşfet Reels verilerini getiren fonksiyon
+  const fetchExploreReels = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // First try to get the user profile
-      const profileResponse = await api.user.getProfile();
-      
-      // Then get the specific user by username to ensure we have the post count
-      const userByUsernameResponse = await fetch(
-        `http://localhost:8080/api/profile/${user.username}`, 
+      const response = await fetch(
+        `http://localhost:8080/api/reels/explore`, 
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`,
@@ -36,70 +27,23 @@ const RightPanel = ({ user, isProfilePage = false }) => {
         }
       );
       
-      const userDataFromUsername = await userByUsernameResponse.json();
+      const data = await response.json();
       
-      // Combine data from both responses
-      const userData = profileResponse.data?.user || {};
-      const usernameData = userDataFromUsername.data?.user || {};
-      
-      // Set stats using the most reliable source (username endpoint)
-      setProfileStats({
-        posts: usernameData.postCount || 3,
-        postCount: usernameData.postCount || 3,
-        followers: usernameData.followerCount || userData.followerCount || 0,
-        followerCount: usernameData.followerCount || userData.followerCount || 0,
-        following: usernameData.followingCount || userData.followingCount || 0,
-        followingCount: usernameData.followingCount || userData.followingCount || 0
-      });
+      if (data.success && data.data) {
+        setExploreReels(data.data);
+      } else {
+        setError('Reels verileri yüklenirken bir hata oluştu.');
+      }
     } catch (err) {
-      setError('Profil bilgileri yüklenirken bir hata oluştu: ' + err.message);
-      
-      // Fallback to hardcoded values if API fails
-      setProfileStats({
-        posts: 3,
-        postCount: 3,
-        followers: 0,
-        followerCount: 0,
-        following: 0,
-        followingCount: 0
-      });
+      setError('Reels verileri yüklenirken bir hata oluştu: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
   
   useEffect(() => {
-    // Sadece profil sayfasında değilsek ve kullanıcı varsa profil istatistiklerini getir
-    if (!isProfilePage && user) {
-      fetchUserProfile();
-    } else if (isProfilePage && user) {
-      // On profile page, use the user object directly
-      setProfileStats({
-        posts: user.postCount || 3,
-        postCount: user.postCount || 3,
-        followers: user.followerCount || 0,
-        followerCount: user.followerCount || 0,
-        following: user.followingCount || 0,
-        followingCount: user.followingCount || 0
-      });
-      setLoading(false);
-    }
-    
-    // Gönderi oluşturulduğunda tetiklenecek olay dinleyicisi
-    const handlePostCreated = () => {
-      if (!isProfilePage && user) {
-        fetchUserProfile(); // Profil istatistiklerini güncelle
-      }
-    };
-    
-    // Olay dinleyiciyi ekle
-    window.addEventListener('postCreated', handlePostCreated);
-    
-    // Component kaldırıldığında dinleyiciyi temizle
-    return () => {
-      window.removeEventListener('postCreated', handlePostCreated);
-    };
-  }, [user, isProfilePage]);
+    fetchExploreReels();
+  }, []);
   
   const handleLogout = () => {
     // Çıkış işlemi
@@ -126,24 +70,22 @@ const RightPanel = ({ user, isProfilePage = false }) => {
         </div>
       )}
       
-      {/* Kullanıcı Profil Kartı - Sadece profil sayfasında değilse göster */}
-      {!isProfilePage && (
-        <div className="relative rounded-2xl overflow-hidden">
-          <GlowingEffect
-            spread={40}
-            glow={true}
-            disabled={false}
-            proximity={64}
-            inactiveZone={0.01}
-            borderWidth={2}
-          />
-          <UserProfileCard
-            user={user}
-            stats={profileStats}
-            loading={loading}
-          />
-        </div>
-      )}
+      {/* Mini Reels Oynatıcı */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <GlowingEffect
+          spread={40}
+          glow={true}
+          disabled={false}
+          proximity={64}
+          inactiveZone={0.01}
+          borderWidth={2}
+        />
+        <MiniReelsPlayer 
+          reels={exploreReels} 
+          user={user} 
+          isExploreMode={true}
+        />
+      </div>
       
       {/* Reels Bölümü - MagnetizeButton ile güncellendi */}
       <div className="relative rounded-2xl overflow-hidden">

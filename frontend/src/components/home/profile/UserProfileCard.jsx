@@ -1,23 +1,56 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Play, Tv, Heart, MessageSquare, Plus, Video, BarChart2 } from 'lucide-react';
 
 const UserProfileCard = ({ user, stats, loading }) => {
   // Kullanıcı verisinin var olduğunu kontrol et
   if (!user) {
     return (
       <div 
-        className="rounded-2xl overflow-hidden p-4 text-center"
+        className="rounded-2xl overflow-hidden p-4"
         style={{
-          backgroundColor: 'var(--background-card)',
-          backdropFilter: 'var(--backdrop-blur)',
+          backgroundColor: 'rgba(20, 24, 36, 0.7)',
+          backdropFilter: 'blur(4px)',
           boxShadow: 'var(--shadow-lg)',
-          border: '1px solid var(--border-color)'
+          border: '1px solid rgba(255, 255, 255, 0.1)'
         }}
       >
-        <div className="animate-pulse flex flex-col items-center justify-center">
-          <div className="rounded-full bg-gray-700 h-16 w-16 mb-4"></div>
-          <div className="h-4 bg-gray-700 rounded w-3/4 mb-2"></div>
-          <div className="h-3 bg-gray-700 rounded w-1/2 mb-2"></div>
+        <div className="flex flex-col items-center text-center space-y-3">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-blue-500">
+            <Tv className="w-8 h-8 text-white" />
+          </div>
+          
+          <div className="space-y-1">
+            <h2 className="font-bold text-xl text-white">Reels'e Hoş Geldiniz</h2>
+            <p className="text-sm text-gray-300">En iyi video içeriklerini keşfedin</p>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-3 w-full my-2">
+            <div className="bg-slate-800/50 rounded-lg p-2 flex flex-col items-center justify-center">
+              <Play className="h-4 w-4 text-purple-400 mb-1" />
+              <span className="text-xs text-white/70">Videolar</span>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-2 flex flex-col items-center justify-center">
+              <Heart className="h-4 w-4 text-purple-400 mb-1" />
+              <span className="text-xs text-white/70">Beğeniler</span>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-2 flex flex-col items-center justify-center">
+              <MessageSquare className="h-4 w-4 text-purple-400 mb-1" />
+              <span className="text-xs text-white/70">Yorumlar</span>
+            </div>
+          </div>
+          
+          <Link
+            to="/login"
+            className="w-full mt-2 py-2 text-center rounded-lg text-sm font-medium flex items-center justify-center"
+            style={{
+              backgroundColor: 'var(--accent-blue)',
+              color: 'white',
+            }}
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Hesap Oluştur / Giriş Yap
+          </Link>
         </div>
       </div>
     );
@@ -64,15 +97,16 @@ const UserProfileCard = ({ user, stats, loading }) => {
     if (loading) return '-';
     return stats?.following || stats?.followingCount || user?.following || user?.followingCount || 0;
   };
-  
+
+  // Giriş yapmış kullanıcı için Reels özet kartı
   return (
     <div
       className="rounded-2xl overflow-hidden"
       style={{
-        backgroundColor: 'var(--background-card)',
-        backdropFilter: 'var(--backdrop-blur)',
+        backgroundColor: 'rgba(20, 24, 36, 0.7)',
+        backdropFilter: 'blur(4px)',
         boxShadow: 'var(--shadow-lg)',
-        border: '1px solid var(--border-color)'
+        border: '1px solid rgba(255, 255, 255, 0.1)'
       }}
     >
       {/* Profil kapak fotoğrafı */}
@@ -94,14 +128,14 @@ const UserProfileCard = ({ user, stats, loading }) => {
               src={user.profileImage}
               alt={user.username}
               className="w-16 h-16 rounded-full object-cover border-4"
-              style={{ borderColor: 'var(--background-card)' }}
+              style={{ borderColor: 'rgba(20, 24, 36, 0.7)' }}
             />
           ) : (
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center border-4"
               style={{
                 backgroundColor: 'var(--accent-blue)',
-                borderColor: 'var(--background-card)'
+                borderColor: 'rgba(20, 24, 36, 0.7)'
               }}
             >
               <span style={{ color: 'white', fontWeight: 'bold', fontSize: '1.5rem' }}>
@@ -112,59 +146,58 @@ const UserProfileCard = ({ user, stats, loading }) => {
         </div>
         
         {/* Kullanıcı adı ve diğer bilgiler */}
-        <h2 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
+        <h2 className="font-bold text-lg text-white">
           {user.fullName || user.username}
         </h2>
         
-        <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+        <p className="text-sm text-white/60">
           @{user.username}
         </p>
         
         {user.bio && (
-          <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+          <p className="mt-2 text-sm text-white/80">
             {user.bio}
           </p>
         )}
         
-        {/* Profil istatistikleri */}
-        <div className="mt-4 flex justify-between">
-          <div className="text-center">
-            <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
-              {getPostCount()}
-            </p>
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Gönderi</p>
+        {/* Reels İstatistikleri */}
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="bg-slate-800/50 rounded-lg p-2 flex items-center justify-start">
+            <Video className="h-4 w-4 text-purple-400 mr-2" />
+            <div>
+              <p className="text-xs text-white/70">Reels</p>
+              <p className="text-sm font-bold text-white">{getPostCount()}</p>
+            </div>
           </div>
-          
-          <div className="text-center">
-            <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
-              {getFollowerCount()}
-            </p>
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Takipçi</p>
+          <div className="bg-slate-800/50 rounded-lg p-2 flex items-center justify-start">
+            <Heart className="h-4 w-4 text-purple-400 mr-2" />
+            <div>
+              <p className="text-xs text-white/70">Beğeniler</p>
+              <p className="text-sm font-bold text-white">432</p>
+            </div>
           </div>
-          
-          <div className="text-center">
-            <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
-              {getFollowingCount()}
-            </p>
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Takip</p>
+          <div className="bg-slate-800/50 rounded-lg p-2 flex items-center justify-start">
+            <BarChart2 className="h-4 w-4 text-purple-400 mr-2" />
+            <div>
+              <p className="text-xs text-white/70">İzlenmeler</p>
+              <p className="text-sm font-bold text-white">3.2K</p>
+            </div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-2 flex items-center justify-start">
+            <MessageSquare className="h-4 w-4 text-purple-400 mr-2" />
+            <div>
+              <p className="text-xs text-white/70">Yorumlar</p>
+              <p className="text-sm font-bold text-white">65</p>
+            </div>
           </div>
         </div>
         
         {/* Profil linki */}
         <Link
           to={`/profile/${user.username}`}
-          className="mt-4 block py-2 text-center rounded-lg text-sm font-medium transition-colors"
-          style={{
-            backgroundColor: 'var(--background-tertiary)',
-            color: 'var(--text-primary)',
-            borderWidth: '1px',
-            borderStyle: 'solid',
-            borderColor: 'var(--border-color)'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--accent-blue-dark)'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--background-tertiary)'}
+          className="mt-4 block py-2 text-center rounded-lg text-sm font-medium transition-colors bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 text-white"
         >
-          Profile Git
+          Profilinize Gidin
         </Link>
       </div>
     </div>

@@ -79,6 +79,24 @@ const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+    searchUsers: (query) => {
+      console.log(`Kullanıcı arama: query=${query}`);
+      
+      // Oturum açmış kullanıcının bilgilerini al
+      const userRaw = sessionStorage.getItem('user') || localStorage.getItem('user');
+      let currentUserId = '';
+      
+      if (userRaw) {
+        try {
+          const userData = JSON.parse(userRaw);
+          currentUserId = userData.id || '';
+        } catch (e) {
+          console.error('Kullanıcı verisi parse edilemedi:', e);
+        }
+      }
+      
+      return fetchWithAuth(`/users/search?query=${encodeURIComponent(query)}&currentUserId=${currentUserId}`);
+    },
   },
   
   // Gönderi ile ilgili işlemler
@@ -129,10 +147,52 @@ const api = {
   messages: {
     getConversations: () => fetchWithAuth('/messages'),
     getConversation: (userId) => fetchWithAuth(`/messages/${userId}`),
-    sendMessage: (userId, content) => fetchWithAuth(`/messages/${userId}`, {
+    sendMessage: (userId, content, mediaUrl = null, mediaType = null) => {
+      const data = { content };
+      if (mediaUrl) {
+        data.mediaUrl = mediaUrl;
+        data.mediaType = mediaType;
+      }
+      return fetchWithAuth(`/messages/${userId}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    sendTypingStatus: (userId, isTyping) => fetchWithAuth(`/messages/${userId}/typing`, {
       method: 'POST',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ isTyping }),
     }),
+    // WebSocket bağlantısı oluştur
+    createWebSocketConnection: () => {
+      const token = getToken();
+      if (!token) return null;
+      
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+      
+      // WebSocket API URL'sini düzelt - sadece WebSocket için prefix düzenlemesi yapalım
+      console.log("WebSocket bağlantısı oluşturuluyor...");
+      
+      // URL'den host kısmını (localhost:8080) çıkaralım
+      const host = API_BASE_URL.replace(/^https?:\/\//, '');
+      const wsUrl = `${wsProtocol}${host}/api/ws`;
+      
+      console.log("WebSocket URL:", wsUrl);
+      
+      // Yeni WebSocket bağlantısı kur
+      const ws = new WebSocket(wsUrl);
+      
+      // WebSocket açıldığında token ile kimlik doğrulama yap
+      ws.onopen = () => {
+        console.log('WebSocket bağlantısı kuruldu');
+        // Token'ı göndermek için auth mesajı gönderiyoruz
+        ws.send(JSON.stringify({ 
+          type: 'auth', 
+          token: token 
+        }));
+      };
+      
+      return ws;
+    },
   },
 
   // Görsel yükleme

@@ -186,6 +186,78 @@ const TabSelector = ({ activeTab, setActiveTab }) => {
   );
 };
 
+// Reels İstatistikleri Bileşeni
+const ReelsStats = () => {
+  return (
+    <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-3 mt-4">
+      <h3 className="text-sm font-medium mb-3 text-white/70">Reels İstatistikleri</h3>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+          <p className="text-purple-400 text-lg font-bold">2.5K</p>
+          <p className="text-white/60 text-xs">İzlendi</p>
+        </div>
+        <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+          <p className="text-purple-400 text-lg font-bold">128</p>
+          <p className="text-white/60 text-xs">Beğeni</p>
+        </div>
+        <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+          <p className="text-purple-400 text-lg font-bold">48</p>
+          <p className="text-white/60 text-xs">Yorum</p>
+        </div>
+        <div className="bg-slate-700/50 rounded-lg p-2 text-center">
+          <p className="text-purple-400 text-lg font-bold">12</p>
+          <p className="text-white/60 text-xs">Paylaşım</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Popüler Hesaplar Bileşeni
+const PopularAccounts = () => {
+  return (
+    <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-3 mt-4">
+      <h3 className="text-sm font-medium mb-3 text-white/70">Popüler Hesaplar</h3>
+      <div className="flex flex-col space-y-3">
+        {/* Hesap 1 */}
+        <div className="flex items-center space-x-2">
+          <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="Melis" className="w-8 h-8 rounded-full" />
+          <div className="flex-1">
+            <p className="text-white text-sm font-medium">melisaz</p>
+            <p className="text-white/60 text-xs">2.3M takipçi</p>
+          </div>
+          <button className="text-xs text-white px-2 py-1 rounded-full bg-purple-600">Takip Et</button>
+        </div>
+        
+        {/* Hesap 2 */}
+        <div className="flex items-center space-x-2">
+          <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Ahmet" className="w-8 h-8 rounded-full" />
+          <div className="flex-1">
+            <p className="text-white text-sm font-medium">ahmetk</p>
+            <p className="text-white/60 text-xs">1.5M takipçi</p>
+          </div>
+          <button className="text-xs text-white px-2 py-1 rounded-full bg-purple-600">Takip Et</button>
+        </div>
+        
+        {/* Hesap 3 */}
+        <div className="flex items-center space-x-2">
+          <img src="https://randomuser.me/api/portraits/women/22.jpg" alt="Ayşe" className="w-8 h-8 rounded-full" />
+          <div className="flex-1">
+            <p className="text-white text-sm font-medium">aysegul_</p>
+            <p className="text-white/60 text-xs">987K takipçi</p>
+          </div>
+          <button className="text-xs text-white px-2 py-1 rounded-full bg-purple-600">Takip Et</button>
+        </div>
+        
+        {/* Tümünü Gör butonu */}
+        <button className="text-purple-400 text-sm font-medium mt-2 hover:text-purple-300 transition-colors">
+          Tümünü Gör →
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const Reels = () => {
   const navigate = useNavigate();
   const { user, token } = useAuth();
@@ -569,8 +641,8 @@ const Reels = () => {
       
       {/* Radyal gradient maskesi */}
       <div 
-        className="absolute inset-0 w-full h-full bg-slate-950 opacity-95 [mask-image:radial-gradient(circle_at_center,transparent_10%,black)]"
-        style={{ backdropFilter: "blur(3px)" }}
+        className="absolute inset-0 w-full h-full bg-black opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_5%,black)]"
+        style={{ backdropFilter: "blur(4px)" }}
       ></div>
 
       {/* Giriş gerektiren mesaj */}
@@ -584,6 +656,12 @@ const Reels = () => {
           
           {/* Tab Seçici */}
           <TabSelector activeTab={activeTab} setActiveTab={setActiveTab} />
+          
+          {/* Reels İstatistikleri */}
+          <ReelsStats />
+          
+          {/* Popüler Hesaplar */}
+          <PopularAccounts />
           
           {/* Video Yükleme Butonu */}
           <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-3 mt-4">
@@ -670,11 +748,17 @@ const Reels = () => {
                 {/* Reels alanı - 9:16 oranında container */}
                 <div className="relative flex flex-row gap-8">
                   {/* Video container - TikTok tarzı, daha büyük boyutlar */}
-                  <div className="relative w-[350px] h-[620px] rounded-xl overflow-hidden bg-black md:w-[360px] md:h-[640px]">
+                  <div 
+                    className="relative w-full max-w-[400px] aspect-[9/16] rounded-xl overflow-hidden bg-black md:w-[400px] md:h-[calc(90vh)] shadow-2xl"
+                    style={{ 
+                      boxShadow: "0 0 25px rgba(123, 31, 162, 0.5)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)"
+                    }}
+                  >
                     {/* Yukarı kaydırma indikatörü */}
                     {currentReelIndex > 0 && (
                       <motion.div 
-                        className="absolute top-2 left-1/2 transform -translate-x-1/2 z-30 bg-slate-900/60 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center"
+                        className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30 bg-slate-900/70 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center"
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
@@ -703,7 +787,7 @@ const Reels = () => {
                         />
                         
                         {/* Video bilgileri (caption, username, vb.) */}
-                        <div className="absolute bottom-20 left-4 right-20 z-30">
+                        <div className="absolute bottom-24 left-4 right-16 z-30 bg-gradient-to-t from-black/70 to-transparent pt-16 pb-3 px-2 -mx-2 rounded-b-xl">
                           <h4 className="text-white font-bold flex items-center text-lg">
                             {reel.user.username}
                             <span className="ml-2 text-sm bg-blue-500 text-white px-1.5 py-0.5 rounded-full text-[10px] font-medium">Takip Et</span>

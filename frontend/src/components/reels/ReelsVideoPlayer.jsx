@@ -47,52 +47,142 @@ const ReelsVideoPlayer = ({
   const [isVideoVertical, setIsVideoVertical] = useState(true);
   const [showControls, setShowControls] = useState(false);
   const controlsTimeout = useRef(null);
+  const isMounted = useRef(true); // Mount durumunu takip etmek için ref
+
+  // Bileşen mount/unmount durumunu yönet
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      // Temizleme sırasında çalışan timeout'u temizle
+      if (controlsTimeout.current) {
+        clearTimeout(controlsTimeout.current);
+      }
+    };
+  }, []); // Sadece mount ve unmount'ta çalışır
 
   // Video aktifse oynat, değilse durdur
   useEffect(() => {
+    // isMounted kontrolü burada kritik değil çünkü cleanup fonksiyonu var,
+    // ama videoRef var mı diye bakmak önemli.
     if (videoRef.current) {
       if (isActive) {
         playVideo();
       } else {
-        if (videoRef.current) {
-          videoRef.current.pause();
-          videoRef.current.currentTime = 0;
+        // Aktif değilse hemen durdur ve başa sar
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+        // isMounted kontrolü ile state güncellemesini güvenli yap
+        if (isMounted.current) {
           setIsPlaying(false);
         }
       }
     }
-  }, [isActive]);
+    
+    // Bu useEffect'in temizleme fonksiyonu özellikle isActive değiştiğinde önemli
+    return () => {
+      // Eğer bu effect tekrar çalışacaksa (isActive değiştiği için)
+      // ve video ref hala varsa, bir önceki durumun videosunu durdur.
+      // isMounted kontrolü burada gerekli değil, çünkü zaten unmount oluyorsa 
+      // ana unmount useEffect'i çalışacak.
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+    };
+  }, [isActive]); // isActive değiştiğinde çalışır
 
   // Video oynatma fonksiyonu
   const playVideo = () => {
-    if (!videoRef.current) return;
+    // Oynatmaya başlamadan ÖNCE mount durumunu ve ref'i kontrol et
+    if (!videoRef.current || !isMounted.current) {
+      console.log('playVideo iptal: Ref yok veya bileşen unmounted.');
+      return;
+    }
     
-    videoRef.current.play()
-      .then(() => {
-        setIsPlaying(true);
-      })
-      .catch(err => {
-        console.error('Video oynatma hatası:', err);
-        
-        if (err.name === 'NotAllowedError') {
-          setMuted(true);
-          videoRef.current.muted = true;
-          videoRef.current.play().catch(e => 
-            console.error('Sessiz modda da oynatılamadı:', e)
-          );
-        }
-      });
+    try {
+      const playPromise = videoRef.current.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            // Promise çözüldüğünde TEKRAR mount durumunu kontrol et
+            if (isMounted.current) {
+              setIsPlaying(true);
+            } else {
+              console.log('Oynatma başarılı ama bileşen unmounted.');
+            }
+          })
+          .catch(err => {
+            // Hata durumunda mount kontrolü
+            if (!isMounted.current) {
+              // Bileşen zaten kaldırıldıysa AbortError beklenen bir durumdur,
+              // konsolu kirletmeye gerek yok veya sadece bilgi amaçlı logla.
+              if (err.name === 'AbortError') {
+                 console.log('Oynatma isteği iptal edildi (bileşen kaldırıldı).');
+              } else {
+                 console.log('Bileşen kaldırıldıktan sonra hata yakalandı:', err.name);
+              }
+              return; // State güncellemesi yapma
+            }
+
+            // Bileşen hala mount edilmişse hataları logla/işle
+            console.error('Video oynatma hatası (mounted):', err); 
+            
+            if (err.name === 'AbortError') {
+              // Bileşen hala mount edilmişken AbortError alınıyorsa, 
+              // bu durum beklenmedik olabilir veya çok hızlı bir isActive değişikliği olabilir.
+              console.warn('AbortError yakalandı (bileşen hala mount edilmişken)');
+              // İsteğe bağlı olarak burada state'i resetleyebiliriz
+              // setIsPlaying(false);
+              return; // Genellikle başka bir işlem yapmaya gerek kalmaz
+            }
+            
+            // NotAllowedError yönetimi (mount kontrolü zaten yapıldı)
+            if (err.name === 'NotAllowedError' && videoRef.current) {
+                setMuted(true);
+                videoRef.current.muted = true;
+                // Sessiz modda tekrar oynatmayı dene
+                const retryPromise = videoRef.current.play();
+                if (retryPromise !== undefined) {
+                  retryPromise.catch(e => {
+                    // Tekrar denerken bile unmount olabilir
+                    if (isMounted.current) {
+                      console.error('Sessiz modda da oynatılamadı:', e);
+                      setHasError(true);
+                    } else {
+                      console.log('Sessiz oynatma girişimi ama bileşen unmounted (retry).');
+                    }
+                  });
+                } else {
+                   setHasError(true); // play() promise döndürmediyse hata varsay
+                }
+            }
+            // Diğer potansiyel hatalar
+            else {
+               setHasError(true);
+            }
+          });
+      }
+    } catch (error) {
+      if (isMounted.current) {
+          console.error('Video oynatma işleminde beklenmeyen hata:', error);
+          setHasError(true);
+      } else {
+          console.log('Beklenmeyen hata yakalandı ama bileşen unmounted:', error);
+      }
+    }
   };
 
   // Oynatma/durdurma geçişi
   const togglePlay = () => {
-    if (!videoRef.current) return;
+    // İşlem yapmadan önce mount ve ref kontrolü
+    if (!videoRef.current || !isMounted.current) return;
     
     if (videoRef.current.paused) {
       playVideo();
     } else {
       videoRef.current.pause();
-      setIsPlaying(false);
+      setIsPlaying(false); // State güncellemesi güvenli (çünkü başta kontrol edildi)
     }
     
     if (onTogglePlay) onTogglePlay();
@@ -100,7 +190,8 @@ const ReelsVideoPlayer = ({
 
   // Ses açma/kapatma
   const toggleMute = () => {
-    if (!videoRef.current) return;
+    // İşlem yapmadan önce mount ve ref kontrolü
+    if (!videoRef.current || !isMounted.current) return;
     
     setMuted(!muted);
     videoRef.current.muted = !videoRef.current.muted;
@@ -108,7 +199,8 @@ const ReelsVideoPlayer = ({
 
   // Video yüklendiğinde
   const handleVideoLoad = () => {
-    if (!videoRef.current) return;
+    // İşlem yapmadan önce mount ve ref kontrolü
+    if (!videoRef.current || !isMounted.current) return;
     
     const video = videoRef.current;
     
@@ -119,7 +211,10 @@ const ReelsVideoPlayer = ({
     // Video object-fit ayarla
     video.style.objectFit = 'contain';
     
-    setHasError(false);
+    // State güncellemeleri öncesi mount kontrolü (gerçi başta yaptık ama duble kontrol)
+    if (isMounted.current) {
+        setHasError(false);
+    }
     
     if (onVideoLoad) onVideoLoad();
     
@@ -132,7 +227,10 @@ const ReelsVideoPlayer = ({
   // Video yükleme hatası
   const handleError = (e) => {
     console.error('Video yükleme hatası:', e);
-    setHasError(true);
+    // State güncellemesi öncesi mount kontrolü
+    if (isMounted.current) {
+        setHasError(true);
+    }
     
     if (onVideoError) onVideoError(e);
   };

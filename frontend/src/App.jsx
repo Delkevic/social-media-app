@@ -6,6 +6,7 @@ import Register from './pages/Register';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
 import Reels from './pages/Reels'; // Uncommented this line
+import Messages from './pages/Messages'; // Messages sayfasını import ettik
 import { ChatPanel } from './components/chat/ChatPanel';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TOKEN_NAME } from './config/constants';
@@ -82,6 +83,24 @@ function App() {
           <Route 
             path="/reels" 
             element={<Reels />} // Using Reels component without protection to test
+          />
+          {/* Mesajlar sayfası */}
+          <Route 
+            path="/messages"
+            element={
+              <ProtectedRoute>
+                <Messages />
+              </ProtectedRoute>
+            } 
+          />
+          {/* Belirli bir kullanıcı ile mesajlaşma */}
+          <Route 
+            path="/messages/:userId"
+            element={
+              <ProtectedRoute>
+                <Messages />
+              </ProtectedRoute>
+            } 
           />
         </Routes>
         <ChatPanel />

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FaPlay, FaPause, FaVolumeUp, FaVolumeMute, FaHeart, FaBookmark } from 'react-icons/fa';
 import { IoChevronBack, IoChevronForward } from 'react-icons/io5';
+import { AiOutlineUserAdd, AiOutlineUserDelete } from 'react-icons/ai';
 import { API_BASE_URL } from '../../config/constants';
 
 const MiniReelsPlayer = ({ reels, user, isExploreMode = false }) => {
@@ -121,6 +122,56 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false }) => {
       }
     } catch (error) {
       console.error("Beğeni işlemi sırasında hata:", error);
+    }
+  };
+
+  // Kullanıcıyı takip et/takibi bırak
+  const toggleFollow = async () => {
+    if (!reelsData || reelsData.length === 0 || !isExploreMode) return;
+    
+    const currentReel = reelsData[currentIndex];
+    const currentUser = currentReel?.user;
+    
+    if (!currentUser || !currentUser.id) {
+      console.error("Kullanıcı bilgisi bulunamadı");
+      return;
+    }
+    
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
+    
+    if (!token) {
+      console.error("Takip etmek için giriş yapmalısınız");
+      return;
+    }
+    
+    try {
+      const method = currentUser.isFollowing ? 'DELETE' : 'POST';
+      const endpoint = `${API_BASE_URL}/api/user/follow/${currentUser.id}`;
+      
+      const response = await fetch(endpoint, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        // Yerel veri güncelleniyor
+        const updatedReels = [...reelsData];
+        updatedReels[currentIndex] = {
+          ...currentReel,
+          user: {
+            ...currentUser,
+            isFollowing: !currentUser.isFollowing
+          }
+        };
+        setReelsData(updatedReels);
+      } else {
+        console.error("Takip işlemi başarısız oldu:", await response.text());
+      }
+    } catch (error) {
+      console.error("Takip işlemi sırasında hata:", error);
     }
   };
 
@@ -254,13 +305,39 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false }) => {
       </div>
       
       {/* Reel Bilgileri */}
-      <div className="flex items-center space-x-2 mb-2">
-        <img 
-          src={getFullMediaUrl(reelOwner?.profile_picture || reelOwner?.profileImage) || '/images/default-avatar.png'} 
-          alt={reelOwner?.username} 
-          className="w-6 h-6 rounded-full object-cover"
-        />
-        <span className="text-white text-xs font-medium">{reelOwner?.username}</span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center space-x-2">
+          <img 
+            src={getFullMediaUrl(reelOwner?.profile_picture || reelOwner?.profileImage) || '/images/default-avatar.png'} 
+            alt={reelOwner?.username} 
+            className="w-6 h-6 rounded-full object-cover"
+          />
+          <span className="text-white text-xs font-medium">{reelOwner?.username}</span>
+        </div>
+        
+        {/* Takip Et butonu - Sadece explore modunda ve takip edilebilir kullanıcılar için görünür */}
+        {isExploreMode && reelOwner && reelOwner.id && (
+          <button
+            onClick={toggleFollow}
+            className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs ${
+              reelOwner.isFollowing 
+                ? 'bg-gray-600 text-white hover:bg-gray-700' 
+                : 'bg-blue-500 text-white hover:bg-blue-600'
+            }`}
+          >
+            {reelOwner.isFollowing ? (
+              <>
+                <AiOutlineUserDelete size={12} />
+                <span>Takibi Bırak</span>
+              </>
+            ) : (
+              <>
+                <AiOutlineUserAdd size={12} />
+                <span>Takip Et</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
       
       {/* Reel Açıklaması */}

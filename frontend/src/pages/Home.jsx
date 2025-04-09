@@ -247,24 +247,24 @@ const Home = () => {
       
       <div className="container mx-auto relative z-10 p-4">
         <div className="flex flex-col lg:flex-row gap-4">
-          {/* Sol Panel - Bildirimler ve Mesajlar - Soldan giriş */}
+          {/* Sol Panel - Profil Bilgileri - Soldan giriş */}
           <motion.div 
             className="w-full lg:w-1/4"
             variants={leftPanelVariants}
             initial="hidden"
             animate="visible"
           >
-            <LeftPanel user={user} />
+            <LeftPanel user={user} showMessagesAndNotifications={false} />
           </motion.div>
           
-          {/* Orta İçerik - Arama ve Gönderiler - Arama yukarıdan, içerik aşağıdan giriş */}
+          {/* Orta İçerik - Arama ve Gönderiler - Arama yukarıdan, içerik aşağıdan giriş */}
           <div className="w-full lg:w-2/4">
             <motion.div
               variants={searchVariants}
               initial="hidden"
               animate="visible"
             >
-              {/* Arama Çubuğu - yukarıdan gelecek */}
+              {/* Arama Çubuğu - yukarıdan gelecek */}
               <div className="mb-4">
                 <MainContent user={user} showSearchOnly={true} />
               </div>
@@ -275,12 +275,12 @@ const Home = () => {
               initial="hidden"
               animate="visible"
             >
-              {/* İçerik - aşağıdan gelecek */}
+              {/* İçerik - aşağıdan gelecek */}
               <MainContent user={user} hideSearch={true} />
             </motion.div>
           </div>
           
-          {/* Sağ Panel - Profil ve Ayarlar - Sağdan giriş */}
+          {/* Sağ Panel - Mini Reels Oynatıcı - Sağdan giriş */}
           <motion.div 
             className="w-full lg:w-1/4"
             variants={rightPanelVariants}

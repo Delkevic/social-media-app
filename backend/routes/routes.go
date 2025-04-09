@@ -106,6 +106,7 @@ func SetupRoutes() *gin.Engine {
 			auth.GET("/messages", controllers.GetConversations)
 			auth.GET("/messages/:userId", controllers.GetConversation)
 			auth.POST("/messages/:userId", controllers.SendMessage)
+			auth.POST("/messages/:userId/typing", controllers.SendTypingStatus)
 
 			// Reels rotaları
 			auth.GET("/reels", controllers.GetReels)
@@ -123,6 +124,12 @@ func SetupRoutes() *gin.Engine {
 			auth.POST("/user/follow/:id", controllers.FollowUser)
 			auth.DELETE("/user/follow/:id", controllers.UnfollowUser)
 		}
+
+		// Kullanıcı arama rotası (auth dışında)
+		api.GET("/users/search", controllers.SearchUsers)
+
+		// WebSocket bağlantı noktası - auth dışında
+		api.GET("/ws", controllers.WebSocketHandler)
 	}
 
 	fmt.Println("=====================================")

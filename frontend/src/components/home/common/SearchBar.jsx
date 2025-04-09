@@ -1,12 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const SearchBar = ({ onSearch }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const isInitialMount = useRef(true);
+  const lastSearchTerm = useRef('');
+
+  // Tuşlama durduğunda arama yap
+  useEffect(() => {
+    // İlk render'da arama yapma
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // Çok kısa arama terimlerini işleme
+    const trimmedTerm = searchTerm.trim();
+    
+    // Aynı arama terimini tekrar arama (son aranan terim aynıysa)
+    if (trimmedTerm === lastSearchTerm.current) {
+      return;
+    }
+    
+    // Minimum 2 karakter kontrolü
+    if (trimmedTerm.length > 0 && trimmedTerm.length < 2) {
+      return; // 2 karakterden azsa arama yapma
+    }
+
+    // Arama yapmadan önce bekleme süresi
+    const timer = setTimeout(() => {
+      console.log('Arama isteği yapılıyor:', trimmedTerm);
+      lastSearchTerm.current = trimmedTerm;
+      onSearch(trimmedTerm);
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, onSearch]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (searchTerm.trim()) {
-      onSearch(searchTerm.trim());
+    const trimmedTerm = searchTerm.trim();
+    if (trimmedTerm && trimmedTerm !== lastSearchTerm.current) {
+      lastSearchTerm.current = trimmedTerm;
+      onSearch(trimmedTerm);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    
+    // Eğer input boşaltılırsa, sonuçları temizle
+    if (!value.trim()) {
+      lastSearchTerm.current = '';
+      onSearch('');
     }
   };
 
@@ -36,9 +82,9 @@ const SearchBar = ({ onSearch }) => {
         <input
           type="search"
           className="block w-full pl-10 pr-10 py-2 rounded-xl"
-          placeholder="Arkadaşlar, gönderiler veya konular ara..."
+          placeholder="Arkadaşlar, gönderiler veya konular ara..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={handleInputChange}
           style={{
             backgroundColor: 'var(--background-secondary)',
             color: 'var(--text-primary)',

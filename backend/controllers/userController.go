@@ -1,10 +1,12 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"social-media-app/backend/auth"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
+	"strconv"
 	"strings"
 	"time"
 
@@ -484,5 +486,77 @@ func UpdateProfile(c *gin.Context) {
 				"updatedAt":    user.UpdatedAt,
 			},
 		},
+	})
+}
+
+// SearchUsers kullanıcı adı veya tam adına göre kullanıcıları arar
+func SearchUsers(c *gin.Context) {
+	// Sorgu parametresini al
+	query := c.Query("query")
+	if query == "" {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Arama sorgusu boş olamaz",
+		})
+		return
+	}
+
+	// URL parametresinden gelen kullanıcı ID'sini al
+	currentUserIdParam := c.Query("currentUserId")
+	var currentUserID uint
+	if currentUserIdParam != "" {
+		id, err := strconv.ParseUint(currentUserIdParam, 10, 32)
+		if err == nil {
+			currentUserID = uint(id)
+			fmt.Printf("Filtrelenecek kullanıcı ID: %d\n", currentUserID)
+		}
+	}
+
+	// Debug için logla
+	fmt.Printf("Kullanıcı araması yapılıyor. Sorgu: %s, Filtreleme ID: %d\n", query, currentUserID)
+
+	// Arama sorgusunu hazırla
+	searchQuery := "%" + query + "%"
+	var users []models.User
+
+	// Kullanıcı adı veya tam ada göre arama yap
+	result := database.DB.
+		Where("username LIKE ? OR full_name LIKE ?", searchQuery, searchQuery).
+		Select("id, username, full_name, profile_image, bio").
+		Limit(20).
+		Find(&users)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Kullanıcılar aranırken bir hata oluştu: " + result.Error.Error(),
+		})
+		return
+	}
+
+	// Sonuçları hazırla
+	var userResults []map[string]interface{}
+	for _, user := range users {
+		// Kullanıcı kendisiyse, sonuçlara ekleme
+		if currentUserID > 0 && user.ID == currentUserID {
+			fmt.Printf("Kullanıcı kendisi filtreleniyor: %d\n", user.ID)
+			continue
+		}
+
+		userResults = append(userResults, map[string]interface{}{
+			"id":           user.ID,
+			"username":     user.Username,
+			"fullName":     user.FullName,
+			"profileImage": user.ProfileImage,
+			"bio":          user.Bio,
+		})
+	}
+
+	// Yanıt döndür
+	fmt.Printf("Arama tamamlandı. %d sonuç bulundu.\n", len(userResults))
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Kullanıcılar başarıyla arandı",
+		Data:    userResults,
 	})
 }

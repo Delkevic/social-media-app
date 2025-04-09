@@ -10,6 +10,8 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     // Gönderi verilerini çek
@@ -56,21 +58,41 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
   }, [activeTab, showSearchOnly]);
 
   const handleSearch = async (searchTerm) => {
-    if (!searchTerm.trim()) return;
+    if (!searchTerm.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
     
     try {
+      setIsSearching(true);
+      
+      // Çok kısa sorgularda arama yapmaktan kaçın (minimum 2 karakter)
+      if (searchTerm.trim().length < 2) {
+        setSearchResults([]);
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
+      setError(null);
       
-      // Backend API'nız arama özelliğini destekliyorsa burada çagırı yapabilirsiniz
-      // const response = await api.posts.search(searchTerm);
-      // setPosts(response.data.posts || []);
-      
-      // Şimdilik bilgilendirme amacı için konsola yazalım
       console.log('Arama yapılıyor:', searchTerm);
       
-      // Gerçek bir uygulamada, backend'e arama isteği gönderin
+      // Backend API'den kullanıcıları ara
+      const response = await api.user.searchUsers(searchTerm);
+      
+      if (response.success) {
+        setSearchResults(response.data || []);
+        console.log('Arama sonuçları:', response.data);
+      } else {
+        setError('Arama yapılırken bir hata oluştu: ' + response.message);
+        setSearchResults([]);
+      }
     } catch (err) {
+      console.error('Arama hatası:', err);
       setError('Arama yapılırken bir hata oluştu: ' + err.message);
+      setSearchResults([]);
     } finally {
       setLoading(false);
     }
@@ -133,8 +155,67 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
         </div>
       )}
       
+      {/* Arama sonuçları */}
+      {isSearching && (
+        <div 
+          className="rounded-2xl p-4 backdrop-blur-lg"
+          style={{
+            backgroundColor: "rgba(20, 24, 36, 0.7)",
+            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+            border: "1px solid rgba(255, 255, 255, 0.1)"
+          }}
+        >
+          <h3 className="text-white text-lg font-medium mb-4">Arama Sonuçları</h3>
+          
+          {loading ? (
+            <div className="text-center py-4">
+              <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+              <p className="mt-2 text-white/70">Aranıyor...</p>
+            </div>
+          ) : searchResults.length > 0 ? (
+            <div className="space-y-3">
+              {searchResults.map(user => (
+                <div 
+                  key={user.id} 
+                  className="flex items-center p-2 hover:bg-white/10 rounded-lg transition-all cursor-pointer"
+                  onClick={() => window.location.href = `/profile/${user.username}`}
+                >
+                  {/* Profil resmi */}
+                  <div className="w-12 h-12 rounded-full overflow-hidden mr-3">
+                    {user.profileImage ? (
+                      <img 
+                        src={user.profileImage} 
+                        alt={user.username} 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                        {user.username[0].toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Kullanıcı bilgileri */}
+                  <div className="flex-1">
+                    <p className="font-medium text-white">{user.username}</p>
+                    {user.fullName && (
+                      <p className="text-white/70 text-sm">{user.fullName}</p>
+                    )}
+                    {user.bio && (
+                      <p className="text-white/50 text-xs truncate">{user.bio}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center py-4 text-white/70">Sonuç bulunamadı.</p>
+          )}
+        </div>
+      )}
+      
       {/* Sadece arama gösterilecekse, geri kalan içerik i gösterme */}
-      {!showSearchOnly && (
+      {!showSearchOnly && !isSearching && (
         <>
           {/* Hata mesajı */}
           {error && (
