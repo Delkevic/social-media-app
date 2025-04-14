@@ -9,49 +9,38 @@ import (
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// Geliştirme aşamasında tüm originleri kabul et
-		return true
-	},
-}
-
-// Bağlantı havuzu - kullanıcı ID'si ile WebSocket bağlantılarını eşleştir
-var connections = make(map[uint]*websocket.Conn)
-
-// Mesaj yapısı
+// Message yapısı istemcilerden gelen mesaj formatı
 type Message struct {
-	SenderID   uint      `json:"senderId"`
-	ReceiverID uint      `json:"receiverId"`
-	Content    string    `json:"content"`
-	MediaURL   string    `json:"mediaUrl,omitempty"`
-	MediaType  string    `json:"mediaType,omitempty"`
-	SentAt     time.Time `json:"sentAt"`
-	IsRead     bool      `json:"isRead"`
+	SenderID   uint   `json:"senderId"`
+	ReceiverID uint   `json:"receiverId"`
+	Content    string `json:"content"`
+	MediaURL   string `json:"mediaUrl"`
+	MediaType  string `json:"mediaType"`
+	Type       string `json:"type,omitempty"`     // Mesaj tipi: "message", "typing" vb.
+	IsTyping   bool   `json:"isTyping,omitempty"` // Yazma durumu için
 }
 
-// Mesaj yanıtı
+// MessageResponse yapısı istemcilere gönderilen mesaj formatı
 type MessageResponse struct {
 	ID         uint      `json:"id"`
 	SenderID   uint      `json:"senderId"`
 	ReceiverID uint      `json:"receiverId"`
 	Content    string    `json:"content"`
-	MediaURL   string    `json:"mediaUrl,omitempty"`
-	MediaType  string    `json:"mediaType,omitempty"`
+	MediaURL   string    `json:"mediaUrl"`
+	MediaType  string    `json:"mediaType"`
 	SentAt     time.Time `json:"sentAt"`
 	IsRead     bool      `json:"isRead"`
 	SenderInfo UserInfo  `json:"senderInfo"`
 }
 
-// Kısa kullanıcı bilgisi
+// UserInfo mesaj yanıtında kullanıcı bilgisi
 type UserInfo struct {
 	ID           uint   `json:"id"`
 	Username     string `json:"username"`
@@ -59,29 +48,54 @@ type UserInfo struct {
 	ProfileImage string `json:"profileImage"`
 }
 
+// WebSocket bağlantılarını saklamak için global değişkenler
+var (
+	connections = make(map[uint]*websocket.Conn) // userID -> WebSocket conn
+	connMutex   = &sync.Mutex{}                  // connections map için thread-safe erişim
+	upgrader    = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
+)
+
 // WebSocketHandler gerçek zamanlı mesajlaşma için WebSocket bağlantıları yönetir
 func WebSocketHandler(c *gin.Context) {
 	fmt.Println("WebSocket bağlantı isteği alındı")
 
 	// WebSocket bağlantısını yükselt
+	upgrader.CheckOrigin = func(r *http.Request) bool { return true } // CORS kontrolünü devre dışı bırak
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		fmt.Println("WebSocket yükseltme hatası:", err)
-		return
+		return // Yükseltme başarısız olursa fonksiyondan çık
 	}
+	fmt.Println("WebSocket bağlantısı başarıyla yükseltildi.")
 
 	// Bağlantıyı kapatma işlemi (defer)
 	defer func() {
+		fmt.Println("WebSocket defer kapatma fonksiyonu çağrıldı.")
 		conn.Close()
-		fmt.Println("WebSocket bağlantısı kapatıldı")
+		fmt.Println("WebSocket bağlantısı defer ile kapatıldı.")
 	}()
 
+	// Auth mesajı için zamanaşımı ayarla (10 saniye)
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+
 	// İlk mesajı bekle (token doğrulama için)
-	_, p, err := conn.ReadMessage()
+	fmt.Println("İlk auth mesajı bekleniyor...")
+	messageType, p, err := conn.ReadMessage()
 	if err != nil {
-		fmt.Println("İlk mesaj okuma hatası:", err)
-		return
+		// Hatanın nedenini logla
+		fmt.Printf("İlk mesaj okuma hatası (ReadMessage): %v\n", err)
+		// Hata durumunda istemciye de bilgi gönderelim (eğer bağlantı hala açıksa)
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "İlk mesaj okunamadı veya bağlantı kapandı"}`))
+		return // Hata varsa fonksiyondan çık
 	}
+
+	// Timeout'u kaldır
+	conn.SetReadDeadline(time.Time{})
+
+	fmt.Printf("İlk mesaj alındı. Tip: %d, İçerik: %s\n", messageType, string(p))
 
 	// Auth mesajını parse et
 	var authMessage struct {
@@ -94,12 +108,14 @@ func WebSocketHandler(c *gin.Context) {
 		conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "Geçersiz auth mesajı formatı"}`))
 		return
 	}
+	fmt.Println("Auth mesajı başarıyla ayrıştırıldı.")
 
 	if authMessage.Type != "auth" || authMessage.Token == "" {
-		fmt.Println("Geçersiz auth mesajı:", authMessage)
+		fmt.Println("Geçersiz auth mesajı (Tip veya Token eksik):", authMessage)
 		conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "Geçersiz token veya auth tipi"}`))
 		return
 	}
+	fmt.Println("Auth mesajı tipi ve token varlığı doğrulandı.")
 
 	// Token'ı doğrula
 	userID, err := auth.VerifyToken(authMessage.Token)
@@ -108,120 +124,286 @@ func WebSocketHandler(c *gin.Context) {
 		conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "Geçersiz token"}`))
 		return
 	}
+	fmt.Printf("Token başarıyla doğrulandı. Kullanıcı ID: %d\n", userID)
 
 	// Kullanıcının önceden açık bir bağlantısı varsa kapat
 	if existingConn, ok := connections[userID]; ok {
+		fmt.Printf("Kullanıcı %d için mevcut bağlantı bulundu, kapatılıyor...\n", userID)
 		existingConn.Close()
+		delete(connections, userID) // Eski bağlantıyı haritadan sil
+		fmt.Printf("Kullanıcı %d için eski bağlantı kapatıldı ve silindi.\n", userID)
 	}
 
+	// Mutex kilitle - connections haritasına yazma sırasında
+	connMutex.Lock()
 	// Yeni bağlantıyı havuza ekle
 	connections[userID] = conn
-	fmt.Printf("Kullanıcı %d WebSocket bağlantısı kurdu\n", userID)
+	connMutex.Unlock()
+
+	fmt.Printf("Kullanıcı %d yeni WebSocket bağlantısı havuza eklendi\n", userID)
 
 	// Bağlantı sonlandığında temizle
 	defer func() {
-		delete(connections, userID)
-		fmt.Printf("Kullanıcı %d WebSocket bağlantısı sonlandı\n", userID)
+		fmt.Printf("Kullanıcı %d için defer bağlantı temizleme fonksiyonu çağrıldı.\n", userID)
+		connMutex.Lock()
+		if currentConn, ok := connections[userID]; ok && currentConn == conn {
+			delete(connections, userID)
+			fmt.Printf("Kullanıcı %d WebSocket bağlantısı havuzdan temizlendi.\n", userID)
+		} else {
+			fmt.Printf("Kullanıcı %d için temizlenecek bağlantı bulunamadı veya farklı bir bağlantı mevcut.\n", userID)
+		}
+		connMutex.Unlock()
 	}()
 
+	// Ping-Pong ile bağlantıyı canlı tut
+	conn.SetPingHandler(func(data string) error {
+		fmt.Printf("Ping mesajı alındı, pong gönderiliyor... (Kullanıcı: %d)\n", userID)
+		err := conn.WriteControl(websocket.PongMessage, []byte(data), time.Now().Add(time.Second))
+		if err != nil {
+			fmt.Printf("Pong gönderme hatası: %v (Kullanıcı: %d)\n", err, userID)
+		}
+		return nil
+	})
+
+	// Pong mesajlarını işlemek için yeni handler
+	conn.SetPongHandler(func(data string) error {
+		fmt.Printf("Pong mesajı alındı (Kullanıcı: %d)\n", userID)
+		// Pong alındığında read deadline'ı güncelle
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
 	// Bağlantı başarılı mesajı gönder
-	conn.WriteMessage(websocket.TextMessage, []byte(`{"success": true, "message": "WebSocket bağlantısı kuruldu"}`))
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"success": true, "message": "WebSocket bağlantısı kuruldu"}`)); err != nil {
+		fmt.Printf("Başarı mesajı gönderme hatası: %v\n", err)
+		return // Başarı mesajı gönderilemezse devam etmenin anlamı yok
+	}
+	fmt.Printf("Kullanıcı %d için başarı mesajı gönderildi.\n", userID)
+
+	// Kullanıcıya bekleyen mesajlar varsa bildirim gönder
+	go sendPendingNotifications(userID, conn)
+
+	// Periyodik ping gönderme (her 30 saniyede bir)
+	stopPing := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// Ping mesajı gönder
+				err := conn.WriteControl(websocket.PingMessage, []byte("ping"), time.Now().Add(5*time.Second))
+				if err != nil {
+					fmt.Printf("Ping gönderme hatası: %v (Kullanıcı: %d)\n", err, userID)
+					// Hata durumunda döngüden çık
+					return
+				}
+
+				// Ayrıca keep-alive mesajı da gönderelim
+				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"ping"}`)); err != nil {
+					fmt.Printf("Keep-alive mesajı gönderme hatası: %v (Kullanıcı: %d)\n", err, userID)
+					return
+				}
+			case <-stopPing:
+				return
+			}
+		}
+	}()
 
 	// Mesajları dinle
+	fmt.Printf("Kullanıcı %d için mesaj döngüsü başlatılıyor...\n", userID)
+
+	// Bu fonksiyon sonlandığında ping döngüsünü de sonlandır
+	defer func() {
+		close(stopPing)
+	}()
+
+	// Her mesaj için max okuma süresi belirle (30 dakika)
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+
 	for {
-		_, p, err := conn.ReadMessage()
+		messageType, p, err := conn.ReadMessage()
+
+		// Her mesaj alımından sonra deadline'ı güncelle
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				fmt.Printf("WebSocket okuma hatası: %v\n", err)
-			}
-			break
-		}
-
-		// Gelen mesajı işle
-		var message Message
-		if err := json.Unmarshal(p, &message); err != nil {
-			fmt.Printf("Mesaj ayrıştırma hatası: %v\n", err)
-			continue
-		}
-
-		// Gönderen ID'sini doğrula
-		if message.SenderID != userID {
-			fmt.Printf("Kimlik doğrulama hatası: Gönderen ID'si (%d) oturum ID'si (%d) ile eşleşmiyor\n", message.SenderID, userID)
-			continue
-		}
-
-		// Mesajı veritabanına kaydet
-		newMessage := models.Message{
-			SenderID:   message.SenderID,
-			ReceiverID: message.ReceiverID,
-			Content:    message.Content,
-			MediaURL:   message.MediaURL,
-			MediaType:  message.MediaType,
-			SentAt:     time.Now(),
-			IsRead:     false,
-		}
-
-		result := database.DB.Create(&newMessage)
-		if result.Error != nil {
-			fmt.Printf("Mesaj kaydetme hatası: %v\n", result.Error)
-			continue
-		}
-
-		// Mesajı yanıt olarak formatla
-		var sender models.User
-		database.DB.Select("id, username, full_name, profile_image").First(&sender, message.SenderID)
-
-		messageResponse := MessageResponse{
-			ID:         newMessage.ID,
-			SenderID:   newMessage.SenderID,
-			ReceiverID: newMessage.ReceiverID,
-			Content:    newMessage.Content,
-			MediaURL:   newMessage.MediaURL,
-			MediaType:  newMessage.MediaType,
-			SentAt:     newMessage.SentAt,
-			IsRead:     newMessage.IsRead,
-			SenderInfo: UserInfo{
-				ID:           sender.ID,
-				Username:     sender.Username,
-				FullName:     sender.FullName,
-				ProfileImage: sender.ProfileImage,
-			},
-		}
-
-		// Yanıtı JSON'a dönüştür
-		responseJSON, err := json.Marshal(messageResponse)
-		if err != nil {
-			fmt.Printf("JSON dönüştürme hatası: %v\n", err)
-			continue
-		}
-
-		// Mesajı gönderene ilet
-		if err := conn.WriteMessage(websocket.TextMessage, responseJSON); err != nil {
-			fmt.Printf("Gönderene ileti hatası: %v\n", err)
-		}
-
-		// Alıcı çevrimiçiyse mesajı ona da ilet
-		if receiverConn, ok := connections[message.ReceiverID]; ok {
-			if err := receiverConn.WriteMessage(websocket.TextMessage, responseJSON); err != nil {
-				fmt.Printf("Alıcıya ileti hatası: %v\n", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNoStatusReceived) {
+				fmt.Printf("WebSocket okuma hatası (döngü içi): %v\n", err)
 			} else {
-				// Mesaj başarıyla gönderildi, okundu olarak işaretle
-				// Not: Burada gerçekten "okundu" değil, "teslim edildi" işaretliyoruz
-				database.DB.Model(&models.Message{}).Where("id = ?", newMessage.ID).Update("is_delivered", true)
+				// Beklenen kapanma durumları (örneğin, tarayıcı sekmesi kapatıldı)
+				fmt.Printf("WebSocket bağlantısı normal şekilde kapandı (döngü içi): %v\n", err)
 			}
+			break // Döngüden çık
 		}
+		fmt.Printf("Kullanıcı %d tarafından mesaj alındı. Tip: %d\n", userID, messageType)
 
-		// Bildirim oluştur
-		notification := models.Notification{
-			UserID:      message.ReceiverID,
-			SenderID:    message.SenderID,
-			Type:        "message",
-			Content:     message.Content,
-			IsRead:      false,
-			ReferenceID: newMessage.ID,
-			CreatedAt:   time.Now(),
+		// Gelen mesajı işle (ping/pong veya metin)
+		if messageType == websocket.TextMessage {
+			// Önce ping/pong işlemi olabilir mi kontrol et
+			var pingMessage struct {
+				Type string `json:"type"`
+			}
+
+			if err := json.Unmarshal(p, &pingMessage); err == nil && pingMessage.Type == "ping" {
+				// Ping mesajına pong ile yanıt ver
+				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"pong"}`)); err != nil {
+					fmt.Printf("Pong yanıtı gönderme hatası: %v\n", err)
+				}
+				continue // Sonraki mesaja geç
+			}
+
+			// Ping/pong değilse normal mesaj olarak işle
+			var message Message
+			if err := json.Unmarshal(p, &message); err != nil {
+				fmt.Printf("Mesaj ayrıştırma hatası (döngü içi): %v\n", err)
+				// Hatalı mesajı istemciye bildirebiliriz
+				conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"error": "Alınan mesaj ayrıştırılamadı: %v"}`, err)))
+				continue // Sonraki mesajı bekle
+			}
+
+			// Eğer typing mesajı ise
+			if message.Type == "typing" {
+				// Yazma durumunu alıcıya ilet
+				if receiverConn, ok := connections[message.ReceiverID]; ok {
+					typingMsg := map[string]interface{}{
+						"type":     "typing",
+						"senderId": message.SenderID,
+						"isTyping": message.IsTyping,
+					}
+					typingJSON, _ := json.Marshal(typingMsg)
+					receiverConn.WriteMessage(websocket.TextMessage, typingJSON)
+				}
+				continue // Sonraki mesajı bekle
+			}
+
+			// Gönderen ID'sini doğrula
+			if message.SenderID != userID {
+				fmt.Printf("Kimlik doğrulama hatası (döngü içi): Gönderen ID'si (%d) oturum ID'si (%d) ile eşleşmiyor\n", message.SenderID, userID)
+				conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "Mesajdaki gönderen ID token ile eşleşmiyor"}`))
+				continue
+			}
+
+			// Mesajı veritabanına kaydet
+			newMessage := models.Message{
+				SenderID:   message.SenderID,
+				ReceiverID: message.ReceiverID,
+				Content:    message.Content,
+				MediaURL:   message.MediaURL,
+				MediaType:  message.MediaType,
+				SentAt:     time.Now(),
+				IsRead:     false,
+			}
+
+			result := database.DB.Create(&newMessage)
+			if result.Error != nil {
+				fmt.Printf("Mesaj kaydetme hatası (döngü içi): %v\n", result.Error)
+				// İstemciye hata bildirimi
+				conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"error": "Mesaj veritabanına kaydedilemedi: %v"}`, result.Error)))
+				continue
+			}
+
+			// Mesajı yanıt olarak formatla
+			var sender models.User
+			database.DB.Select("id, username, full_name, profile_image").First(&sender, message.SenderID)
+
+			messageResponse := MessageResponse{
+				ID:         newMessage.ID,
+				SenderID:   newMessage.SenderID,
+				ReceiverID: newMessage.ReceiverID,
+				Content:    newMessage.Content,
+				MediaURL:   newMessage.MediaURL,
+				MediaType:  newMessage.MediaType,
+				SentAt:     newMessage.SentAt,
+				IsRead:     newMessage.IsRead,
+				SenderInfo: UserInfo{
+					ID:           sender.ID,
+					Username:     sender.Username,
+					FullName:     sender.FullName,
+					ProfileImage: sender.ProfileImage,
+				},
+			}
+
+			// Yanıtı JSON'a dönüştür
+			responseJSON, err := json.Marshal(messageResponse)
+			if err != nil {
+				fmt.Printf("JSON dönüştürme hatası (döngü içi): %v\n", err)
+				continue
+			}
+
+			// Mesajı gönderene ilet (kendi gönderdiği mesajın onayını alır)
+			if err := conn.WriteMessage(websocket.TextMessage, responseJSON); err != nil {
+				fmt.Printf("Gönderene ileti hatası (döngü içi): %v\n", err)
+				// Bağlantı kopmuş olabilir, döngüden çıkmayı düşünebiliriz
+				// break
+			}
+
+			// Alıcı çevrimiçiyse mesajı ona da ilet
+			connMutex.Lock()
+			if receiverConn, ok := connections[message.ReceiverID]; ok {
+				fmt.Printf("Mesaj kullanıcı %d tarafından kullanıcı %d'ye iletiliyor...\n", userID, message.ReceiverID)
+				if err := receiverConn.WriteMessage(websocket.TextMessage, responseJSON); err != nil {
+					fmt.Printf("Alıcıya ileti hatası (döngü içi): %v\n", err)
+					// Alıcının bağlantısı kopmuş olabilir
+				} else {
+					// Mesaj başarıyla teslim edildi
+					database.DB.Model(&models.Message{}).Where("id = ?", newMessage.ID).Update("is_delivered", true)
+					fmt.Printf("Mesaj kullanıcı %d'ye başarıyla teslim edildi ve is_delivered olarak işaretlendi.\n", message.ReceiverID)
+				}
+			} else {
+				fmt.Printf("Alıcı %d çevrimdışı, mesaj iletilemedi.\n", message.ReceiverID)
+			}
+			connMutex.Unlock()
+
+			// Bildirim oluştur (Bu zaten REST API üzerinden de yapılıyor olabilir, kontrol et)
+			notification := models.Notification{
+				UserID:      message.ReceiverID,
+				SenderID:    message.SenderID,
+				Type:        "message",
+				Content:     message.Content,
+				IsRead:      false,
+				ReferenceID: newMessage.ID,
+				CreatedAt:   time.Now(),
+			}
+			database.DB.Create(&notification)
+
+		} else if messageType == websocket.BinaryMessage {
+			fmt.Printf("Binary mesaj alındı, desteklenmiyor: %d\n", messageType)
+			conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "Binary mesajlar desteklenmiyor"}`))
+		} else {
+			fmt.Printf("Alınan mesaj tipi metin değil: %d\n", messageType)
 		}
-		database.DB.Create(&notification)
+	}
+	fmt.Printf("Kullanıcı %d için mesaj döngüsü sonlandı.\n", userID)
+}
+
+// Yeni eklenen yardımcı fonksiyon - kullanıcıya bekleyen mesajlarınını bildirir
+func sendPendingNotifications(userID uint, conn *websocket.Conn) {
+	// Okunmamış mesajların sayısını getir
+	var unreadCount int64
+	if err := database.DB.Model(&models.Message{}).Where("receiver_id = ? AND is_read = ?", userID, false).Count(&unreadCount).Error; err != nil {
+		fmt.Printf("Okunmamış mesaj sayısı getirilirken hata: %v\n", err)
+		return
+	}
+
+	// Okunmamış bildirim sayısını getir
+	var unreadNotificationCount int64
+	if err := database.DB.Model(&models.Notification{}).Where("user_id = ? AND is_read = ?", userID, false).Count(&unreadNotificationCount).Error; err != nil {
+		fmt.Printf("Okunmamış bildirim sayısı getirilirken hata: %v\n", err)
+		return
+	}
+
+	// Bildirim gönder
+	notificationMsg := map[string]interface{}{
+		"type":                    "notification_count",
+		"unreadMessageCount":      unreadCount,
+		"unreadNotificationCount": unreadNotificationCount,
+	}
+
+	notificationJSON, _ := json.Marshal(notificationMsg)
+	if err := conn.WriteMessage(websocket.TextMessage, notificationJSON); err != nil {
+		fmt.Printf("Bildirim mesajı gönderme hatası: %v\n", err)
 	}
 }
 
@@ -230,7 +412,10 @@ func GetConversations(c *gin.Context) {
 	// Kullanıcı kimliğini doğrula
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Oturum açık değil"})
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Oturum açık değil",
+		})
 		return
 	}
 
@@ -273,13 +458,16 @@ func GetConversations(c *gin.Context) {
 	`
 
 	if err := database.DB.Raw(query, userID, userID, userID, userID, userID, userID, userID, userID, userID).Scan(&conversations).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Konuşmalar alınırken bir hata oluştu: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Konuşmalar alınırken bir hata oluştu: " + err.Error(),
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    conversations,
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Data:    conversations,
 	})
 }
 
@@ -288,7 +476,10 @@ func GetConversation(c *gin.Context) {
 	// Kullanıcı kimliğini doğrula
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Oturum açık değil"})
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Oturum açık değil",
+		})
 		return
 	}
 
@@ -296,7 +487,10 @@ func GetConversation(c *gin.Context) {
 	targetIDStr := c.Param("userId")
 	targetID, err := strconv.ParseUint(targetIDStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz kullanıcı ID"})
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz kullanıcı ID",
+		})
 		return
 	}
 
@@ -308,14 +502,20 @@ func GetConversation(c *gin.Context) {
 	).Order("sent_at ASC").Find(&messages)
 
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Mesajlar alınırken bir hata oluştu: " + result.Error.Error()})
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Mesajlar alınırken bir hata oluştu: " + result.Error.Error(),
+		})
 		return
 	}
 
 	// Hedef kullanıcının bilgilerini al
 	var targetUser models.User
 	if err := database.DB.Select("id, username, full_name, profile_image").First(&targetUser, targetID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Kullanıcı bulunamadı"})
+		c.JSON(http.StatusNotFound, Response{
+			Success: false,
+			Message: "Kullanıcı bulunamadı",
+		})
 		return
 	}
 
@@ -357,17 +557,19 @@ func GetConversation(c *gin.Context) {
 		formattedMessages = append(formattedMessages, formattedMessage)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"messages": formattedMessages,
-			"user": gin.H{
-				"id":           targetUser.ID,
-				"username":     targetUser.Username,
-				"fullName":     targetUser.FullName,
-				"profileImage": targetUser.ProfileImage,
-			},
+	responseData := map[string]interface{}{
+		"messages": formattedMessages,
+		"user": map[string]interface{}{
+			"id":           targetUser.ID,
+			"username":     targetUser.Username,
+			"fullName":     targetUser.FullName,
+			"profileImage": targetUser.ProfileImage,
 		},
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Data:    responseData,
 	})
 }
 
@@ -376,7 +578,10 @@ func SendMessage(c *gin.Context) {
 	// Kullanıcı kimliğini doğrula
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Oturum açık değil"})
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Oturum açık değil",
+		})
 		return
 	}
 
@@ -384,7 +589,10 @@ func SendMessage(c *gin.Context) {
 	targetIDStr := c.Param("userId")
 	targetID, err := strconv.ParseUint(targetIDStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz kullanıcı ID"})
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz kullanıcı ID",
+		})
 		return
 	}
 
@@ -396,7 +604,10 @@ func SendMessage(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz mesaj verisi: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz mesaj verisi: " + err.Error(),
+		})
 		return
 	}
 
@@ -413,7 +624,10 @@ func SendMessage(c *gin.Context) {
 
 	// Mesajı kaydet
 	if err := database.DB.Create(&message).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Mesaj kaydedilirken bir hata oluştu: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Mesaj kaydedilirken bir hata oluştu: " + err.Error(),
+		})
 		return
 	}
 
@@ -462,9 +676,9 @@ func SendMessage(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    response,
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Data:    response,
 	})
 }
 
@@ -473,7 +687,10 @@ func SendTypingStatus(c *gin.Context) {
 	// Kullanıcı kimliğini doğrula
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Oturum açık değil"})
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Oturum açık değil",
+		})
 		return
 	}
 
@@ -481,7 +698,10 @@ func SendTypingStatus(c *gin.Context) {
 	targetIDStr := c.Param("userId")
 	targetID, err := strconv.ParseUint(targetIDStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz kullanıcı ID"})
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz kullanıcı ID",
+		})
 		return
 	}
 
@@ -491,7 +711,10 @@ func SendTypingStatus(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz veri: " + err.Error()})
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz veri: " + err.Error(),
+		})
 		return
 	}
 
@@ -508,8 +731,138 @@ func SendTypingStatus(c *gin.Context) {
 		}
 	}
 
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Yazma durumu gönderildi",
+	})
+}
+
+// MarkMessageAsRead bir mesajı okundu olarak işaretler
+func MarkMessageAsRead(c *gin.Context) {
+	// Kullanıcı kimliğini doğrula
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Oturum açık değil",
+		})
+		return
+	}
+
+	// Mesaj ID'sini al
+	messageIDStr := c.Param("id")
+	messageID, err := strconv.ParseUint(messageIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz mesaj ID",
+		})
+		return
+	}
+
+	// Mesajı kontrol et - alıcı olduğumuzdan emin ol
+	var message models.Message
+	result := database.DB.Where("id = ? AND receiver_id = ?", messageID, userID).First(&message)
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, Response{
+			Success: false,
+			Message: "Mesaj bulunamadı veya bu mesajı işaretleme yetkiniz yok",
+		})
+		return
+	}
+
+	// Mesajı okundu olarak işaretle
+	if err := database.DB.Model(&message).Update("is_read", true).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Mesaj okundu olarak işaretlenirken bir hata oluştu: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Mesaj okundu olarak işaretlendi",
+	})
+}
+
+// GetPreviousChats kullanıcının daha önce mesajlaştığı tüm kullanıcıları döndürür
+func GetPreviousChats(c *gin.Context) {
+	// Token'dan kullanıcı ID'sini al
+	tokenString := c.GetHeader("Authorization")
+	if tokenString == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Yetkilendirme başlığı eksik"})
+		return
+	}
+
+	// Token'ı temizle (Bearer kısmını kaldır)
+	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+		tokenString = tokenString[7:]
+	}
+
+	// Token'ı doğrula ve kullanıcı ID'sini al
+	userID, err := auth.VerifyToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Geçersiz token", "details": err.Error()})
+		return
+	}
+
+	// Veritabanı bağlantısını al
+	db := database.DB
+
+	// Kullanıcının daha önce mesajlaştığı kişileri bul
+	// SQL sorgusu: Son mesajlaşma zamanına göre sıralanmış, benzersiz kullanıcı ID'leri
+	type Result struct {
+		UserID uint `gorm:"column:user_id"`
+	}
+	var results []Result
+
+	query := `
+		SELECT 
+			CASE 
+				WHEN sender_id = ? THEN receiver_id 
+				ELSE sender_id 
+			END as user_id,
+			MAX(sent_at) as last_message
+		FROM messages
+		WHERE sender_id = ? OR receiver_id = ?
+		GROUP BY user_id
+		ORDER BY last_message DESC
+	`
+
+	if err := db.Raw(query, userID, userID, userID).Scan(&results).Error; err != nil {
+		fmt.Println("Sorgu hatası:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Mesajlaşma geçmişi alınamadı", "details": err.Error()})
+		return
+	}
+
+	// ID listesini çıkar
+	var userIDs []uint
+	for _, r := range results {
+		userIDs = append(userIDs, r.UserID)
+	}
+
+	// Kullanıcı bilgilerini getir
+	type UserInfo struct {
+		ID           uint   `json:"id"`
+		Username     string `json:"username"`
+		FullName     string `json:"fullName" gorm:"column:full_name"`
+		ProfileImage string `json:"profileImage" gorm:"column:profile_image"`
+	}
+	var users []UserInfo
+
+	if len(userIDs) > 0 {
+		if err := db.Table("users").
+			Select("id, username, full_name, profile_image").
+			Where("id IN ?", userIDs).
+			Find(&users).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Kullanıcı bilgileri alınamadı", "details": err.Error()})
+			return
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Yazma durumu gönderildi",
+		"data":    users,
 	})
 }

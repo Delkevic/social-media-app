@@ -76,8 +76,14 @@ func SetupRoutes() *gin.Engine {
 			// Kullanıcı profili
 			auth.GET("/user", controllers.GetUserProfile)
 			auth.PUT("/user/profile", controllers.UpdateProfile)
+			auth.GET("/user/following", controllers.GetFollowing)
+			auth.GET("/user/followers", controllers.GetFollowers)
 
-			// Gönderi rotaları
+			// Kullanıcı following/followers - kullanıcı adına göre
+			auth.GET("/profile/:username/following", controllers.GetFollowing)
+			auth.GET("/profile/:username/followers", controllers.GetFollowers)
+
+			// Gönderi rotaları
 			auth.GET("/posts", controllers.GetPosts)
 			auth.POST("/posts", controllers.CreatePost)
 			auth.GET("/posts/:id", controllers.GetPostById)
@@ -107,6 +113,8 @@ func SetupRoutes() *gin.Engine {
 			auth.GET("/messages/:userId", controllers.GetConversation)
 			auth.POST("/messages/:userId", controllers.SendMessage)
 			auth.POST("/messages/:userId/typing", controllers.SendTypingStatus)
+			auth.POST("/messages/read/:id", controllers.MarkMessageAsRead)
+			auth.GET("/messages/previous-chats", controllers.GetPreviousChats) // Daha önce mesajlaşılan kullanıcıları getirir
 
 			// Reels rotaları
 			auth.GET("/reels", controllers.GetReels)

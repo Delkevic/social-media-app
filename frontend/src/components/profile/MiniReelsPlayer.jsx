@@ -4,7 +4,7 @@ import { IoChevronBack, IoChevronForward } from 'react-icons/io5';
 import { AiOutlineUserAdd, AiOutlineUserDelete } from 'react-icons/ai';
 import { API_BASE_URL } from '../../config/constants';
 
-const MiniReelsPlayer = ({ reels, user, isExploreMode = false }) => {
+const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = false }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
@@ -213,6 +213,15 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false }) => {
     }
   };
 
+  // Kaydedilen Reels'leri görüntüle
+  const navigateToSavedReels = () => {
+    // Burada URL'yi değiştirmek yerine kişisel bir prop ile bunu uygulayabilirsiniz
+    // Bu örnek için sadece konsola logluyoruz
+    console.log("Kaydedilen Reels'lere git");
+    // Gerçek projede burada bir redirect veya state değişikliği yapabilirsiniz
+    window.location.href = '/saved-reels';
+  };
+
   // Eğer reelsler yoksa
   if (reelsData.length === 0) {
     return (
@@ -371,6 +380,19 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false }) => {
           </button>
         </div>
       </div>
+      
+      {/* Kaydedilen Reels butonu - Sadece kendi profilindeyken görünür */}
+      {isOwnProfile && (
+        <div className="mt-3 pt-3 border-t border-gray-700/30">
+          <button 
+            onClick={navigateToSavedReels}
+            className="w-full flex items-center justify-center space-x-1 py-1.5 rounded-md bg-blue-500/20 hover:bg-blue-500/30 transition-colors text-blue-400 text-xs font-medium"
+          >
+            <FaBookmark size={12} />
+            <span>Kaydedilen Reels'leri Göster</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

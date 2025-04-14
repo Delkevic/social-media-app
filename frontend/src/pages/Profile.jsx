@@ -421,7 +421,7 @@ const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#11141E] text-white">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-900 via-gray-900 to-black">
       <PostShow
         post={selectedPost}
         isOpen={isModalOpen}
@@ -436,21 +436,21 @@ const Profile = () => {
         onClose={closeReelModal}
         profileUser={user}
       />
+      
+      <div className="container mx-auto px-4 py-4 flex-grow">
+        <div className="flex flex-col lg:flex-row lg:space-x-6">
+          <div className="hidden md:block md:w-1/4 lg:w-1/5">
+            <LeftPanel activePage="profile" user={currentUser} />
+          </div>
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="flex flex-col lg:flex-row gap-6">
-          <div className="w-full lg:w-1/5">
-            <LeftPanel user={currentUser} showMessagesAndNotifications={false} />
-        </div>
-
-          <div className="w-full lg:w-3/5">
+          <div className="w-full md:w-3/4 lg:w-3/5">
             {loading ? (
               <div className="flex justify-center items-center h-96">
                 <div className="animate-spin h-10 w-10 border-4 rounded-full border-blue-500 border-t-transparent"></div>
               </div>
             ) : user ? (
               <div className="space-y-6">
-                <div className="rounded-2xl overflow-hidden bg-[rgba(20,24,36,0.7)] backdrop-blur-lg shadow-xl border border-[rgba(255,255,255,0.1)] p-6">
+                <div className="rounded-2xl p-6 backdrop-blur-lg border border-[rgba(255,255,255,0.1)] bg-[rgba(20,24,36,0.7)] mb-6">
                   <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
                     <div className="flex-shrink-0">
                       <img
@@ -798,7 +798,8 @@ const Profile = () => {
                 <MiniReelsPlayer 
                   reels={isOwnProfile ? exploreReels : reels} 
                   user={user}
-                  isExploreMode={isOwnProfile && exploreReels.length > 0} 
+                  isExploreMode={isOwnProfile}
+                  isOwnProfile={isOwnProfile}
                 />
                 
                 <div className="rounded-2xl overflow-hidden bg-[rgba(20,24,36,0.7)] backdrop-blur-lg border border-[rgba(255,255,255,0.1)] p-4">

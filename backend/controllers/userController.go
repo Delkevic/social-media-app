@@ -560,3 +560,157 @@ func SearchUsers(c *gin.Context) {
 		Data:    userResults,
 	})
 }
+
+// GetFollowing handles retrieving the users the current user follows
+func GetFollowing(c *gin.Context) {
+	// Kimlik doğrulama
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Oturum açmanız gerekiyor",
+		})
+		return
+	}
+
+	// Hedef kullanıcıyı belirle (url parametresi veya oturum açan kullanıcı)
+	var targetUsername string
+	var targetUserID uint
+
+	// URL'den username parametresini al
+	username := c.Param("username")
+	if username != "" {
+		// Başka bir kullanıcının takip ettiklerini görüntüleme
+		var targetUser models.User
+		if err := database.DB.Where("username = ?", username).First(&targetUser).Error; err != nil {
+			c.JSON(http.StatusNotFound, Response{
+				Success: false,
+				Message: "Kullanıcı bulunamadı",
+			})
+			return
+		}
+		targetUsername = targetUser.Username
+		targetUserID = targetUser.ID
+	} else {
+		// Kendi takip ettiklerini görüntüleme
+		var currentUser models.User
+		if err := database.DB.First(&currentUser, userID).Error; err != nil {
+			c.JSON(http.StatusNotFound, Response{
+				Success: false,
+				Message: "Kullanıcı bulunamadı",
+			})
+			return
+		}
+		targetUsername = currentUser.Username
+		targetUserID = currentUser.ID
+	}
+
+	// Takip edilen kullanıcıları getir
+	var followingUsers []struct {
+		ID           uint
+		Username     string
+		FullName     string
+		ProfileImage string
+		Bio          string
+		IsFollowing  bool
+	}
+
+	// Ham SQL sorgusu kullanarak takip edilen kullanıcıları getir
+	query := `
+		SELECT u.id, u.username, u.full_name, u.profile_image, u.bio,
+		EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND following_id = u.id) as is_following
+		FROM users u
+		INNER JOIN follows f ON u.id = f.following_id
+		WHERE f.follower_id = ?
+	`
+	if err := database.DB.Raw(query, userID, targetUserID).Scan(&followingUsers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Takip edilen kullanıcılar alınırken bir hata oluştu: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: targetUsername + " kullanıcısının takip ettiği kişiler",
+		Data:    followingUsers,
+	})
+}
+
+// GetFollowers handles retrieving the users that follow the current user
+func GetFollowers(c *gin.Context) {
+	// Kimlik doğrulama
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Oturum açmanız gerekiyor",
+		})
+		return
+	}
+
+	// Hedef kullanıcıyı belirle (url parametresi veya oturum açan kullanıcı)
+	var targetUsername string
+	var targetUserID uint
+
+	// URL'den username parametresini al
+	username := c.Param("username")
+	if username != "" {
+		// Başka bir kullanıcının takipçilerini görüntüleme
+		var targetUser models.User
+		if err := database.DB.Where("username = ?", username).First(&targetUser).Error; err != nil {
+			c.JSON(http.StatusNotFound, Response{
+				Success: false,
+				Message: "Kullanıcı bulunamadı",
+			})
+			return
+		}
+		targetUsername = targetUser.Username
+		targetUserID = targetUser.ID
+	} else {
+		// Kendi takipçilerini görüntüleme
+		var currentUser models.User
+		if err := database.DB.First(&currentUser, userID).Error; err != nil {
+			c.JSON(http.StatusNotFound, Response{
+				Success: false,
+				Message: "Kullanıcı bulunamadı",
+			})
+			return
+		}
+		targetUsername = currentUser.Username
+		targetUserID = currentUser.ID
+	}
+
+	// Takipçi kullanıcıları getir
+	var followerUsers []struct {
+		ID           uint
+		Username     string
+		FullName     string
+		ProfileImage string
+		Bio          string
+		IsFollowing  bool
+	}
+
+	// Ham SQL sorgusu kullanarak takipçi kullanıcıları getir
+	query := `
+		SELECT u.id, u.username, u.full_name, u.profile_image, u.bio,
+		EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND following_id = u.id) as is_following
+		FROM users u
+		INNER JOIN follows f ON u.id = f.follower_id
+		WHERE f.following_id = ?
+	`
+	if err := database.DB.Raw(query, userID, targetUserID).Scan(&followerUsers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Takipçiler alınırken bir hata oluştu: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: targetUsername + " kullanıcısının takipçileri",
+		Data:    followerUsers,
+	})
+}
