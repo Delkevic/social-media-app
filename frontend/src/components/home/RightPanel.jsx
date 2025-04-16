@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GlowingEffect } from '../../components/ui/GlowingEffect';
 import { HoverButton } from '../../components/ui/HoverButton';
-import { MagnetizeButton } from '../../components/ui/MagnetizeButton';
 import api from '../../services/api';
 import MiniReelsPlayer from '../../components/profile/MiniReelsPlayer';
 
@@ -45,15 +44,6 @@ const RightPanel = ({ user, isProfilePage = false }) => {
     fetchExploreReels();
   }, []);
   
-  const handleLogout = () => {
-    // Çıkış işlemi
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('user');
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
-  };
-  
   return (
     <div className="space-y-4">
       {/* Hata mesajı */}
@@ -87,7 +77,7 @@ const RightPanel = ({ user, isProfilePage = false }) => {
         />
       </div>
       
-      {/* Reels Bölümü - MagnetizeButton ile güncellendi */}
+      {/* Reels Bölümü - HoverButton ile güncellendi */}
       <div className="relative rounded-2xl overflow-hidden">
         <GlowingEffect
           spread={40}
@@ -105,11 +95,13 @@ const RightPanel = ({ user, isProfilePage = false }) => {
             border: "1px solid rgba(255, 255, 255, 0.1)"
           }}
         >
-          <MagnetizeButton
+          <HoverButton
             onClick={() => navigate('/reels')}
             className="w-full flex items-center justify-center"
-            particleCount={14}
-            attractRadius={50}
+            style={{
+              "--circle-start": "#8b5cf6",
+              "--circle-end": "#6366f1"
+            }}
           >
             <span className="flex items-center justify-center">
               <svg 
@@ -122,45 +114,6 @@ const RightPanel = ({ user, isProfilePage = false }) => {
               </svg>
               Reels
             </span>
-          </MagnetizeButton>
-        </div>
-      </div>
-      
-      {/* Çıkış Butonu */}
-      <div className="relative rounded-2xl overflow-hidden">
-        <GlowingEffect
-          spread={40}
-          glow={true}
-          disabled={false}
-          proximity={64}
-          inactiveZone={0.01}
-          borderWidth={2}
-        />
-        <div
-          className="rounded-2xl p-4 backdrop-blur-lg"
-          style={{
-            backgroundColor: "rgba(20, 24, 36, 0.7)",
-            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-            border: "1px solid rgba(255, 255, 255, 0.1)"
-          }}
-        >
-          <HoverButton
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center"
-            style={{
-              "--circle-start": "#3b82f6", 
-              "--circle-end": "#1e40af"
-            }}
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              ></path>
-            </svg>
-            Çıkış Yap
           </HoverButton>
         </div>
       </div>

@@ -13,6 +13,7 @@ type User struct {
 	Email        string `gorm:"unique;not null"`
 	Password     string `gorm:"not null"`
 	FullName     string
+	Phone        string // Telefon numarası alanı eklendi
 	ProfileImage string // Profil fotoğrafı URL'i
 	Bio          string // Kullanıcı biyografisi
 	Location     string // Konum bilgisi
@@ -20,6 +21,10 @@ type User struct {
 	IsPrivate    bool   `gorm:"default:false"` // Hesap gizliliği
 	IsVerified   bool   `gorm:"default:false"` // Onaylanmış hesap
 	IsAdmin      bool   `gorm:"default:false"` // Admin yetkisi
+	// Gizlilik Ayarları Eklendi
+	CommentPermission string `gorm:"default:'all'"` // 'all', 'followers', 'none'
+	TagPermission     string `gorm:"default:'all'"` // 'all', 'followers', 'none'
+	// HideFollowersList bool `gorm:"default:false"` // IsPrivate ile birlikte değerlendirilebilir
 
 	// Takip ilişkileriyle ilgili alanlar
 	Followers []Follow `gorm:"foreignKey:FollowingID"` // Beni takip edenler

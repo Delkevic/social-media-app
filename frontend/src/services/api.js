@@ -1,4 +1,5 @@
 import { API_URL, API_BASE_URL } from '../config/constants';
+import axios from 'axios';
 
 // Token'ı getiren yardımcı fonksiyon
 const getToken = () => {
@@ -22,12 +23,12 @@ const fetchWithAuth = async (endpoint, options = {}) => {
     },
   };
   
-  // API isteğini doğru URL ile oluştur
-  const url = endpoint.startsWith('/api/') 
-    ? `${API_BASE_URL}${endpoint}` 
-    : `${API_URL}${endpoint}`;
+  // URL oluşturma mantığı: Endpoint /api/v1 ile mi başlıyor?
+  // Hayır, /v1/ ile başlıyor. Bu yüzden API_URL kullanılmalı.
+  // API_URL'nin 'http://localhost:8080/api' olduğunu varsayıyoruz.
+  const url = `${API_URL}${endpoint}`; // Endpoint zaten /v1/... içeriyor
   
-  console.log(`API isteği: ${url}`, config);
+  console.log(`API isteği: ${options.method || 'GET'} ${url}`, config.body ? `Body: ${config.body.substring(0, 100)}...` : ''); // Loglamayı iyileştir
   
   try {
     const response = await fetch(url, config);
@@ -54,18 +55,31 @@ const fetchWithAuth = async (endpoint, options = {}) => {
       return { success: false, message: errorData.message || 'Bir hata oluştu' };
     }
     
-    const jsonResponse = await response.json();
-    console.log(`API Cevap (${endpoint}):`, jsonResponse);
-    
-    // Yanıt formatını kontrol et ve standat yanıt yapısına dönüştür
-    if (jsonResponse.success === undefined) {
-      // API success alanı döndürmüyorsa, bir success alanı ekle
-      return { success: true, data: jsonResponse };
+    // Yanıtı loglarken daha dikkatli olalım
+    const responseClone = response.clone(); // Yanıtı klonla
+    try {
+      const jsonResponse = await response.json();
+      console.log(`API Cevap (${url}):`, jsonResponse);
+      
+      // Yanıt formatını kontrol et ve standat yanıt yapısına dönüştür
+      if (jsonResponse.success === undefined) {
+        // API success alanı döndürmüyorsa, bir success alanı ekle
+        return { success: true, data: jsonResponse };
+      }
+      
+      return jsonResponse;
+    } catch (jsonError) {
+      // JSON parse edilemezse (örn. 404'te boş yanıt dönerse)
+      const textResponse = await responseClone.text(); // Klonlanmış yanıttan text al
+      console.warn(`API Cevap (${url}) JSON parse edilemedi. Durum: ${response.status}, Text: ${textResponse}`);
+      if (!response.ok) { // Hata durumuysa yine de hata mesajı dön
+          return { success: false, message: textResponse || `Sunucu hatası: ${response.status}` };
+      }
+      // Başarılı ama boş yanıt ise (örn. 204 No Content)
+      return { success: true, data: null }; 
     }
-    
-    return jsonResponse;
   } catch (error) {
-    console.error(`API Hatası (${endpoint}):`, error);
+    console.error(`API Hatası (${url}):`, error);
     return { success: false, message: error.message || 'API isteği sırasında beklenmeyen bir hata oluştu' };
   }
 };
@@ -81,6 +95,17 @@ const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+    updatePassword: (passwordData) => fetchWithAuth('/user/password', {
+      method: 'PUT',
+      body: JSON.stringify(passwordData),
+    }),
+    deactivateAccount: () => fetchWithAuth('/user', {
+      method: 'DELETE',
+    }),
+    deleteAccount: () => fetchWithAuth('/user', {
+      method: 'DELETE',
+    }),
+    getLoginActivities: () => fetchWithAuth('/user/login-activity'),
     searchUsers: (query) => {
       console.log(`Kullanıcı arama: query=${query}`);
       
@@ -101,6 +126,8 @@ const api = {
     },
     getFollowing: () => fetchWithAuth('/user/following'),
     getFollowers: () => fetchWithAuth('/user/followers'),
+    getFollowingByUsername: (username) => fetchWithAuth(`/profile/${username}/following`),
+    getFollowersByUsername: (username) => fetchWithAuth(`/profile/${username}/followers`),
     follow: (userId) => fetchWithAuth(`/user/follow/${userId}`, {
       method: 'POST',
     }),
@@ -112,6 +139,7 @@ const api = {
   // Gönderi ile ilgili işlemler
   posts: {
     getFeeds: (feed = 'general') => fetchWithAuth(`/posts?feed=${feed}`),
+    getUserPostsByUsername: (username) => fetchWithAuth(`/profile/${username}/posts`),
     create: (data) => fetchWithAuth('/posts', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -500,6 +528,17 @@ const getFullImageUrl = (imageUrl) => {
     return `${API_BASE_URL}${cleanUrl}`;
   } else {
     return `${API_BASE_URL}/${cleanUrl}`;
+  }
+};
+
+// Kullanıcı araması yap
+export const searchUsers = async (query) => {
+  try {
+    const response = await fetchWithAuth(`/users/search?query=${encodeURIComponent(query)}`);
+    return response;
+  } catch (error) {
+    console.error('Kullanıcı arama hatası:', error);
+    throw error;
   }
 };
 

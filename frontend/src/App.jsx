@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import Profile from './pages/Profile';
 import Reels from './pages/Reels'; // Uncommented this line
 import Messages from './pages/Messages'; // Messages sayfasını import ettik
+import SettingsPage from './pages/Settings/SettingsPage'; // Settings sayfasını import ediyoruz
 import { ChatPanel } from './components/chat/ChatPanel';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TOKEN_NAME } from './config/constants';
@@ -99,6 +100,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <Messages />
+              </ProtectedRoute>
+            } 
+          />
+          {/* Ayarlar sayfası */}
+          <Route 
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
               </ProtectedRoute>
             } 
           />

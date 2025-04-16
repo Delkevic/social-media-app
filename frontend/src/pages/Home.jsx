@@ -247,24 +247,26 @@ const Home = () => {
       
       <div className="container mx-auto relative z-10 p-4">
         <div className="flex flex-col lg:flex-row gap-4">
-          {/* Sol Panel - Profil Bilgileri - Soldan giriş */}
+          {/* Sol Panel - Yapışkan sınıfı eklendi */}
           <motion.div 
-            className="w-full lg:w-1/4"
+            className="w-full lg:w-1/4 sticky top-4 self-start"
             variants={leftPanelVariants}
             initial="hidden"
             animate="visible"
           >
-            <LeftPanel user={user} showMessagesAndNotifications={false} />
+            {/* LeftPanel içindeki NavigationLinks artık düzgün çalışmalı */}
+            <LeftPanel user={user} showMessagesAndNotifications={false} /> 
           </motion.div>
           
-          {/* Orta İçerik - Arama ve Gönderiler - Arama yukarıdan, içerik aşağıdan giriş */}
+          {/* Orta İçerik - Orijinal genişlik */}
           <div className="w-full lg:w-2/4">
             <motion.div
               variants={searchVariants}
               initial="hidden"
               animate="visible"
+              className="sticky top-4 z-10"
             >
-              {/* Arama Çubuğu - yukarıdan gelecek */}
+              {/* Arama Çubuğu - sticky yapıldı */}
               <div className="mb-4">
                 <MainContent user={user} showSearchOnly={true} />
               </div>
@@ -280,14 +282,14 @@ const Home = () => {
             </motion.div>
           </div>
           
-          {/* Sağ Panel - Mini Reels Oynatıcı - Sağdan giriş */}
+          {/* Sağ Panel - Burası zaten sticky */}
           <motion.div 
-            className="w-full lg:w-1/4"
+            className="w-full lg:w-1/4 sticky top-4 self-start" 
             variants={rightPanelVariants}
             initial="hidden"
             animate="visible"
           >
-            <RightPanel user={user} />
+            <RightPanel user={user} /> 
           </motion.div>
         </div>
       </div>

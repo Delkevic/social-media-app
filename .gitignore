@@ -166,3 +166,24 @@ dist
 .pnp.*
 
 backend/uploads/*
+
+# IDE ayarları
+.idea/
+.vscode/
+
+# Frontend build dizini
+frontend/build/
+build/
+
+# Veritabanı dosyaları
+*.db
+*.sqlite
+
+# Medya yüklemeleri (backend/uploads zaten var)
+uploads/images/
+uploads/videos/
+uploads/thumbnails/
+
+# Gizli ayar dosyaları
+config.json
+settings.json

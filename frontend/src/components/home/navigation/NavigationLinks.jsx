@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../../context/AuthContext';
 
 const NavigationLinks = () => {
   const location = useLocation();
+  const { user: currentUser } = useAuth();
   
   // Navigasyon bağlantıları
   const links = [
@@ -59,6 +61,15 @@ const NavigationLinks = () => {
         </svg>
       ),
       label: 'Ayarlar'
+    },
+    {
+      to: currentUser ? `/profile/${currentUser.username}` : '/login',
+      icon: (
+        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+          <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path>
+        </svg>
+      ),
+      label: 'Profil'
     }
   ];
 
@@ -79,7 +90,10 @@ const NavigationLinks = () => {
         
         <div className="space-y-2">
           {links.map((link) => {
-            const isActive = location.pathname === link.to;
+            if (!currentUser && link.label === 'Profil') return null;
+            
+            const isActive = location.pathname === link.to || 
+                           (link.label === 'Profil' && location.pathname.startsWith('/profile/') && location.pathname.endsWith(currentUser?.username || '###'));
             
             return (
               <Link

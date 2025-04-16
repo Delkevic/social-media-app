@@ -73,11 +73,18 @@ func SetupRoutes() *gin.Engine {
 			// Image upload endpointi
 			auth.POST("/upload/image", controllers.UploadImage)
 
-			// Kullanıcı profili
+			// Kullanıcı profili ve ayarları
 			auth.GET("/user", controllers.GetUserProfile)
 			auth.PUT("/user/profile", controllers.UpdateProfile)
+			auth.PUT("/user/password", controllers.UpdatePassword)
+			auth.DELETE("/user", controllers.DeleteAccount)
+			auth.GET("/user/login-activity", controllers.GetLoginActivities)
+
+			// Kullanıcı takip etme/çıkarma
 			auth.GET("/user/following", controllers.GetFollowing)
 			auth.GET("/user/followers", controllers.GetFollowers)
+			auth.POST("/user/follow/:id", controllers.FollowUser)
+			auth.DELETE("/user/follow/:id", controllers.UnfollowUser)
 
 			// Kullanıcı following/followers - kullanıcı adına göre
 			auth.GET("/profile/:username/following", controllers.GetFollowing)
@@ -93,7 +100,7 @@ func SetupRoutes() *gin.Engine {
 			auth.POST("/posts/:id/save", controllers.SavePost)
 			auth.DELETE("/posts/:id/save", controllers.UnsavePost)
 
-			// Profil rotaları
+			// Profil rotaları (Diğer kullanıcılar için)
 			auth.GET("/profile/:username", controllers.GetUserByUsername)
 			auth.GET("/profile/:username/posts", controllers.GetUserPosts)
 
@@ -128,9 +135,6 @@ func SetupRoutes() *gin.Engine {
 			auth.POST("/reels/:id/save", controllers.SaveReel)
 			auth.DELETE("/reels/:id/save", controllers.UnsaveReel)
 
-			// Kullanıcı takip rotaları
-			auth.POST("/user/follow/:id", controllers.FollowUser)
-			auth.DELETE("/user/follow/:id", controllers.UnfollowUser)
 		}
 
 		// Kullanıcı arama rotası (auth dışında)

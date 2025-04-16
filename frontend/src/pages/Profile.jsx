@@ -6,10 +6,16 @@ import ReelShow from "../components/profile/ReelShow";
 import LeftPanel from "../components/home/LeftPanel";
 import MiniReelsPlayer from "../components/profile/MiniReelsPlayer"; // MiniReelsPlayer'ı import ediyoruz
 import { API_BASE_URL } from "../config/constants"; // API_BASE_URL ekliyoruz
+import api from "../services/api"; // api servisini import ediyoruz
+import FollowListModal from "../components/modals/FollowListModal"; // Yeni modalı import et
+import { useAuth } from "../context/AuthContext"; // useAuth eklendi
+import { Lock, LogOut } from 'lucide-react'; // Kilit ikonu ve LogOut ikonu eklendi
+import { toast } from 'react-hot-toast'; // toast eklendi
+import { GlowingEffect } from '../components/ui/GlowingEffect'; // GlowingEffect import edildi
 
 const Profile = () => {
   const [user, setUser] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
+  const { user: currentUser, token, logout } = useAuth(); // AuthContext kullanımı ve logout fonksiyonu
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState([]);
   const [imagePosts, setImagePosts] = useState([]);
@@ -39,15 +45,26 @@ const Profile = () => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowRequestInProgress, setIsFollowRequestInProgress] = useState(false);
 
+  // Follow List Modal State'leri
+  const [isFollowModalOpen, setIsFollowModalOpen] = useState(false);
+  const [followModalTitle, setFollowModalTitle] = useState("");
+  const [followModalUsers, setFollowModalUsers] = useState([]);
+  const [followModalLoading, setFollowModalLoading] = useState(false);
+  const [followModalError, setFollowModalError] = useState(null);
+
+  // Yeni State'ler
+  const [followStatus, setFollowStatus] = useState('none'); // Şimdilik isFollowing gibi davranacak
+  const [canViewProfile, setCanViewProfile] = useState(true);
+
   // Keşfet reelslerini getir
   const fetchExploreReels = useCallback(async () => {
     try {
-      const token =
-        sessionStorage.getItem("token") || localStorage.getItem("token");
+    const token =
+      sessionStorage.getItem("token") || localStorage.getItem("token");
       if (!token) {
-        navigate("/login");
-        return;
-      }
+      navigate("/login");
+      return;
+    }
 
       const response = await fetch(
         `${API_BASE_URL}/api/reels?feed=trending`,
@@ -111,127 +128,96 @@ const Profile = () => {
     }
   }, [navigate, username]);
 
-  useEffect(() => {
-    const storedUser =
-      JSON.parse(sessionStorage.getItem("user")) ||
-      JSON.parse(localStorage.getItem("user"));
-    const token =
-      sessionStorage.getItem("token") || localStorage.getItem("token");
-
-    if (!storedUser || !token) {
+  // Profil bilgilerini ve gönderileri getiren ana fonksiyon
+  const fetchProfileData = useCallback(async () => {
+    setLoading(true);
+    const localToken = sessionStorage.getItem("token") || localStorage.getItem("token");
+    if (!localToken) {
       navigate("/login");
       return;
     }
-    setCurrentUser(storedUser);
-    setIsOwnProfile(username === storedUser.username);
 
-    const fetchUserProfile = async () => {
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/profile/${username}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-        if (!response.ok) {
-          throw new Error("Kullanıcı profili bulunamadı");
-        }
-
-        const data = await response.json();
-        if (data.success && data.data.user) {
-          setUser(data.data.user);
-          
-          // Takip durumunu ayarla
-          if (data.data.user.isFollowing !== undefined) {
-            setIsFollowing(data.data.user.isFollowing);
-          }
-
-          // Eğer kendi profili ise, profil düzenleme formunu doldur
-          if (isOwnProfile) {
-    setEditFormData({
-              fullName: data.data.user.fullName || "",
-              bio: data.data.user.bio || "",
-              location: data.data.user.location || "",
-              website: data.data.user.website || "",
-            });
-          }
-
-          // Stats verilerini güncelle
-          setStats({
-            followers: data.data.user.followerCount || 0,
-            following: data.data.user.followingCount || 0,
-            posts: data.data.user.postCount || 0,
-          });
-
-          // Kullanıcının gönderilerini çek
-          fetchUserPosts(username, token);
-          
-          // Reels verilerini çek
-          fetchExploreReels();
-          if (!isOwnProfile) {
-            fetchUserReels();
-          }
-        }
-      } catch (error) {
-        console.error("Profil yüklenirken hata oluştu:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const verifyToken = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/user`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (!response.ok) {
-          // Token geçersizse oturumu temizle ve login sayfasına yönlendir
-          sessionStorage.removeItem("token");
-          sessionStorage.removeItem("user");
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
-          navigate("/login");
-        } else {
-          // Token geçerliyse kullanıcı profilini çek
-          fetchUserProfile();
-        }
-      } catch (error) {
-        console.error("Token doğrulama hatası:", error);
-        setLoading(false);
-      }
-    };
-
-    verifyToken();
-  }, [navigate, username, isOwnProfile, fetchExploreReels, fetchUserReels]);
-
-  useEffect(() => {
-    if (activeTab === "reels" && user) {
-      fetchUserReels();
-    }
-  }, [activeTab, user, fetchUserReels]);
-
-  const fetchUserPosts = async (username, token) => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/profile/${username}/posts`,
-        {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data.posts) {
-          setPosts(data.data.posts);
+      // Önce profil bilgilerini çek (yeni API servisiyle)
+      const profileResponse = await api.user.getProfileByUsername(username);
 
-          // Gönderileri resimli ve resimsiz olarak ayırırken images değerini düzgün kontrol et
-          const withImages = data.data.posts.filter((post) => {
+      if (profileResponse.success && profileResponse.data.user) {
+        const userData = profileResponse.data.user;
+        setUser(userData);
+        // Backend'den gelen followStatus'u basitçe takip edip etmediğine çevir
+        setFollowStatus(userData.followStatus === 'following' ? 'following' : 'none'); 
+        setCanViewProfile(userData.canViewProfile === undefined ? true : userData.canViewProfile);
+
+        // İstatistikleri ayarla
+        setStats({
+          followers: userData.followerCount || 0,
+          following: userData.followingCount || 0,
+          posts: userData.postCount || 0,
+        });
+
+        // Kendi profili mi kontrolü
+        const storedUser = JSON.parse(sessionStorage.getItem("user")) || JSON.parse(localStorage.getItem("user"));
+        const ownProfile = storedUser?.username === username;
+        setIsOwnProfile(ownProfile);
+
+        if (ownProfile) {
+          setEditFormData({
+            fullName: userData.fullName || "",
+            bio: userData.bio || "",
+            location: userData.location || "",
+            website: userData.website || "",
+          });
+        }
+        
+        // Eğer profili görebiliyorsa gönderileri ve reels'leri çek
+        if (userData.canViewProfile !== false) { 
+          fetchUserPosts(username, localToken); // Gönderileri çek
+          fetchUserReels(); // Reels'leri çek (bu zaten sadece başkasının profilinde çağrılıyor olmalı)
+        } else {
+          // Profili göremiyorsa gönderi/reel listelerini boşalt
+          setPosts([]);
+          setImagePosts([]);
+          setTextPosts([]);
+          setReels([]);
+        }
+        
+        // Her zaman keşfet reels'lerini çek (kendi profilinde de)
+        fetchExploreReels();
+
+      } else {
+        console.error("Profil yüklenemedi:", profileResponse.message);
+        setUser(null); // Kullanıcı bulunamadıysa veya hata varsa
+        setCanViewProfile(false); // Profil görülemez
+        toast.error(profileResponse.message || "Kullanıcı profili yüklenirken bir hata oluştu.");
+      }
+    } catch (error) {
+      console.error("Profil yüklenirken hata oluştu:", error);
+      setUser(null);
+      setCanViewProfile(false);
+      toast.error("Profil yüklenirken bir hata oluştu.");
+    } finally {
+      setLoading(false);
+    }
+  }, [username, navigate, fetchExploreReels, fetchUserReels]);
+
+  // Bileşen yüklendiğinde profil verisini çek
+  useEffect(() => {
+    fetchProfileData();
+  }, [fetchProfileData]); // Sadece fetchProfileData değiştiğinde çalışsın
+
+  const fetchUserPosts = async (targetUsername, token) => { // username yerine targetUsername
+    // Bu fonksiyon artık canViewProfile kontrolü yapmıyor, çağıran yer yapıyor.
+    try {
+       // API çağrısını yeni servisle yap
+       const response = await api.posts.getUserPostsByUsername(targetUsername); // api.js'e bu metod eklenmeli
+      
+       if (response.success && response.data) {
+          // Yanıt yapısı değişmiş olabilir, kontrol et
+          const userPosts = response.data.posts || [];
+          setPosts(userPosts); 
+
+          // Resimli/Resimsiz ayırma mantığı aynı kalabilir
+          const withImages = userPosts.filter((post) => {
             let postImages = post.images;
             if (typeof post.images === "string") {
               try {
@@ -249,7 +235,7 @@ const Profile = () => {
             );
           });
 
-          const withoutImages = data.data.posts.filter((post) => {
+          const withoutImages = userPosts.filter((post) => {
             let postImages = post.images;
             if (typeof post.images === "string") {
               try {
@@ -268,12 +254,17 @@ const Profile = () => {
 
           setImagePosts(withImages);
           setTextPosts(withoutImages);
-        }
-      } else {
-        console.error("Gönderiler alınamadı:", response.statusText);
-      }
+       } else {
+         console.error("Gönderiler alınamadı:", response.message);
+         setPosts([]);
+         setImagePosts([]);
+         setTextPosts([]);
+       }
     } catch (error) {
       console.error("Gönderiler yüklenirken hata oluştu:", error);
+      setPosts([]);
+      setImagePosts([]);
+      setTextPosts([]);
     }
   };
 
@@ -375,50 +366,208 @@ const Profile = () => {
     setSelectedReel(null);
   };
 
-  // Takip et/takibi bırak işlevi
-  const toggleFollow = async () => {
-    if (isFollowRequestInProgress) return;
+  // Takip et/bırak işlevi (basitleştirilmiş)
+  const handleFollowAction = async () => {
+    if (isFollowRequestInProgress || !user || isOwnProfile) return; // Kendi profilinde işlem yapma
     setIsFollowRequestInProgress(true);
 
+    const action = followStatus === 'following' ? api.user.unfollow : api.user.follow;
+    const targetUserId = user.id; // Username yerine ID kullan
+
     try {
-      const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-      if (!token) {
-        navigate("/login");
-        return;
-      }
+      const response = await action(targetUserId); // API'yi ID ile çağır
 
-      const method = isFollowing ? 'DELETE' : 'POST';
-      const response = await fetch(
-        `${API_BASE_URL}/api/user/follow/${user.id}`,
-        {
-          method,
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      if (response.success) {
+        const wasFollowing = followStatus === 'following';
+        const newStatus = wasFollowing ? 'none' : 'following';
+        setFollowStatus(newStatus);
 
-      if (response.ok) {
-        // Takip durumunu güncelle
-        setIsFollowing(!isFollowing);
+        // Takipçi sayısını anlık güncelle
+        setStats(prevStats => ({
+          ...prevStats,
+          followers: wasFollowing 
+            ? Math.max(0, prevStats.followers - 1) 
+            : prevStats.followers + 1
+        }));
         
-        // Takipçi sayısını güncelle
-        setStats({
-          ...stats,
-          followers: isFollowing 
-            ? Math.max(0, stats.followers - 1) 
-            : stats.followers + 1
-        });
+        // toast.success(wasFollowing ? 'Takipten çıkarıldı.' : 'Takip edildi.');
+
       } else {
-        console.error("Takip işlemi başarısız oldu:", await response.text());
+        toast.error(response.message || "İşlem sırasında bir hata oluştu.");
+        console.error("Takip işlemi başarısız:", response.message);
       }
     } catch (error) {
+      toast.error("İşlem sırasında bir hata oluştu.");
       console.error("Takip işlemi sırasında hata:", error);
     } finally {
       setIsFollowRequestInProgress(false);
     }
   };
+
+  // Takipçi listesini getiren fonksiyon (canViewProfile kontrolü eklendi)
+  const fetchFollowers = useCallback(async () => {
+    if (!username || !canViewProfile) { // Profil gizliyse ve görülemiyorsa fetch etme
+       setFollowModalUsers([]);
+       setFollowModalLoading(false);
+       // İsteğe bağlı olarak kullanıcıya bilgi verilebilir
+       // setFollowModalError("Bu hesabın takipçilerini görmek için takip etmelisiniz.");
+       return; 
+    }
+    setFollowModalLoading(true);
+    setFollowModalError(null);
+    try {
+       // API yanıtını kontrol et (Data içindeki users dizisi)
+       const response = await api.user.getFollowersByUsername(username); 
+       if (response.success && response.data && Array.isArray(response.data.users)) {
+         setFollowModalUsers(response.data.users);
+         // canViewList'i de kontrol edebiliriz ama fetchFollowers zaten canViewProfile ile korunuyor
+       } else {
+         setFollowModalUsers([]);
+         setFollowModalError(response.message || "Takipçiler alınamadı.");
+         console.error("Takipçi getirme hatası:", response.message);
+       }
+    } catch (error) {
+       setFollowModalUsers([]);
+       setFollowModalError("Takipçiler yüklenirken bir hata oluştu.");
+       console.error("Takipçi getirme hatası:", error);
+    } finally {
+       setFollowModalLoading(false);
+    }
+  }, [username, canViewProfile]); // canViewProfile bağımlılık eklendi
+
+  // Takip edilen listesini getiren fonksiyon (canViewProfile kontrolü eklendi)
+  const fetchFollowing = useCallback(async () => {
+     if (!username || !canViewProfile) { // Profil gizliyse ve görülemiyorsa fetch etme
+       setFollowModalUsers([]);
+       setFollowModalLoading(false);
+       return;
+     }
+     setFollowModalLoading(true);
+     setFollowModalError(null);
+     try {
+       // API yanıtını kontrol et (Data içindeki users dizisi)
+       const response = await api.user.getFollowingByUsername(username);
+       if (response.success && response.data && Array.isArray(response.data.users)) {
+         setFollowModalUsers(response.data.users);
+       } else {
+         setFollowModalUsers([]);
+         setFollowModalError(response.message || "Takip edilenler alınamadı.");
+         console.error("Takip edilen getirme hatası:", response.message);
+       }
+     } catch (error) {
+       setFollowModalUsers([]);
+       setFollowModalError("Takip edilenler yüklenirken bir hata oluştu.");
+       console.error("Takip edilen getirme hatası:", error);
+     } finally {
+       setFollowModalLoading(false);
+     }
+  }, [username, canViewProfile]); // canViewProfile bağımlılık eklendi
+
+
+  // Takipçi modalını açan handler (canViewProfile kontrolü)
+  const handleShowFollowers = () => {
+    if (!canViewProfile) {
+      toast.error("Bu hesabın takipçilerini görmek için takip etmeniz gerekir.");
+      return;
+    }
+    setFollowModalTitle("Takipçiler");
+    setFollowModalUsers([]); 
+    setIsFollowModalOpen(true);
+    fetchFollowers();
+  };
+
+  // Takip edilen modalını açan handler (canViewProfile kontrolü)
+  const handleShowFollowing = () => {
+    if (!canViewProfile) {
+      toast.error("Bu hesabın takip ettiklerini görmek için takip etmeniz gerekir.");
+      return;
+    }
+    setFollowModalTitle("Takip Edilenler");
+    setFollowModalUsers([]);
+    setIsFollowModalOpen(true);
+    fetchFollowing();
+  };
+
+  // Modal kapatma
+  const closeFollowModal = () => {
+    setIsFollowModalOpen(false);
+    setFollowModalUsers([]);
+    setFollowModalError(null);
+  };
+
+  // Takipçi modalını açan handler
+  const handleFollowToggleInModal = async (targetUserId, isCurrentlyFollowing) => {
+    console.log(`Toggling follow for user ${targetUserId}, currently following: ${isCurrentlyFollowing}`);
+    // TODO: API çağrısını yap (api.user.follow veya api.user.unfollow)
+    // Başarılı olursa followModalUsers state'ini güncelle
+    // Ve profil sayfasındaki ana takipçi/takip sayısını da güncellememiz gerekebilir.
+    // Şimdilik sadece logluyoruz.
+    try {
+      const action = isCurrentlyFollowing ? api.user.unfollow : api.user.follow;
+      const response = await action(targetUserId);
+      if (response.success) {
+        // Modal listesini güncelle
+        setFollowModalUsers(prevUsers => 
+          prevUsers.map(u => 
+            u.ID === targetUserId ? { ...u, IsFollowing: !isCurrentlyFollowing } : u
+          )
+        );
+        // Ana stats state'ini de güncelle (takipçi/takip sayısını)
+        // Eğer kendi profilimizdeysek ve takip ettiğimiz kişi sayısı değişiyorsa:
+        if (isOwnProfile) {
+           setStats(prevStats => ({
+             ...prevStats,
+             following: isCurrentlyFollowing ? prevStats.following - 1 : prevStats.following + 1
+           }));
+        }
+        // Eğer başka bir profildeysek ve o profilin takipçi sayısı değişiyorsa:
+        else if (user.id === targetUserId) { 
+            // Bu durum handle edilmeli - kendi takip durumumuz değişiyor,
+            // başkasının profiline bakarkenki takipçi sayısı değil.
+        } 
+        // Eğer başka bir profildeysek ve kendi takip etme durumumuz değiştiyse,
+        // o profilin takipçi sayısını güncellememiz gerekir.
+        else {
+            // Başkasının profiline bakarken birini takip/takibi bırakırsak?
+            // Bu durumda o profilin takipçi sayısı değişebilir.
+             setStats(prevStats => ({
+                 ...prevStats,
+                 followers: isCurrentlyFollowing ? prevStats.followers - 1 : prevStats.followers + 1
+             }));
+        }
+
+      } else {
+        console.error("Modal içinde takip durumu değiştirilemedi:", response.message);
+      }
+    } catch (error) {
+      console.error("Modal içinde takip durumu değiştirilirken hata:", error);
+    }
+  };
+
+  // --- Dinamik Takip Butonu Metni ve Stili (Basitleştirilmiş) ---
+  const getFollowButtonProps = () => {
+    if (isOwnProfile) return { text: '', style: 'hidden' }; // Kendi profilinde buton yok
+    
+    switch (followStatus) {
+      case 'following':
+        return { text: 'Takibi Bırak', style: 'bg-gray-700 text-white hover:bg-gray-800 border border-gray-600' };
+      // case 'pending': // Şimdilik kaldırıldı
+      //   return { text: 'İstek Gönderildi', style: 'bg-gray-600 text-gray-300 hover:bg-gray-700 border border-gray-500' };
+      case 'none':
+      default: // none veya bilinmeyen durum
+        return { text: 'Takip Et', style: 'bg-blue-600 text-white hover:bg-blue-700' };
+    }
+  };
+  const followButtonProps = getFollowButtonProps();
+  // --- ---
+
+  // --- Çıkış Yapma Fonksiyonu ---
+  const handleLogout = () => {
+    logout(); // AuthContext'teki logout fonksiyonunu çağır
+    toast.success("Başarıyla çıkış yapıldı.");
+    navigate('/login'); // Login sayfasına yönlendir
+  };
+  // --- ---
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-900 via-gray-900 to-black">
@@ -437,6 +586,18 @@ const Profile = () => {
         profileUser={user}
       />
       
+      {/* Takipçi/Takip Edilen Modalı */} 
+      <FollowListModal
+        isOpen={isFollowModalOpen}
+        onClose={closeFollowModal}
+        title={followModalTitle}
+        users={followModalUsers}
+        onFollowToggle={handleFollowToggleInModal}
+        currentUserId={currentUser?.id}
+        loading={followModalLoading}
+        error={followModalError}
+      />
+
       <div className="container mx-auto px-4 py-4 flex-grow">
         <div className="flex flex-col lg:flex-row lg:space-x-6">
           <div className="hidden md:block md:w-1/4 lg:w-1/5">
@@ -478,31 +639,19 @@ const Profile = () => {
                     {isEditing ? "İptal" : "Profili Düzenle"}
                   </button>
                           ) : (
-                            <>
+                            // --- Güncellenmiş Takip Butonu ---
+                            followButtonProps.text && (
                               <button
-                                onClick={toggleFollow}
+                                onClick={handleFollowAction}
                                 disabled={isFollowRequestInProgress}
                                 className={`rounded-full px-6 py-2 text-sm font-medium transition-colors duration-300 shadow-md ${
                                   isFollowRequestInProgress ? 'opacity-70 cursor-not-allowed' : ''
-                                } ${
-                                  isFollowing 
-                                    ? 'bg-gray-700 text-white hover:bg-gray-800 border border-gray-600' 
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                                }`}
+                                } ${followButtonProps.style}`} 
                               >
-                                {isFollowRequestInProgress 
-                                  ? '...' 
-                                  : isFollowing 
-                                    ? "Takibi Bırak" 
-                                    : "Takip Et"
-                                }
+                                {isFollowRequestInProgress ? '...' : followButtonProps.text} 
                               </button>
-                              <button className="rounded-full p-2 border border-gray-600/50 text-gray-400 hover:bg-gray-700/30 hover:text-gray-300 transition-all duration-300">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                </svg>
-                              </button>
-                            </>
+                            )
+                            // --- ---
                           )}
                         </div>
                       </div>
@@ -510,15 +659,23 @@ const Profile = () => {
                         <div className="text-center">
                           <span className="block text-xl font-bold text-gray-200">{stats.posts}</span>
                           <span className="text-xs text-gray-400 uppercase tracking-wider">Gönderi</span>
-                        </div>
-                        <div className="text-center">
+                </div>
+                        <button 
+                           onClick={handleShowFollowers} 
+                           disabled={!canViewProfile && !isOwnProfile} // Gizli ve kendi profilin değilse deaktif
+                           className={`text-center px-2 rounded-md transition-colors ${!canViewProfile && !isOwnProfile ? 'cursor-not-allowed opacity-60' : 'hover:bg-slate-700/30'}`}
+                         >
                           <span className="block text-xl font-bold text-gray-200">{stats.followers}</span>
                           <span className="text-xs text-gray-400 uppercase tracking-wider">Takipçi</span>
-                        </div>
-                        <div className="text-center">
+                        </button>
+                        <button 
+                           onClick={handleShowFollowing} 
+                           disabled={!canViewProfile && !isOwnProfile} // Gizli ve kendi profilin değilse deaktif
+                           className={`text-center px-2 rounded-md transition-colors ${!canViewProfile && !isOwnProfile ? 'cursor-not-allowed opacity-60' : 'hover:bg-slate-700/30'}`}
+                         >
                           <span className="block text-xl font-bold text-gray-200">{stats.following}</span>
                           <span className="text-xs text-gray-400 uppercase tracking-wider">Takip</span>
-                </div>
+                        </button>
                 </div>
                 {!isEditing ? (
                         <div className="text-gray-300 max-w-xl pt-2 space-y-1">
@@ -596,203 +753,224 @@ const Profile = () => {
             </div>
                 </div>
 
-                <div className="border-b border-gray-700/50">
-                  <div className="flex justify-start sm:justify-center md:justify-start space-x-0 sm:space-x-1 md:space-x-2">
-                    <button
-                      className={`py-3 px-2 md:px-4 font-medium text-sm flex items-center transition-all duration-200 ${activeTab === "posts" ? "border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-300 hover:border-b-2 hover:border-gray-600/50"}`}
-                      onClick={() => setActiveTab("posts")}
-                    >
-                      <svg className="w-5 h-5 md:mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" /></svg>
-                      <span className="hidden md:inline ml-1.5">Gönderiler</span>
-                    </button>
-                    <button
-                      className={`py-3 px-2 md:px-4 font-medium text-sm flex items-center transition-all duration-200 ${activeTab === "reels" ? "border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-300 hover:border-b-2 hover:border-gray-600/50"}`}
-                      onClick={() => setActiveTab("reels")}
-                    >
-                      <svg className="w-5 h-5 md:mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                      <span className="hidden md:inline ml-1.5">Reelsler</span>
-                    </button>
-                    <button
-                      className={`py-3 px-2 md:px-4 font-medium text-sm flex items-center transition-all duration-200 ${activeTab === "writings" ? "border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-300 hover:border-b-2 hover:border-gray-600/50"}`}
-                      onClick={() => setActiveTab("writings")}
-                    >
-                      <svg className="w-5 h-5 md:mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                      <span className="hidden md:inline ml-1.5">Yazılar</span>
-                    </button>
-                    {isOwnProfile && (
-                      <button
-                        className={`py-3 px-2 md:px-4 font-medium text-sm flex items-center transition-all duration-200 ${activeTab === "saved" ? "border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-300 hover:border-b-2 hover:border-gray-600/50"}`}
-                        onClick={() => setActiveTab("saved")}
-                      >
-                        <svg className="w-5 h-5 md:mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
-                        <span className="hidden md:inline ml-1.5">Kaydedilenler</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
+                {/* --- Sekmeler ve İçerik Alanı (Tek Koşullu Blok) --- */}
+                { (canViewProfile || isOwnProfile) ? (
+                  <>
+                    {/* --- Sekme Butonları --- */}
+                    <div className="border-b border-gray-700/50">
+                      <div className="flex justify-start sm:justify-center md:justify-start space-x-0 sm:space-x-1 md:space-x-2">
+                        {/* Gönderiler Sekmesi */} 
+                        <button
+                          className={`py-3 px-2 md:px-4 font-medium text-sm flex items-center transition-all duration-200 ${activeTab === "posts" ? "border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-300 hover:border-b-2 hover:border-gray-600/50"}`}
+                          onClick={() => setActiveTab("posts")}
+                        >
+                          <svg className="w-5 h-5 md:mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" /></svg>
+                          <span className="hidden md:inline ml-1.5">Gönderiler</span>
+                        </button>
+                        {/* Reelsler Sekmesi */} 
+                        <button
+                           className={`py-3 px-2 md:px-4 font-medium text-sm flex items-center transition-all duration-200 ${activeTab === "reels" ? "border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-300 hover:border-b-2 hover:border-gray-600/50"}`}
+                           onClick={() => setActiveTab("reels")}
+                         >
+                          <svg className="w-5 h-5 md:mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                          <span className="hidden md:inline ml-1.5">Reelsler</span>
+                        </button>
+                         {/* Yazılar Sekmesi */} 
+                         <button
+                           className={`py-3 px-2 md:px-4 font-medium text-sm flex items-center transition-all duration-200 ${activeTab === "writings" ? "border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-300 hover:border-b-2 hover:border-gray-600/50"}`}
+                           onClick={() => setActiveTab("writings")}
+                         >
+                           <svg className="w-5 h-5 md:mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                           <span className="hidden md:inline ml-1.5">Yazılar</span>
+                         </button>
+                         {/* Kaydedilenler Sekmesi (Sadece kendi profili) */} 
+                         {isOwnProfile && (
+                           <button
+                             className={`py-3 px-2 md:px-4 font-medium text-sm flex items-center transition-all duration-200 ${activeTab === "saved" ? "border-b-2 border-blue-500 text-white" : "text-gray-400 hover:text-gray-300 hover:border-b-2 hover:border-gray-600/50"}`}
+                             onClick={() => setActiveTab("saved")}
+                           >
+                              <svg className="w-5 h-5 md:mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+                              <span className="hidden md:inline ml-1.5">Kaydedilenler</span>
+                           </button>
+                         )}
+                      </div>
+                    </div>
 
-                <div className="min-h-[300px]">
-                  {activeTab === "posts" && (
-                    <div>
-                      {imagePosts.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-1 md:gap-2">
-                          {imagePosts.map((post) => {
-                            let imageUrl = '';
-                            if (typeof post.images === 'string') {
-                              try {
-                                const parsedImages = JSON.parse(post.images);
-                                imageUrl = Array.isArray(parsedImages) ? parsedImages[0] : null;
-                              } catch (e) { imageUrl = null; }
-                            } else if (Array.isArray(post.images)) {
-                              imageUrl = post.images[0];
-                            }
-                            const fullImageUrl = getFullImageUrl(imageUrl);
-                            
-                            return (
-                              <div
-                                key={post.id}
-                                className="aspect-square overflow-hidden relative cursor-pointer rounded group bg-slate-800/50"
-                                onClick={() => handlePostClick(post)}
-                              >
-                                {fullImageUrl ? (
-                                    <img
-                                      src={fullImageUrl}
-                                      alt={post.content?.substring(0, 50) || 'Gönderi resmi'}
-                                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                      loading="lazy"
-                                      onError={(e) => { 
-                                          e.target.onerror = null; 
-                                          e.target.style.display = 'none'; 
-                                          const parent = e.target.parentElement;
-                                          if(parent) parent.innerHTML += '<div class="flex items-center justify-center h-full text-gray-500 text-xs">Resim Yüklenemedi</div>';
-                                      }}
-                                    />
-                                ) : (
-                                    <div className="flex items-center justify-center h-full text-gray-500 text-xs">Resim Yok</div>
-                                )}
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center">
-                                  <div className="flex items-center space-x-4 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                    <span className="flex items-center text-sm">
-                                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
-                                      {post.likes || 0}
-                                    </span>
-                                    <span className="flex items-center text-sm">
-                                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" /></svg>
-                                      {post.comments || 0}
-                                    </span>
+                    {/* --- Sekme İçerikleri --- */}
+                    <div className="min-h-[300px]">
+                      {/* Gönderiler İçeriği */} 
+                      {activeTab === "posts" && (
+                        <div>
+                          {imagePosts.length > 0 ? (
+                            <div className="grid grid-cols-3 gap-1 md:gap-2">
+                              {imagePosts.map((post) => {
+                                let imageUrl = '';
+                                if (typeof post.images === 'string') {
+                                  try {
+                                    const parsedImages = JSON.parse(post.images);
+                                    imageUrl = Array.isArray(parsedImages) ? parsedImages[0] : null;
+                                  } catch (e) { imageUrl = null; }
+                                } else if (Array.isArray(post.images)) {
+                                  imageUrl = post.images[0];
+                                }
+                                const fullImageUrl = getFullImageUrl(imageUrl);
+                                
+                                return (
+                                  <div
+                                    key={post.id}
+                                    className="aspect-square overflow-hidden relative cursor-pointer rounded group bg-slate-800/50"
+                                    onClick={() => handlePostClick(post)}
+                                  >
+                                    {fullImageUrl ? (
+                                        <img
+                                          src={fullImageUrl}
+                                          alt={post.content?.substring(0, 50) || 'Gönderi resmi'}
+                                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                          loading="lazy"
+                                          onError={(e) => { 
+                                              e.target.onerror = null; 
+                                              e.target.style.display = 'none'; 
+                                              const parent = e.target.parentElement;
+                                              if(parent) parent.innerHTML += '<div class="flex items-center justify-center h-full text-gray-500 text-xs">Resim Yüklenemedi</div>';
+                                          }}
+                                        />
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full text-gray-500 text-xs">Resim Yok</div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300 flex items-center justify-center">
+                                      <div className="flex items-center space-x-4 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                        <span className="flex items-center text-sm">
+                                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
+                                          {post.likes || 0}
+                                        </span>
+                                        <span className="flex items-center text-sm">
+                                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" /></svg>
+                                          {post.comments || 0}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                              </div>
-                            )
-                           })
-                          }
-                        </div>
-                      ) : (
-                        <div className="text-center py-16">
-                          <p className="text-gray-400 text-sm">Henüz gönderi yok.</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {activeTab === "reels" && (
-                    <div>
-                      {reels.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-1 md:gap-2">
-                          {reels.map((reel) => {
-                            const thumbnailUrl = getFullImageUrl(reel.thumbnail);
-                            return (
-                              <div
-                                key={reel.id}
-                                className="aspect-[9/16] overflow-hidden relative cursor-pointer rounded group bg-slate-800/50"
-                                onClick={() => handleReelClick(reel)}
-                              >
-                                {thumbnailUrl ? (
-                                    <img
-                                      src={thumbnailUrl}
-                                      alt={reel.description || 'Reel kapağı'}
-                                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                      loading="lazy"
-                                      onError={(e) => { 
-                                        e.target.onerror = null; 
-                                        e.target.style.display = 'none';
-                                        const parent = e.target.parentElement;
-                                        if(parent) parent.innerHTML += '<div class="flex items-center justify-center h-full text-gray-500 text-xs">Kapak Yüklenemedi</div>';
-                                      }}
-                                    />
-                                ) : (
-                                     <div className="flex items-center justify-center h-full text-gray-500 text-xs">Kapak Yok</div>
-                                )}
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-300 flex flex-col items-center justify-center">
-                                  <svg className="w-8 h-8 text-white opacity-0 group-hover:opacity-80 transition-opacity duration-300 mb-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
-                                  <span className="flex items-center text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
-                                    {reel.likes || 0}
-                                  </span>
-                                </div>
-                              </div>
-                            )
-                           })
-                          }
-                        </div>
-                      ) : (
-                        <div className="text-center py-16">
-                          <p className="text-gray-400 text-sm">Henüz reel yok.</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {activeTab === "writings" && (
-                    <div>
-                      {textPosts.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {textPosts.map((post) => (
-                            <div
-                              key={post.id}
-                              className="p-4 rounded-xl bg-[rgba(20,24,36,0.7)] border border-[rgba(255,255,255,0.1)] backdrop-blur-lg cursor-pointer hover:bg-slate-800/50 transition-colors duration-200 shadow-sm"
-                              onClick={() => handlePostClick(post)}
-                            >
-                              <p className="text-gray-300 text-sm leading-relaxed line-clamp-3 mb-3">{post.content}</p>
-                              <div className="flex items-center justify-between text-gray-400 text-xs">
-                                <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                                <div className="flex items-center space-x-3">
-                                  <span className="flex items-center">
-                                    <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
-                                    {post.likes || 0}
-                                  </span>
-                                  <span className="flex items-center">
-                                    <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" /></svg>
-                                    {post.comments || 0}
-                                  </span>
-                                </div>
-                              </div>
+                                )
+                               })
+                              }
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-16">
-                          <p className="text-gray-400 text-sm">Henüz yazı yok.</p>
+                          ) : (
+                            <div className="text-center py-16">
+                              <p className="text-gray-400 text-sm">Henüz gönderi yok.</p>
+                            </div>
+                          )}
                         </div>
                       )}
+                      {/* Reelsler İçeriği */} 
+                      {activeTab === "reels" && (
+                        <div>
+                          {reels.length > 0 ? (
+                             <div className="grid grid-cols-3 gap-1 md:gap-2">
+                               {reels.map((reel) => {
+                                 const thumbnailUrl = getFullImageUrl(reel.thumbnail);
+                                 return (
+                                   <div
+                                     key={reel.id}
+                                     className="aspect-[9/16] overflow-hidden relative cursor-pointer rounded group bg-slate-800/50"
+                                     onClick={() => handleReelClick(reel)}
+                                   >
+                                     {thumbnailUrl ? (
+                                         <img
+                                           src={thumbnailUrl}
+                                           alt={reel.description || 'Reel kapağı'}
+                                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                           loading="lazy"
+                                           onError={(e) => { 
+                                             e.target.onerror = null; 
+                                             e.target.style.display = 'none';
+                                             const parent = e.target.parentElement;
+                                             if(parent) parent.innerHTML += '<div class="flex items-center justify-center h-full text-gray-500 text-xs">Kapak Yüklenemedi</div>';
+                                           }}
+                                         />
+                                     ) : (
+                                          <div className="flex items-center justify-center h-full text-gray-500 text-xs">Kapak Yok</div>
+                                     )}
+                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-300 flex flex-col items-center justify-center">
+                                       <svg className="w-8 h-8 text-white opacity-0 group-hover:opacity-80 transition-opacity duration-300 mb-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+                                       <span className="flex items-center text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                         <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
+                                         {reel.likes || 0}
+                                       </span>
+                                     </div>
+                                   </div>
+                                 )
+                               })}
+                             </div>
+                           ) : (
+                             <div className="text-center py-16">
+                               <p className="text-gray-400 text-sm">Henüz reel yok.</p>
+                             </div>
+                           )}
+                         </div>
+                       )}
+                       {/* Yazılar İçeriği */} 
+                       {activeTab === "writings" && (
+                         <div>
+                           {textPosts.length > 0 ? (
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                               {textPosts.map((post) => (
+                                 <div
+                                   key={post.id}
+                                   className="p-4 rounded-xl bg-[rgba(20,24,36,0.7)] border border-[rgba(255,255,255,0.1)] backdrop-blur-lg cursor-pointer hover:bg-slate-800/50 transition-colors duration-200 shadow-sm"
+                                   onClick={() => handlePostClick(post)}
+                                 >
+                                   <p className="text-gray-300 text-sm leading-relaxed line-clamp-3 mb-3">{post.content}</p>
+                                   <div className="flex items-center justify-between text-gray-400 text-xs">
+                                     <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                                     <div className="flex items-center space-x-3">
+                                       <span className="flex items-center">
+                                         <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
+                                         {post.likes || 0}
+                                       </span>
+                                       <span className="flex items-center">
+                                         <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" /></svg>
+                                         {post.comments || 0}
+                                       </span>
+                                     </div>
+                                   </div>
+                                 </div>
+                               ))}
+                             </div>
+                           ) : (
+                             <div className="text-center py-16">
+                               <p className="text-gray-400 text-sm">Henüz yazı yok.</p>
+                             </div>
+                           )}
+                         </div>
+                       )}
+                       {/* Kaydedilenler İçeriği */} 
+                       {activeTab === "saved" && isOwnProfile && (
+                         <div className="text-center py-16">
+                           {/* TODO: Kaydedilen gönderiler burada listelenecek */} 
+                           <p className="text-gray-400 text-sm">Kaydedilen gönderiler özelliği yakında.</p>
+                         </div>
+                       )}
                     </div>
-                  )}
-
-                  {activeTab === "saved" && (
-                    <div className="text-center py-16">
-                      <p className="text-gray-400 text-sm">Bu özellik henüz kullanıma hazır değil.</p>
-                    </div>
-                  )}
-                </div>
+                  </>
+                ) : (
+                  // --- Gizli Hesap Mesajı --- (canViewProfile false ise burası render edilir)
+                  <div className="text-center py-16 px-4 rounded-2xl bg-[rgba(20,24,36,0.7)] backdrop-blur-lg border border-[rgba(255,255,255,0.1)]">
+                    <Lock className="w-12 h-12 mx-auto text-gray-500 mb-4" />
+                    <h3 className="font-semibold text-gray-300 mb-2">Bu Hesap Gizli</h3>
+                    <p className="text-sm text-gray-400">
+                      Bu kişinin fotoğraflarını ve videolarını görmek için takip et.
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="text-center py-10 rounded-2xl bg-[rgba(20,24,36,0.7)] backdrop-blur-lg border border-[rgba(255,255,255,0.1)] shadow-xl">
+              <div className="text-center py-10 ...">
                 <p className="text-gray-400">Kullanıcı bulunamadı.</p>
               </div>
             )}
-                    </div>
+          </div>
 
-          <div className="hidden lg:block lg:w-1/5">
+          <div className="hidden lg:block lg:w-1/5 sticky top-4 self-start">
             {user && (
               <div className="space-y-4">
                 <MiniReelsPlayer 
@@ -801,6 +979,37 @@ const Profile = () => {
                   isExploreMode={isOwnProfile}
                   isOwnProfile={isOwnProfile}
                 />
+                
+                {/* --- Çıkış Yap Butonu (Genişlik Ayarlandı) --- */}
+                {isOwnProfile && (
+                  <div className="relative rounded-2xl overflow-hidden">
+                     <GlowingEffect
+                       spread={40}
+                       glow={true}
+                       disabled={false}
+                       proximity={64}
+                       inactiveZone={0.01}
+                       borderWidth={2}
+                     />
+                     <div 
+                       className="rounded-2xl p-4 backdrop-blur-lg"
+                       style={{
+                         backgroundColor: "rgba(20, 24, 36, 0.7)", // RightPanel'deki stil
+                         boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
+                         border: "1px solid rgba(255, 255, 255, 0.1)"
+                       }}
+                     >
+                       <button
+                         onClick={handleLogout}
+                         className="w-full flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 border border-red-500/30 hover:border-red-500/50 transition-colors duration-200"
+                       >
+                         <LogOut size={16} />
+                         Çıkış Yap
+                       </button>
+                     </div>
+                    </div>
+                )}
+                {/* --- --- */}
                 
                 <div className="rounded-2xl overflow-hidden bg-[rgba(20,24,36,0.7)] backdrop-blur-lg border border-[rgba(255,255,255,0.1)] p-4">
                   <h3 className="text-gray-300 font-medium text-sm mb-3 flex items-center">
