@@ -53,6 +53,11 @@ func SetupRoutes() *gin.Engine {
 		api.POST("/register", controllers.Register)
 		api.POST("/login", controllers.Login)
 
+		// Password reset routes - public
+		api.POST("/forgot-password", controllers.RequestPasswordReset)
+		api.POST("/verify-reset-code", controllers.VerifyResetCode)
+		api.POST("/reset-password", controllers.SetNewPassword)
+
 		// Görsel ve video servis etme yolları - public
 		api.GET("/images/:name", controllers.ServeUploadedImage)
 		api.GET("/videos/:name", controllers.ServeUploadedVideo)

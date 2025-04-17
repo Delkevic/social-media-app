@@ -3,6 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import VerifyCode from './pages/VerifyCode';
+import ResetPassword from './pages/ResetPassword';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
 import Reels from './pages/Reels'; // Uncommented this line
@@ -71,8 +74,12 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          {/* Authentication routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/verify-code" element={<VerifyCode />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route 
             path="/profile/:username"
             element={

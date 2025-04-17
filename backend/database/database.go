@@ -83,6 +83,7 @@ func ConnectDatabase() {
 		&models.ReelLike{},      // ReelLike modelini ekle
 		&models.SavedReel{},     // SavedReel modelini ekle
 		&models.LoginActivity{}, // LoginActivity modeli eklendi
+		&models.PasswordReset{}, // PasswordReset modeli eklendi
 	)
 
 	if err != nil {
