@@ -135,6 +135,8 @@ func SetupRoutes() *gin.Engine {
 			auth.POST("/reels/:id/save", controllers.SaveReel)
 			auth.DELETE("/reels/:id/save", controllers.UnsaveReel)
 
+			// Geri Bildirim Rotası (Yeni Eklendi)
+			auth.POST("/feedback", controllers.SubmitFeedback)
 		}
 
 		// Kullanıcı arama rotası (auth dışında)

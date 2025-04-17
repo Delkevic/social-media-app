@@ -511,6 +511,14 @@ const api = {
       method: 'POST',
     }),
   },
+
+  // Geri Bildirim ile ilgili işlemler (Yeni Eklendi)
+  feedback: {
+    submit: (data) => fetchWithAuth('/feedback', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  },
 };
 
 // Yardımcı fonksiyonlar

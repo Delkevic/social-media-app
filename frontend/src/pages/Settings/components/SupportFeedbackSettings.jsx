@@ -1,25 +1,46 @@
 import React, { useState } from 'react';
 import { LifeBuoy, MessageSquarePlus, HelpCircle, FileText } from 'lucide-react';
+import api from '../../../services/api'; // Import the api service
+import { toast } from 'react-hot-toast'; // Import toast for notifications
 
 const SupportFeedbackSettings = () => {
   // State değişkenleri
   const [feedbackType, setFeedbackType] = useState('issue');
   const [feedbackText, setFeedbackText] = useState('');
-  
+  const [isSubmitting, setIsSubmitting] = useState(false); // Add submitting state
+
   // SSS bölümü için göster/gizle state'i
   const [expandedFaq, setExpandedFaq] = useState(null);
-  
+
   // Form gönderme işlemi
-  const handleSubmitFeedback = (e) => {
+  const handleSubmitFeedback = async (e) => {
     e.preventDefault();
-    console.log('Gönderilen geri bildirim:', { type: feedbackType, text: feedbackText });
-    // API isteği burada yapılacak
-    
-    // Formu sıfırla
-    setFeedbackText('');
-    alert('Geri bildiriminiz için teşekkür ederiz! En kısa sürede incelenecektir.');
+    if (!feedbackText.trim()) {
+      toast.error('Lütfen geri bildiriminizi yazın.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await api.feedback.submit({ // Use the api service
+        type: feedbackType,
+        text: feedbackText,
+      });
+
+      if (response.success) {
+        setFeedbackText(''); // Formu sıfırla
+        toast.success('Geri bildiriminiz için teşekkür ederiz! En kısa sürede incelenecektir.');
+      } else {
+        toast.error(`Geri bildirim gönderilemedi: ${response.message}`);
+      }
+    } catch (error) {
+      console.error('Geri bildirim gönderme hatası:', error);
+      toast.error('Geri bildirim gönderilirken bir hata oluştu.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-  
+
   // Sık sorulan sorular (örnek veri)
   const faqs = [
     { 
@@ -48,7 +69,7 @@ const SupportFeedbackSettings = () => {
       answer: 'Bildirimlerin çalışmamasının birkaç nedeni olabilir: 1) Tarayıcı bildirimlerine izin vermemiş olabilirsiniz, 2) Uygulama içinde bildirimleri kapatmış olabilirsiniz, 3) Cihazınızın bildirim ayarları kapalı olabilir. Ayarlar > Bildirim Ayarları bölümünden kontrol edebilirsiniz.' 
     },
   ];
-  
+
   // Topluluk kuralları (örnek veri)
   const communityGuidelines = [
     'Diğer kullanıcılara saygılı olun, nefret söylemi ve taciz içeren paylaşımlar yapmayın.',
@@ -59,7 +80,7 @@ const SupportFeedbackSettings = () => {
     'Sahte hesaplar oluşturmayın veya başka kullanıcıları taklit etmeyin.',
     'Platforma veya diğer kullanıcılara zarar verecek yazılımlar veya kodlar paylaşmayın.',
   ];
-  
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between mb-6">
@@ -119,14 +140,16 @@ const SupportFeedbackSettings = () => {
                   ? 'Lütfen karşılaştığınız sorunu detaylı bir şekilde açıklayın...' 
                   : 'Lütfen önerinizi detaylı bir şekilde açıklayın...'}
                 required
+                disabled={isSubmitting} // Disable textarea while submitting
               ></textarea>
             </div>
             
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+              className={`px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isSubmitting} // Disable button while submitting
             >
-              Gönder
+              {isSubmitting ? 'Gönderiliyor...' : 'Gönder'}
             </button>
           </form>
         </div>
@@ -189,4 +212,4 @@ const SupportFeedbackSettings = () => {
   );
 };
 
-export default SupportFeedbackSettings; 
+export default SupportFeedbackSettings;
