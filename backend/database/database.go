@@ -79,11 +79,12 @@ func ConnectDatabase() {
 		&models.PostImage{},
 		&models.Like{},
 		&models.SavedPost{},
-		&models.Reels{},         // Reels modelini ekle
-		&models.ReelLike{},      // ReelLike modelini ekle
-		&models.SavedReel{},     // SavedReel modelini ekle
-		&models.LoginActivity{}, // LoginActivity modeli eklendi
-		&models.PasswordReset{}, // PasswordReset modeli eklendi
+		&models.Reels{},             // Reels modelini ekle
+		&models.ReelLike{},          // ReelLike modelini ekle
+		&models.SavedReel{},         // SavedReel modelini ekle
+		&models.LoginActivity{},     // LoginActivity modeli eklendi
+		&models.PasswordReset{},     // PasswordReset modeli eklendi
+		&models.EmailVerification{}, // EmailVerification modeli eklendi
 	)
 
 	if err != nil {

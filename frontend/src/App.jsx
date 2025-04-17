@@ -14,6 +14,7 @@ import SettingsPage from './pages/Settings/SettingsPage'; // Settings sayfasın�
 import { ChatPanel } from './components/chat/ChatPanel';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TOKEN_NAME } from './config/constants';
+import RegisterPage from './pages/auth/RegisterPage'; // Import the RegisterPage
 
 // Korumalı Route bileşeni oluşturuyoruz
 const ProtectedRoute = ({ children }) => {
@@ -76,7 +77,7 @@ function App() {
           />
           {/* Authentication routes */}
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route path="/register" element={<RegisterPage />} /> {/* Updated to use RegisterPage */}
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/verify-code" element={<VerifyCode />} />
           <Route path="/reset-password" element={<ResetPassword />} />

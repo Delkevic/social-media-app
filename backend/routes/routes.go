@@ -50,7 +50,8 @@ func SetupRoutes() *gin.Engine {
 	api := router.Group("/api")
 	{
 		// Auth routes - public
-		api.POST("/register", controllers.Register)
+		api.POST("/initiate-register", controllers.InitiateRegister)
+		api.POST("/complete-registration", controllers.CompleteRegistration)
 		api.POST("/login", controllers.Login)
 
 		// Password reset routes - public

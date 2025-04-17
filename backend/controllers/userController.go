@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"social-media-app/backend/auth"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-resty/resty/v2"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -35,6 +38,274 @@ type Response struct {
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 	Token   string      `json:"token,omitempty"`
+}
+
+// InitiateRegister initiates the registration process by sending a verification code
+func InitiateRegister(c *gin.Context) {
+	var request RegisterRequest
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz form verileri: " + err.Error(),
+		})
+		return
+	}
+
+	// Email kontrolü
+	var existingUser models.User
+	result := database.DB.Where("email = ?", request.Email).First(&existingUser)
+	if result.RowsAffected > 0 {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Bu e-posta adresi zaten kullanılıyor",
+		})
+		return
+	}
+
+	// Kullanıcı adı kontrolü
+	result = database.DB.Where("username = ?", request.Username).First(&existingUser)
+	if result.RowsAffected > 0 {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Bu kullanıcı adı zaten kullanılıyor",
+		})
+		return
+	}
+
+	// Generate a random 6-digit code
+	verificationCode := generateRandomCode()
+	fmt.Printf("Generated verification code: %s for email: %s\n", verificationCode, request.Email)
+
+	// Serialize user data
+	userData, err := json.Marshal(request)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Kullanıcı verileri işlenirken hata oluştu",
+		})
+		return
+	}
+
+	// Store the verification code in database
+	expiryTime := time.Now().Add(15 * time.Minute) // Code valid for 15 minutes
+	emailVerification := models.EmailVerification{
+		Email:     request.Email,
+		Code:      verificationCode,
+		UserData:  userData,
+		ExpiresAt: expiryTime,
+		CreatedAt: time.Now(),
+	}
+
+	// Delete any existing verification codes for this email
+	if err := database.DB.Where("email = ?", request.Email).Delete(&models.EmailVerification{}).Error; err != nil {
+		fmt.Printf("Error deleting previous verification codes: %v\n", err)
+		// Continue anyway, it's not critical
+	}
+
+	// Save new verification code
+	if err := database.DB.Create(&emailVerification).Error; err != nil {
+		fmt.Printf("Error saving verification code to database: %v\n", err)
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Doğrulama kodu oluşturulurken bir hata oluştu.",
+		})
+		return
+	}
+
+	// Send email with verification code
+	err = sendVerificationEmail(request.Email, verificationCode)
+	if err != nil {
+		fmt.Printf("Email sending error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Doğrulama e-postası gönderilirken bir hata oluştu: " + err.Error(),
+		})
+		return
+	}
+
+	fmt.Printf("Verification email sent successfully to: %s\n", request.Email)
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Doğrulama kodu e-posta adresinize gönderildi.",
+		Data: map[string]interface{}{
+			"email": request.Email,
+		},
+	})
+}
+
+// CompleteRegistration completes the registration process after code verification
+func CompleteRegistration(c *gin.Context) {
+	var request struct {
+		Email string `json:"email" binding:"required,email"`
+		Code  string `json:"code" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz form verileri: " + err.Error(),
+		})
+		return
+	}
+
+	// Find the verification code
+	var verification models.EmailVerification
+	result := database.DB.Where("email = ? AND code = ? AND expires_at > ?",
+		request.Email, request.Code, time.Now()).First(&verification)
+
+	if result.Error != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz veya süresi dolmuş doğrulama kodu",
+		})
+		return
+	}
+
+	// Deserialize user data
+	var registerRequest RegisterRequest
+	if err := json.Unmarshal(verification.UserData, &registerRequest); err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Kullanıcı verileri işlenirken hata oluştu",
+		})
+		return
+	}
+
+	// Hash the password
+	hashedPassword, err := auth.HashPassword(registerRequest.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Şifre işlenirken bir hata oluştu",
+		})
+		return
+	}
+
+	// Create the user
+	user := models.User{
+		Username:  registerRequest.Username,
+		Email:     registerRequest.Email,
+		Password:  hashedPassword,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		LastLogin: time.Now(),
+	}
+
+	result = database.DB.Create(&user)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Kullanıcı oluşturulurken bir hata oluştu: " + result.Error.Error(),
+		})
+		return
+	}
+
+	// Delete the verification code
+	database.DB.Delete(&verification)
+
+	// Generate JWT token
+	token, err := auth.GenerateToken(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Token oluşturulurken bir hata oluştu",
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, Response{
+		Success: true,
+		Message: "Kayıt başarılı. Hesabınız doğrulandı.",
+		Data: map[string]interface{}{
+			"user": map[string]interface{}{
+				"id":       user.ID,
+				"username": user.Username,
+				"email":    user.Email,
+			},
+		},
+		Token: token,
+	})
+}
+
+// Send verification email using Brevo API
+func sendVerificationEmail(email, code string) error {
+	client := resty.New()
+	client.SetTimeout(15 * time.Second) // Set a reasonable timeout
+
+	brevoApiKey := os.Getenv("BREVO_API_KEY")
+	supportEmail := os.Getenv("SUPPORT_EMAIL_ADDRESS")
+	senderEmail := os.Getenv("SUPPORT_SENDER_EMAIL")
+	senderName := os.Getenv("SUPPORT_NAME")
+
+	// Validate environment variables
+	if brevoApiKey == "" {
+		return fmt.Errorf("BREVO_API_KEY is missing")
+	}
+	if supportEmail == "" {
+		return fmt.Errorf("SUPPORT_EMAIL_ADDRESS is missing")
+	}
+	if senderEmail == "" {
+		return fmt.Errorf("SUPPORT_SENDER_EMAIL is missing")
+	}
+	if senderName == "" {
+		return fmt.Errorf("SUPPORT_NAME is missing")
+	}
+
+	// Create email content
+	htmlContent := fmt.Sprintf(`
+		<html>
+		<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+				<div style="text-align: center; margin-bottom: 20px;">
+					<h1 style="color: #3b82f6;">Buzzify - E-posta Doğrulama</h1>
+				</div>
+				<p>Merhaba,</p>
+				<p>Buzzify hesabınızı oluşturmak için e-posta adresinizi doğrulamanız gerekiyor. Doğrulama kodunuz:</p>
+				<div style="text-align: center; margin: 30px 0;">
+					<div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; background-color: #f0f4f8; padding: 15px; border-radius: 6px; color: #3b82f6;">%s</div>
+				</div>
+				<p>Bu kod 15 dakika süreyle geçerlidir.</p>
+				<p>Eğer bu hesabı siz oluşturmadıysanız, lütfen bu e-postayı dikkate almayın.</p>
+				<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+				<p style="font-size: 12px; color: #666; text-align: center;">İyi günler,<br>Buzzify Ekibi</p>
+			</div>
+		</body>
+		</html>
+	`, code)
+
+	payload := map[string]interface{}{
+		"sender": map[string]string{
+			"name":  senderName,
+			"email": senderEmail,
+		},
+		"to": []map[string]string{
+			{
+				"email": email,
+			},
+		},
+		"subject":     "Buzzify - E-posta Doğrulama Kodunuz",
+		"htmlContent": htmlContent,
+	}
+
+	fmt.Printf("Sending verification email to: %s with Brevo API\n", email)
+
+	resp, err := client.R().
+		SetHeader("Accept", "application/json").
+		SetHeader("Content-Type", "application/json").
+		SetHeader("api-key", brevoApiKey).
+		SetBody(payload).
+		Post("https://api.brevo.com/v3/smtp/email")
+
+	if err != nil {
+		return fmt.Errorf("request error: %v", err)
+	}
+
+	if resp.StatusCode() != 201 {
+		return fmt.Errorf("email sending failed with status: %d, body: %s", resp.StatusCode(), resp.Body())
+	}
+
+	return nil
 }
 
 // Register handler - FullName alanı artık zorunlu değil

@@ -65,6 +65,16 @@ type FollowRequest struct {
 	UpdatedAt   time.Time
 }
 
+// EmailVerification - Stores verification codes for new registrations
+type EmailVerification struct {
+	ID        uint      `gorm:"primaryKey"`
+	Email     string    `gorm:"unique;not null"`
+	Code      string    `gorm:"not null"`
+	UserData  []byte    `gorm:"type:blob"` // Stores serialized user registration data
+	ExpiresAt time.Time `gorm:"not null"`
+	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
+}
+
 // UserSettings - Kullanıcı ayarları
 type UserSettings struct {
 	UserID               uint   `gorm:"primaryKey"`
