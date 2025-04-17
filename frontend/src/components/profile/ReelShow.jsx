@@ -391,7 +391,8 @@ const ReelShow = ({ reel, reels = [], isOpen, onClose, profileUser }) => {
                     >
                       <div className="w-10 h-10 rounded-full overflow-hidden mr-3 border-2 border-white/30">
                         <img
-                          src={profileUser?.profileImage || "https://via.placeholder.com/40"}
+                          src={profileUser?.profileImage || "https://ui-avatars.com/api/?size=40&name=" + 
+                              (profileUser?.username?.charAt(0) || "U") + "&background=random"}
                           alt={profileUser?.username}
                           className="w-full h-full object-cover"
                           onError={(e) => {

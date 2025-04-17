@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
 	"strconv"
@@ -62,12 +63,13 @@ func GetExploreReels(c *gin.Context) {
 			"id":           reel.ID,
 			"caption":      reel.Caption,
 			"videoURL":     reel.VideoURL,
-			"thumbnail":    "",            // Modelde alan yoksa boş string ekliyoruz
-			"media_url":    reel.VideoURL, // Frontend ile uyum için
+			"thumbnailURL": reel.ThumbnailURL,
+			"thumbnail":    reel.ThumbnailURL,
+			"media_url":    reel.VideoURL,
 			"music":        reel.Music,
 			"duration":     reel.Duration,
 			"user":         reel.User,
-			"likes":        reel.LikeCount, // Frontend ile uyum için
+			"likes":        reel.LikeCount,
 			"likeCount":    reel.LikeCount,
 			"commentCount": reel.CommentCount,
 			"shareCount":   reel.ShareCount,
@@ -144,13 +146,14 @@ func GetReels(c *gin.Context) {
 			"id":           reel.ID,
 			"caption":      reel.Caption,
 			"videoURL":     reel.VideoURL,
+			"thumbnailURL": reel.ThumbnailURL,
 			"music":        reel.Music,
 			"duration":     reel.Duration,
 			"user":         reel.User,
 			"likeCount":    reel.LikeCount,
 			"commentCount": reel.CommentCount,
 			"shareCount":   reel.ShareCount,
-			"viewCount":    reel.ViewCount + 1, // Görüntülenme sayısını artır
+			"viewCount":    reel.ViewCount + 1,
 			"isLiked":      isLiked,
 			"isSaved":      isSaved,
 			"createdAt":    reel.CreatedAt,
@@ -168,38 +171,63 @@ func GetReels(c *gin.Context) {
 func CreateReel(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
-	// Reel bilgilerini al
-	var input struct {
-		Caption  string `json:"caption"`
-		VideoURL string `json:"videoURL" binding:"required"`
-		Music    string `json:"music"`
-		Duration int    `json:"duration"`
-	}
+	// Form verilerini al (multipart/form-data)
+	caption := c.PostForm("caption")
+	music := c.PostForm("music")
+	durationStr := c.PostForm("duration")
+	duration, _ := strconv.Atoi(durationStr)
 
-	if err := c.ShouldBindJSON(&input); err != nil {
+	// --- Video Dosyasını İşle ---
+	videoFile, videoHeader, err := c.Request.FormFile("video")
+	if err != nil {
 		c.JSON(http.StatusBadRequest, Response{
 			Success: false,
-			Message: "Gecersiz istek: " + err.Error(),
+			Message: "Video dosyası alınamadı: " + err.Error(),
 		})
 		return
 	}
+	defer videoFile.Close()
 
-	// Videoyu dogrula
-	if input.VideoURL == "" {
-		c.JSON(http.StatusBadRequest, Response{
+	// Video dosyasını kaydet
+	videoFilename := generateUniqueFilename(videoHeader.Filename)
+	videoUploadPath := filepath.Join("uploads", "videos", videoFilename)
+	if err := c.SaveUploadedFile(videoHeader, videoUploadPath); err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
 			Success: false,
-			Message: "Video URL'si gereklidir",
+			Message: "Video dosyası kaydedilemedi: " + err.Error(),
 		})
 		return
+	}
+	videoURL := "/api/videos/" + videoFilename // API üzerinden erişim için URL
+
+	// --- Thumbnail Dosyasını İşle (Opsiyonel) ---
+	thumbnailURL := "" // Varsayılan boş
+	thumbnailFile, thumbnailHeader, err := c.Request.FormFile("thumbnail")
+	if err == nil { // Hata yoksa thumbnail var demektir
+		defer thumbnailFile.Close()
+		thumbnailFilename := generateUniqueFilename(thumbnailHeader.Filename)
+		thumbnailUploadPath := filepath.Join("uploads", "thumbnails", thumbnailFilename)
+		if err := c.SaveUploadedFile(thumbnailHeader, thumbnailUploadPath); err != nil {
+			// Thumbnail kaydetme hatası olursa logla ama devam et
+			fmt.Println("Thumbnail kaydedilemedi:", err)
+		} else {
+			thumbnailURL = "/api/thumbnails/" + thumbnailFilename
+		}
+	} else if err != http.ErrMissingFile {
+		// Dosya yok hatası dışındaki hataları logla
+		fmt.Println("Thumbnail alınırken hata:", err)
 	}
 
 	// Yeni Reel olusştur
 	newReel := models.Reels{
-		UserID:   userID.(uint),
-		Caption:  input.Caption,
-		VideoURL: input.VideoURL,
-		Music:    input.Music,
-		Duration: input.Duration,
+		UserID:       userID.(uint),
+		Caption:      caption,
+		VideoURL:     videoURL,
+		ThumbnailURL: thumbnailURL, // Eklenen alan
+		Music:        music,
+		Duration:     duration,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 
 	// Veritabanına kaydet
@@ -222,6 +250,7 @@ func CreateReel(c *gin.Context) {
 			"id":           newReel.ID,
 			"caption":      newReel.Caption,
 			"videoURL":     newReel.VideoURL,
+			"thumbnailURL": newReel.ThumbnailURL,
 			"music":        newReel.Music,
 			"duration":     newReel.Duration,
 			"user":         newReel.User,
@@ -421,6 +450,7 @@ func GetUserReels(c *gin.Context) {
 			"id":           reel.ID,
 			"caption":      reel.Caption,
 			"videoURL":     reel.VideoURL,
+			"thumbnailURL": reel.ThumbnailURL,
 			"music":        reel.Music,
 			"duration":     reel.Duration,
 			"likeCount":    reel.LikeCount,
@@ -573,4 +603,16 @@ func UnsaveReel(c *gin.Context) {
 			Message: "Kaydedilmiş reel bulunamadı",
 		})
 	}
+}
+
+// Dosya adı için benzersiz bir isim oluşturur
+func generateUniqueFilename(originalFilename string) string {
+	// Zaman damgası ve rastgele bir sayı ekleyerek benzersizlik sağla
+	timestamp := time.Now().Format("20060102150405")
+	// Dosya uzantısını al
+	ext := filepath.Ext(originalFilename)
+	// Yeni dosya adını oluştur (örnek: video_20231027103000_12345.mp4)
+	// Rastgele sayı yerine basit bir UUID veya benzeri bir şey de kullanılabilir
+	base := originalFilename[0 : len(originalFilename)-len(ext)]
+	return fmt.Sprintf("%s_%s%s", base, timestamp, ext)
 }

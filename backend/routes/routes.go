@@ -60,6 +60,7 @@ func SetupRoutes() *gin.Engine {
 
 		// Görsel ve video servis etme yolları - public
 		api.GET("/images/:name", controllers.ServeUploadedImage)
+		api.GET("/thumbnails/:name", controllers.ServeUploadedThumbnail)
 		api.GET("/videos/:name", controllers.ServeUploadedVideo)
 
 		// Static dosya sunucusu - yüklenen dosyalara erişim için

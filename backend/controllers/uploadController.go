@@ -486,6 +486,25 @@ func ServeUploadedVideo(c *gin.Context) {
 	c.File(filePath)
 }
 
+// ServeUploadedThumbnail - Yüklenen thumbnail dosyalarını servis eder
+func ServeUploadedThumbnail(c *gin.Context) {
+	filename := c.Param("name")
+	if filename == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dosya adı belirtilmedi"})
+		return
+	}
+
+	thumbnailPath := filepath.Join("./uploads/thumbnails", filename)
+
+	// Dosya var mı kontrol et
+	if _, err := os.Stat(thumbnailPath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Thumbnail bulunamadı"})
+		return
+	}
+
+	c.File(thumbnailPath)
+}
+
 // ClearOldUploads - Eski yüklenen dosyaları temizler (zamanlanmış görevle çalıştırılabilir)
 func ClearOldUploads(c *gin.Context) {
 	// Admin yetkisi kontrolü

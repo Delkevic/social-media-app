@@ -30,6 +30,7 @@ type Reels struct {
 	User         User `gorm:"foreignKey:UserID"`
 	Caption      string
 	VideoURL     string `gorm:"not null"`
+	ThumbnailURL string // Kapak fotoğrafı URL'si eklendi
 	Music        string
 	Duration     int       `gorm:"default:15"` // Saniye cinsinden süre
 	LikeCount    int       `gorm:"default:0"`

@@ -48,7 +48,8 @@ func GetPosts(c *gin.Context) {
 	}
 
 	// Yanıtı hazırla
-	var responsePosts []map[string]interface{}
+	responsePosts := make([]map[string]interface{}, 0)
+
 	for _, post := range posts {
 		// Kullanıcının bu gönderiyi beğenip beğenmediğini kontrol et
 		var likedCount int64
@@ -86,6 +87,12 @@ func GetPosts(c *gin.Context) {
 		}
 
 		responsePosts = append(responsePosts, responsePost)
+	}
+
+	// Ekstra kontrol: Eğer posts boşsa, responsePosts'un yine de boş slice olduğundan emin olalım
+	// (Normalde make ile bu zaten garanti ama ekstra güvence için)
+	if len(posts) == 0 {
+		responsePosts = make([]map[string]interface{}, 0)
 	}
 
 	c.JSON(http.StatusOK, Response{

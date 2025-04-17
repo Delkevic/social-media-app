@@ -141,7 +141,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
                 className="rounded-md w-full h-32 object-cover"
                 onError={(e) => {
                   console.error('Görsel yüklenemedi:', image);
-                  e.target.src = 'https://via.placeholder.com/150?text=Yüklenemedi';
+                  e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Crect width='150' height='150' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='14' fill='%23fff' text-anchor='middle' dominant-baseline='middle'%3EGörsel Yüklenemedi%3C/text%3E%3C/svg%3E";
                 }}
               />
               <button

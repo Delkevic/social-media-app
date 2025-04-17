@@ -863,93 +863,93 @@ const Profile = () => {
                       )}
                       {/* Reelsler İçeriği */} 
                       {activeTab === "reels" && (
-                        <div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 gap-1">
                           {reels.length > 0 ? (
-                             <div className="grid grid-cols-3 gap-1 md:gap-2">
-                               {reels.map((reel) => {
-                                 const thumbnailUrl = getFullImageUrl(reel.thumbnail);
-                                 return (
-                                   <div
-                                     key={reel.id}
-                                     className="aspect-[9/16] overflow-hidden relative cursor-pointer rounded group bg-slate-800/50"
-                                     onClick={() => handleReelClick(reel)}
-                                   >
-                                     {thumbnailUrl ? (
-                                         <img
-                                           src={thumbnailUrl}
-                                           alt={reel.description || 'Reel kapağı'}
-                                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                           loading="lazy"
-                                           onError={(e) => { 
-                                             e.target.onerror = null; 
-                                             e.target.style.display = 'none';
-                                             const parent = e.target.parentElement;
-                                             if(parent) parent.innerHTML += '<div class="flex items-center justify-center h-full text-gray-500 text-xs">Kapak Yüklenemedi</div>';
-                                           }}
-                                         />
-                                     ) : (
-                                          <div className="flex items-center justify-center h-full text-gray-500 text-xs">Kapak Yok</div>
-                                     )}
-                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-300 flex flex-col items-center justify-center">
-                                       <svg className="w-8 h-8 text-white opacity-0 group-hover:opacity-80 transition-opacity duration-300 mb-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
-                                       <span className="flex items-center text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                         <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
-                                         {reel.likes || 0}
-                                       </span>
-                                     </div>
-                                   </div>
-                                 )
-                               })}
-                             </div>
-                           ) : (
-                             <div className="text-center py-16">
-                               <p className="text-gray-400 text-sm">Henüz reel yok.</p>
-                             </div>
-                           )}
-                         </div>
-                       )}
-                       {/* Yazılar İçeriği */} 
-                       {activeTab === "writings" && (
-                         <div>
-                           {textPosts.length > 0 ? (
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                               {textPosts.map((post) => (
-                                 <div
-                                   key={post.id}
-                                   className="p-4 rounded-xl bg-[rgba(20,24,36,0.7)] border border-[rgba(255,255,255,0.1)] backdrop-blur-lg cursor-pointer hover:bg-slate-800/50 transition-colors duration-200 shadow-sm"
-                                   onClick={() => handlePostClick(post)}
-                                 >
-                                   <p className="text-gray-300 text-sm leading-relaxed line-clamp-3 mb-3">{post.content}</p>
-                                   <div className="flex items-center justify-between text-gray-400 text-xs">
-                                     <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                                     <div className="flex items-center space-x-3">
-                                       <span className="flex items-center">
-                                         <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
-                                         {post.likes || 0}
-                                       </span>
-                                       <span className="flex items-center">
-                                         <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" /></svg>
-                                         {post.comments || 0}
-                                       </span>
-                                     </div>
-                                   </div>
-                                 </div>
-                               ))}
-                             </div>
-                           ) : (
-                             <div className="text-center py-16">
-                               <p className="text-gray-400 text-sm">Henüz yazı yok.</p>
-                             </div>
-                           )}
-                         </div>
-                       )}
-                       {/* Kaydedilenler İçeriği */} 
-                       {activeTab === "saved" && isOwnProfile && (
-                         <div className="text-center py-16">
-                           {/* TODO: Kaydedilen gönderiler burada listelenecek */} 
-                           <p className="text-gray-400 text-sm">Kaydedilen gönderiler özelliği yakında.</p>
-                         </div>
-                       )}
+                            reels.map((reel, index) => (
+                              <div
+                                key={`${reel.id}-${index}`}
+                                className="relative aspect-w-9 aspect-h-16 group cursor-pointer overflow-hidden rounded-lg bg-slate-800"
+                                onClick={() => handleReelClick(reel)}
+                              >
+                                {reel.thumbnailURL ? (
+                                  <img
+                                    src={getFullImageUrl(reel.thumbnailURL)}
+                                    alt={reel.caption || 'Reel Thumbnail'}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    loading="lazy"
+                                    onError={(e) => { e.target.style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <video
+                                    src={getFullVideoUrl(reel.videoURL)}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                    preload="metadata"
+                                    muted
+                                    playsInline
+                                  />
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent opacity-70 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-2">
+                                  <div className="flex items-center text-white text-xs">
+                                    <svg className="w-4 h-4 mr-1 fill-current" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd"></path></svg>
+                                    <span>{reel.viewCount || 0}</span>
+                                  </div>
+                                </div>
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                  <div className="bg-black/50 rounded-full p-3">
+                                    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path></svg>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-center py-16">
+                              <p className="text-gray-400 text-sm">Henüz reel yok.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {/* Yazılar İçeriği */} 
+                      {activeTab === "writings" && (
+                        <div>
+                          {textPosts.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {textPosts.map((post) => (
+                                <div
+                                  key={post.id}
+                                  className="p-4 rounded-xl bg-[rgba(20,24,36,0.7)] border border-[rgba(255,255,255,0.1)] backdrop-blur-lg cursor-pointer hover:bg-slate-800/50 transition-colors duration-200 shadow-sm"
+                                  onClick={() => handlePostClick(post)}
+                                >
+                                  <p className="text-gray-300 text-sm leading-relaxed line-clamp-3 mb-3">{post.content}</p>
+                                  <div className="flex items-center justify-between text-gray-400 text-xs">
+                                    <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                                    <div className="flex items-center space-x-3">
+                                      <span className="flex items-center">
+                                        <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" /></svg>
+                                        {post.likes || 0}
+                                      </span>
+                                      <span className="flex items-center">
+                                        <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" /></svg>
+                                        {post.comments || 0}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-16">
+                              <p className="text-gray-400 text-sm">Henüz yazı yok.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {/* Kaydedilenler İçeriği */} 
+                      {activeTab === "saved" && isOwnProfile && (
+                        <div className="text-center py-16">
+                          {/* TODO: Kaydedilen gönderiler burada listelenecek */} 
+                          <p className="text-gray-400 text-sm">Kaydedilen gönderiler özelliği yakında.</p>
+                        </div>
+                      )}
                     </div>
                   </>
                 ) : (

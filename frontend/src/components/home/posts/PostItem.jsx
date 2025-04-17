@@ -297,6 +297,13 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
     if (!imageUrl) return null;
 
     if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+      // URL'nin HTTP/HTTPS ile başlaması durumunda çift slashları temizle
+      const urlParts = imageUrl.split('://');
+      if (urlParts.length === 2) {
+        const protocol = urlParts[0];
+        const path = urlParts[1].replace(/\/+/g, '/');
+        return `${protocol}://${path}`;
+      }
       return imageUrl;
     }
 

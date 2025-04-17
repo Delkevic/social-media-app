@@ -22,7 +22,8 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
         
         console.log('Gönderiler çekiliyor. Feed tipi:', activeTab);
         const response = await api.posts.getFeeds(activeTab);
-        console.log('API Yanıtı (getFeeds):', response);
+        console.log('Tam API Yanıtı (getFeeds):', response);
+        console.log('API Yanıtı Data kısmı (getFeeds):', response ? response.data : 'Yanıt yok');
         
         if (response && response.data) {
           // API yanıtının yapısını kontrol et
