@@ -1039,7 +1039,7 @@ func DeactivateAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, Response{Success: true, Message: "Hesap başarıyla donduruldu"})
 }
 
-// DeleteAccount - Kullanıcı hesabını kalıcı olarak siler (GORM soft delete kullandığı için aslında dondurur)
+// DeleteAccount - Kullanıcı hesabını kalıcı olarak siler
 func DeleteAccount(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists {
@@ -1053,9 +1053,8 @@ func DeleteAccount(c *gin.Context) {
 		return
 	}
 
-	// GORM'un soft delete özelliğini kullan
-	// Not: Gerçek kalıcı silme için Unscoped() kullanılabilir: database.DB.Unscoped().Delete(&user)
-	if err := database.DB.Delete(&user).Error; err != nil {
+	// Gerçek kalıcı silme için Unscoped() kullan
+	if err := database.DB.Unscoped().Delete(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Hesap silinirken bir hata oluştu"})
 		return
 	}
