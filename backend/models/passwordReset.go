@@ -11,5 +11,5 @@ type PasswordReset struct {
 	Email     string    `gorm:"not null" json:"email"`
 	Code      string    `gorm:"not null" json:"code"`
 	ExpiresAt time.Time `gorm:"not null" json:"expires_at"`
-	CreatedAt time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
+	CreatedAt time.Time `gorm:"autoCreateTime"`
 }

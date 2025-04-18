@@ -11,7 +11,7 @@ type Notification struct {
 	Content     string    `gorm:"type:text" json:"content"`    // Bildirimin içeriği
 	ReferenceID uint      `gorm:"not null" json:"referenceId"` // Bildirimin referans verdiği öğenin ID'si (post, yorum vb.)
 	IsRead      bool      `gorm:"not null;default:false" json:"isRead"`
-	CreatedAt   time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"createdAt"`
+	CreatedAt time.Time `gorm:"autoCreateTime"`
 
 	// İlişkiler
 	User   User `gorm:"foreignKey:UserID" json:"-"`

@@ -1,14 +1,15 @@
 package database
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
 
-	"social-media-app/backend/models" // Proje ismini kendi dizinine göre değiştir
+	"social-media-app/backend/models"
 
 	"github.com/joho/godotenv"
-	"gorm.io/driver/sqlite" // SQLite sürücüsünü kullanacağız
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -41,11 +42,20 @@ func ConnectDatabase() {
 		},
 	}
 
-	// SQLite veritabanına bağlan
-	dbName := "social_media_app.db"
-	db, err := gorm.Open(sqlite.Open(dbName), config)
+	// Railway üzerinden MySQL bağlantısı için DSN (Data Source Name)
+	user := getEnvWithDefault("MYSQLUSER", "root")
+	password := getEnvWithDefault("MYSQLPASSWORD", "")
+	host := getEnvWithDefault("MYSQLHOST", "turntable.proxy.rlwy.net")
+	port := getEnvWithDefault("MYSQLPORT", "3306")
+	dbname := getEnvWithDefault("MYSQLDATABASE", "railway")
+
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		user, password, host, port, dbname)
+
+	// MySQL veritabanına bağlan
+	db, err := gorm.Open(mysql.Open(dsn), config)
 	if err != nil {
-		log.Fatal("SQLite veritabanı bağlantısı başarısız:", err)
+		log.Fatalf("MySQL veritabanı bağlantısı başarısız: %v", err)
 	}
 
 	// Bağlantı havuzu ayarları
@@ -53,18 +63,12 @@ func ConnectDatabase() {
 	if err != nil {
 		log.Fatal("Veritabanı bağlantı havuzu ayarlanamadı:", err)
 	}
-
-	// SetMaxIdleConns sets the maximum number of connections in the idle connection pool.
 	sqlDB.SetMaxIdleConns(10)
-
-	// SetMaxOpenConns sets the maximum number of open connections to the database.
 	sqlDB.SetMaxOpenConns(100)
-
-	// SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	DB = db
-	log.Println("SQLite veritabanı bağlantısı başarılı!")
+	log.Println("MySQL veritabanı bağlantısı başarılı!")
 
 	// Tabloları otomatik oluştur
 	err = db.AutoMigrate(
@@ -79,12 +83,12 @@ func ConnectDatabase() {
 		&models.PostImage{},
 		&models.Like{},
 		&models.SavedPost{},
-		&models.Reels{},             // Reels modelini ekle
-		&models.ReelLike{},          // ReelLike modelini ekle
-		&models.SavedReel{},         // SavedReel modelini ekle
-		&models.LoginActivity{},     // LoginActivity modeli eklendi
-		&models.PasswordReset{},     // PasswordReset modeli eklendi
-		&models.EmailVerification{}, // EmailVerification modeli eklendi
+		&models.Reels{},
+		&models.ReelLike{},
+		&models.SavedReel{},
+		&models.LoginActivity{},
+		&models.PasswordReset{},
+		&models.EmailVerification{},
 	)
 
 	if err != nil {
@@ -94,7 +98,7 @@ func ConnectDatabase() {
 	log.Println("Veritabanı migration başarılı!")
 }
 
-// getEnvWithDefault - Çevre değişkenini varsayılan değerle al
+// .env'den değer al, boşsa default döndür
 func getEnvWithDefault(key, defaultValue string) string {
 	value := os.Getenv(key)
 	if value == "" {

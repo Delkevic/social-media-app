@@ -72,7 +72,7 @@ type EmailVerification struct {
 	Code      string    `gorm:"not null"`
 	UserData  []byte    `gorm:"type:blob"` // Stores serialized user registration data
 	ExpiresAt time.Time `gorm:"not null"`
-	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	CreatedAt time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP"`
 }
 
 // UserSettings - Kullanıcı ayarları
