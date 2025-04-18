@@ -8,6 +8,7 @@ import (
 	"social-media-app/backend/auth"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
+	"social-media-app/backend/services"
 	"strconv"
 	"strings"
 	"time"
@@ -226,6 +227,16 @@ func CompleteRegistration(c *gin.Context) {
 		},
 		Token: token,
 	})
+
+	// Send welcome email asynchronously after sending response to client
+	go func() {
+		err := services.SendWelcomeEmail(user.Email, user.Username)
+		if err != nil {
+			fmt.Printf("Error sending welcome email: %v\n", err)
+		} else {
+			fmt.Printf("Welcome email sent successfully to: %s\n", user.Email)
+		}
+	}()
 }
 
 // Send verification email using Brevo API
