@@ -229,6 +229,38 @@ func (s *NotificationService) CreateCommentNotification(ctx context.Context, use
 	return s.SendNotification(ctx, notification)
 }
 
+// CreateFollowRequestNotification, takip isteği bildirimi oluşturur
+func (s *NotificationService) CreateFollowRequestNotification(ctx context.Context, userID, requesterId, requesterName, requesterUsername, requesterImage string) error {
+	notification := Notification{
+		UserID:            userID,
+		ActorID:           requesterId,
+		ActorName:         requesterName,
+		ActorUsername:     requesterUsername,
+		ActorProfileImage: requesterImage,
+		Type:              NotificationTypeFollowRequest,
+		IsRead:            false,
+		CreatedAt:         time.Now(),
+	}
+
+	return s.SendNotification(ctx, notification)
+}
+
+// CreateFollowAcceptNotification, takip isteği kabul bildirimi oluşturur
+func (s *NotificationService) CreateFollowAcceptNotification(ctx context.Context, userID, acceptorID, acceptorName, acceptorUsername, acceptorImage string) error {
+	notification := Notification{
+		UserID:            userID,
+		ActorID:           acceptorID,
+		ActorName:         acceptorName,
+		ActorUsername:     acceptorUsername,
+		ActorProfileImage: acceptorImage,
+		Type:              NotificationTypeFollowAccept,
+		IsRead:            false,
+		CreatedAt:         time.Now(),
+	}
+
+	return s.SendNotification(ctx, notification)
+}
+
 // WebSocket üzerinden bildirim gönder
 func (s *NotificationService) sendWebSocketNotification(notification Notification) {
 	// Alıcı kullanıcının bağlantılarını al

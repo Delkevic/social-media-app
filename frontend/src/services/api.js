@@ -132,31 +132,7 @@ const api = {
     getFollowers: () => fetchWithAuth('/user/followers'),
     getFollowingByUsername: (username) => fetchWithAuth(`/profile/${username}/following`),
     getFollowersByUsername: (username) => fetchWithAuth(`/profile/${username}/followers`),
-    follow: async (userId) => {
-      try {
-        const response = await axios.post(`${API_BASE_URL}/api/follow/${userId}`);
-        return { success: true, message: 'Takip edildi', data: response.data };
-      } catch (error) {
-        console.error('Takip etme işlemi sırasında hata:', error);
-        return { 
-          success: false, 
-          message: error.response?.data?.message || 'Kullanıcı takip edilemedi.' 
-        };
-      }
-    },
-    unfollow: async (userId) => {
-      try {
-        const response = await axios.delete(`${API_BASE_URL}/api/follow/${userId}`);
-        return { success: true, message: 'Takip bırakıldı', data: response.data };
-      } catch (error) {
-        console.error('Takibi bırakma işlemi sırasında hata:', error);
-        return { 
-          success: false, 
-          message: error.response?.data?.message || 'Takipten çıkma işlemi başarısız oldu.' 
-        };
-      }
-    },
-    cancelFollowRequest: async (userId) => {
+    follow: async (username) => {
       try {
         const token = getToken();
         const config = {
@@ -164,21 +140,73 @@ const api = {
             'Authorization': `Bearer ${token}`,
           }
         };
-        
-        console.log(`Takip isteği iptal ediliyor: userId=${userId}`);
-        const response = await axios.delete(`${API_BASE_URL}/api/follow-request/${userId}`, config);
-        
-        console.log('Takip isteği iptal cevabı:', response.data);
+
+        console.log(`Kullanıcı takip ediliyor: username=${username}`);
+        const response = await axios.post(`${API_BASE_URL}/api/user/follow/${username}`, {}, config);
+
+        console.log('Takip cevabı:', response.data);
         return { 
           success: true, 
-          message: 'Takip isteği iptal edildi', 
+          message: response.data.message || 'Takip edildi', 
           data: response.data 
         };
       } catch (error) {
-        console.error('Takip isteği iptal işlemi sırasında hata:', error);
+        console.error('Takip etme işlemi sırasında hata:', error);
+        return {
+          success: false,
+          message: error.response?.data?.message || 'Kullanıcı takip edilemedi.'
+        };
+      }
+    },
+    unfollow: async (username) => {
+      try {
+        const token = getToken();
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        };
+
+        console.log(`Kullanıcı takipten çıkarılıyor: username=${username}`);
+        const response = await axios.delete(`${API_BASE_URL}/api/user/follow/${username}`, config);
+
+        console.log('Takibi bırakma cevabı:', response.data);
         return { 
-          success: false, 
-          message: error.response?.data?.message || 'Takip isteği iptal edilemedi.' 
+          success: true, 
+          message: response.data.message || 'Takip bırakıldı', 
+          data: response.data 
+        };
+      } catch (error) {
+        console.error('Takibi bırakma işlemi sırasında hata:', error);
+        return {
+          success: false,
+          message: error.response?.data?.message || 'Takipten çıkma işlemi başarısız oldu.'
+        };
+      }
+    },
+    cancelFollowRequest: async (username) => {
+      try {
+        const token = getToken();
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        };
+
+        console.log(`Takip isteği iptal ediliyor: username=${username}`);
+        const response = await axios.delete(`${API_BASE_URL}/api/user/follow-request/${username}`, config);
+
+        console.log('Takip isteği iptal cevabı:', response.data);
+        return {
+          success: true,
+          message: response.data.message || 'Takip isteği iptal edildi',
+          data: response.data
+        };
+      } catch (error) {
+        console.error('Takip isteği iptal işlemi sırasında hata:', error);
+        return {
+          success: false,
+          message: error.response?.data?.message || 'Takip isteği iptal edilemedi.'
         };
       }
     },

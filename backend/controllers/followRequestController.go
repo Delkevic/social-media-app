@@ -111,7 +111,7 @@ func SendFollowRequestToUser(c *gin.Context) {
 	go func() {
 		ctx := c.Request.Context()
 		notificationService := services.NewNotificationService()
-		notificationService.CreateFollowNotification(
+		notificationService.CreateFollowRequestNotification(
 			ctx,
 			strconv.Itoa(int(targetUser.ID)),
 			strconv.Itoa(int(follower.ID)),
@@ -228,7 +228,7 @@ func AcceptFollowRequestById(c *gin.Context) {
 
 		notificationService := services.NewNotificationService()
 		// Kabul bildirimi
-		notificationService.CreateFollowNotification(
+		notificationService.CreateFollowAcceptNotification(
 			ctx,
 			strconv.Itoa(int(request.FollowerID)),
 			strconv.Itoa(int(currentUser.ID)),
