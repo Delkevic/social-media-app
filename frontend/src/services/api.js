@@ -95,6 +95,10 @@ const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+    updatePrivacy: (isPrivate) => fetchWithAuth('/user/privacy', {
+      method: 'PUT',
+      body: JSON.stringify({ isPrivate }),
+    }),
     updatePassword: (passwordData) => fetchWithAuth('/user/password', {
       method: 'PUT',
       body: JSON.stringify(passwordData),
@@ -128,12 +132,56 @@ const api = {
     getFollowers: () => fetchWithAuth('/user/followers'),
     getFollowingByUsername: (username) => fetchWithAuth(`/profile/${username}/following`),
     getFollowersByUsername: (username) => fetchWithAuth(`/profile/${username}/followers`),
-    follow: (userId) => fetchWithAuth(`/user/follow/${userId}`, {
-      method: 'POST',
-    }),
-    unfollow: (userId) => fetchWithAuth(`/user/follow/${userId}`, {
-      method: 'DELETE',
-    }),
+    follow: async (userId) => {
+      try {
+        const response = await axios.post(`${API_BASE_URL}/api/follow/${userId}`);
+        return { success: true, message: 'Takip edildi', data: response.data };
+      } catch (error) {
+        console.error('Takip etme işlemi sırasında hata:', error);
+        return { 
+          success: false, 
+          message: error.response?.data?.message || 'Kullanıcı takip edilemedi.' 
+        };
+      }
+    },
+    unfollow: async (userId) => {
+      try {
+        const response = await axios.delete(`${API_BASE_URL}/api/follow/${userId}`);
+        return { success: true, message: 'Takip bırakıldı', data: response.data };
+      } catch (error) {
+        console.error('Takibi bırakma işlemi sırasında hata:', error);
+        return { 
+          success: false, 
+          message: error.response?.data?.message || 'Takipten çıkma işlemi başarısız oldu.' 
+        };
+      }
+    },
+    cancelFollowRequest: async (userId) => {
+      try {
+        const token = getToken();
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        };
+        
+        console.log(`Takip isteği iptal ediliyor: userId=${userId}`);
+        const response = await axios.delete(`${API_BASE_URL}/api/follow-request/${userId}`, config);
+        
+        console.log('Takip isteği iptal cevabı:', response.data);
+        return { 
+          success: true, 
+          message: 'Takip isteği iptal edildi', 
+          data: response.data 
+        };
+      } catch (error) {
+        console.error('Takip isteği iptal işlemi sırasında hata:', error);
+        return { 
+          success: false, 
+          message: error.response?.data?.message || 'Takip isteği iptal edilemedi.' 
+        };
+      }
+    },
   },
   
   // Gönderi ile ilgili işlemler
@@ -518,6 +566,86 @@ const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  },
+
+  // Destek ve Geribildirim servisleri
+  support: {
+    // Geribildirim gönderme
+    submitFeedback: async (data) => {
+      try {
+        const response = await axios.post('/api/feedback', data);
+        return response.data;
+      } catch (error) {
+        handleApiError(error);
+        throw error;
+      }
+    },
+    
+    // Destek talebi oluşturma
+    createSupportTicket: async (data) => {
+      try {
+        const response = await axios.post('/api/support/tickets', data);
+        return response.data;
+      } catch (error) {
+        handleApiError(error);
+        throw error;
+      }
+    },
+    
+    // Kullanıcının destek taleplerini getirme
+    getUserTickets: async () => {
+      try {
+        const response = await axios.get('/api/support/tickets');
+        return response.data;
+      } catch (error) {
+        handleApiError(error);
+        throw error;
+      }
+    },
+    
+    // Destek talebi detaylarını getirme
+    getTicketDetails: async (ticketId) => {
+      try {
+        const response = await axios.get(`/api/support/tickets/${ticketId}`);
+        return response.data;
+      } catch (error) {
+        handleApiError(error);
+        throw error;
+      }
+    },
+    
+    // Destek talebine mesaj ekleme
+    addTicketMessage: async (ticketId, message) => {
+      try {
+        const response = await axios.post(`/api/support/tickets/${ticketId}/messages`, message);
+        return response.data;
+      } catch (error) {
+        handleApiError(error);
+        throw error;
+      }
+    },
+    
+    // Destek talebini kapatma
+    closeTicket: async (ticketId) => {
+      try {
+        const response = await axios.put(`/api/support/tickets/${ticketId}/close`);
+        return response.data;
+      } catch (error) {
+        handleApiError(error);
+        throw error;
+      }
+    },
+    
+    // Kapalı destek talebini yeniden açma
+    reopenTicket: async (ticketId) => {
+      try {
+        const response = await axios.put(`/api/support/tickets/${ticketId}/reopen`);
+        return response.data;
+      } catch (error) {
+        handleApiError(error);
+        throw error;
+      }
+    }
   },
 };
 

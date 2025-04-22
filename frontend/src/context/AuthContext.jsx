@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
       try {
         setUser(JSON.parse(storedUser));
       } catch (error) {
-        console.error('Failed to parse user data:', error);
+        console.error('Kullanıcı verisi ayrıştırılamadı:', error);
         // Handle invalid user data by logging out
         logout();
       }
@@ -51,14 +51,29 @@ export const AuthProvider = ({ children }) => {
     sessionStorage.removeItem('user');
   };
 
+  // Token güncelleme fonksiyonu
+  const updateToken = (newToken) => {
+    setToken(newToken);
+    
+    // Token'ı doğru depolama alanında güncelle
+    if (localStorage.getItem('token')) {
+      localStorage.setItem('token', newToken);
+    } else if (sessionStorage.getItem('token')) {
+      sessionStorage.setItem('token', newToken);
+    }
+  };
+
   const updateUser = (updatedUserData) => {
     setUser(updatedUserData);
     
     // Update the stored user data
+    const userStr = JSON.stringify(updatedUserData);
     if (localStorage.getItem('token')) {
-      localStorage.setItem('user', JSON.stringify(updatedUserData));
+      localStorage.setItem('user', userStr);
+      console.log("AuthContext: localStorage'da kullanıcı güncellendi");
     } else if (sessionStorage.getItem('token')) {
-      sessionStorage.setItem('user', JSON.stringify(updatedUserData));
+      sessionStorage.setItem('user', userStr);
+      console.log("AuthContext: sessionStorage'da kullanıcı güncellendi");
     }
   };
 
@@ -69,6 +84,7 @@ export const AuthProvider = ({ children }) => {
       loading,
       login, 
       logout,
+      updateToken,
       updateUser,
       isAuthenticated: !!token 
     }}>

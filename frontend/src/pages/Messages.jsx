@@ -7,6 +7,8 @@ import { GlowingEffect } from '../components/ui/GlowingEffect';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, isSameDay, isYesterday, isToday, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import * as messageService from '../services/message-services';
+import * as mediaService from '../services/media-service';
 import { 
   Send, 
   Search, 
@@ -22,17 +24,75 @@ import {
   MessageSquare,
   Users,
   PlusCircle,
-  Check,       
-  CheckCheck   
+  Check,
+  CheckCheck,
+  FileIcon,
+  Loader
 } from 'lucide-react';
 import { FaPaperPlane, FaImage, FaSmile, FaEllipsisV } from 'react-icons/fa';
 import formatDistanceToNow from 'date-fns/formatDistanceToNow';
+import { toast } from 'react-hot-toast';
 
 // Profil resmi URL'ini tam hale getiren yardımcı fonksiyon
 const getFullImageUrl = (url) => {
   if (!url) return `https://ui-avatars.com/api/?name=U`;
   if (url.startsWith('http')) return url;
   return `${API_BASE_URL}/${url}`;
+};
+
+// Medya dosyası bileşeni
+const MediaPreview = ({ media, onCancel }) => {
+  if (!media) return null;
+  
+  const mediaUrl = media.preview;
+  
+  return (
+    <div className="relative mb-2 w-full">
+      <div className="rounded-md overflow-hidden border border-gray-700 bg-gray-800">
+        {media.fileType === 'image' ? (
+          <img 
+            src={mediaUrl} 
+            alt="Upload preview" 
+            className="max-h-64 max-w-full object-contain"
+          />
+        ) : media.fileType === 'video' ? (
+          <video 
+            src={mediaUrl} 
+            controls 
+            className="max-h-64 max-w-full"
+          />
+        ) : (
+          <div className="flex items-center justify-center p-4">
+            <FileIcon className="mr-2 text-blue-400" />
+            <span className="text-white">{media.name}</span>
+          </div>
+        )}
+      </div>
+      <button 
+        className="absolute -top-2 -right-2 rounded-full bg-red-500 text-white p-1"
+        onClick={onCancel}
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
+};
+
+// Yükleme göstergesi
+const UploadProgress = ({ progress }) => {
+  return (
+    <div className="mb-2 w-full">
+      <div className="bg-gray-700 rounded-full h-2.5">
+        <div 
+          className="bg-blue-500 h-2.5 rounded-full" 
+          style={{ width: `${progress}%` }}
+        ></div>
+      </div>
+      <p className="text-xs text-gray-400 mt-1 text-center">
+        Yükleniyor... {progress}%
+      </p>
+    </div>
+  );
 };
 
 // Mesaj baloncuğu bileşeni
@@ -44,6 +104,13 @@ const MessageBubble = ({ message, isCurrentUser }) => {
   const formattedTime = message.sentAt 
     ? formatDistanceToNow(new Date(message.sentAt), { addSuffix: true, locale: tr }) 
     : '';
+    
+  const mediaUrl = message.mediaUrl 
+    ? mediaService.getMediaUrl(message.mediaUrl, message.mediaType?.startsWith('image/') ? 'image' : 'video')
+    : null;
+    
+  const isImage = message.mediaType?.startsWith('image/');
+  const isVideo = message.mediaType?.startsWith('video/');
 
   return (
     <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-4`}>
@@ -61,18 +128,20 @@ const MessageBubble = ({ message, isCurrentUser }) => {
         <div className={`p-3 ${bubbleStyle}`}>
           {message.mediaUrl && (
             <div className="mb-2">
-              {message.mediaType?.startsWith('image/') ? (
-                <img src={message.mediaUrl} alt="Media" className="rounded-lg max-w-full" />
-              ) : message.mediaType?.startsWith('video/') ? (
-                <video src={message.mediaUrl} controls className="rounded-lg max-w-full" />
+              {isImage ? (
+                <img src={mediaUrl} alt="Medya" className="rounded-lg max-w-full cursor-pointer" 
+                  onClick={() => window.open(mediaUrl, '_blank')} />
+              ) : isVideo ? (
+                <video src={mediaUrl} controls className="rounded-lg max-w-full" />
               ) : (
-                <a href={message.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline">
+                <a href={mediaUrl} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline flex items-center">
+                  <FileIcon size={16} className="mr-1" />
                   Dosyayı görüntüle
                 </a>
               )}
             </div>
           )}
-          <p className="break-words">{message.content}</p>
+          {message.content && <p className="break-words">{message.content}</p>}
         </div>
         <div className={`text-xs text-gray-400 mt-1 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
           {formattedTime}
@@ -492,6 +561,10 @@ const Messages = () => {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [followingSuggestions, setFollowingSuggestions] = useState([]);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
+  const [mediaFile, setMediaFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const messageContainerRef = useRef(null);
 
   // Ekran boyutunu kontrol etmek için
   useEffect(() => {
@@ -991,77 +1064,101 @@ const Messages = () => {
     setTypingTimeout(newTimeout);
   };
 
-  // Mesaj gönderme - WebSocket ile
+  // Mesajı gönderme
   const handleSendMessage = async (e) => {
     e.preventDefault();
     
-    // Kullanıcı ve mesaj içeriği kontrolü
-    if (!newMessage.trim() || !selectedConversation || !currentUser || !currentUser.id) {
-      console.error("Mesaj gönderilemiyor: Gerekli bilgiler eksik.", {newMessage, selectedConversation, currentUser});
-      setError("Mesaj göndermek için gerekli bilgiler eksik.");
+    if ((!newMessage.trim() && !mediaFile) || isUploading || !selectedConversation) return;
+    
+    // Medya yükleme varsa
+    if (mediaFile) {
+      setIsUploading(true);
+      setUploadProgress(0);
+      
+      const uploadCancel = mediaService.uploadFile(
+        mediaFile.file,
+        (progress) => {
+          setUploadProgress(progress);
+        },
+        async (uploadedMedia) => {
+          // Başarılı yükleme sonrası mesaj gönder
+          try {
+            const messageData = {
+              receiverId: selectedConversation.id,
+              content: newMessage.trim(),
+              mediaUrl: uploadedMedia.filename || uploadedMedia.url
+            };
+            
+            const newMessage = {
+              id: `temp-${Date.now()}`,
+              conversationId: selectedConversation.id,
+              content: newMessage.trim(),
+              mediaUrl: mediaFile.preview,
+              mediaType: mediaFile.type,
+              sender: "currentUser",
+              timestamp: new Date().toISOString(),
+              isNew: true,
+            };
+            
+            setMessages(prev => [...prev, newMessage]);
+            setNewMessage("");
+            setMediaFile(null);
+            setIsUploading(false);
+            
+            await api.messages.sendMessage(messageData);
+            
+            // Yazıyor durumunu iptal et
+            if (isTyping) {
+              sendTypingStatus(false);
+            }
+            
+            // Mesaj gönderildikten sonra mesajları yeniden yükle
+            setTimeout(() => {
+              fetchMessages(selectedConversation.id);
+            }, 1000);
+          } catch (error) {
+            console.error("Medya içerikli mesaj gönderilirken hata:", error);
+            toast.error("Mesaj gönderilemedi, lütfen tekrar deneyin");
+          }
+        },
+        (error) => {
+          setIsUploading(false);
+          toast.error(error.message || "Dosya yüklenirken bir hata oluştu");
+        }
+      );
+      
       return;
     }
     
-    // WebSocket bağlantısını kontrol et
-    if (!wsConnectedRef.current || !wsRef.current) {
-      console.error('WebSocket bağlantısı yok, mesaj gönderilemiyor');
-      setError("Mesaj göndermek için bağlantı kurulamadı.");
-      return;
-    }
+    // Normal metin mesajı gönderme
+    const newMessage = {
+      id: `temp-${Date.now()}`,
+      conversationId: selectedConversation.id,
+      content: newMessage.trim(),
+      sender: "currentUser",
+      timestamp: new Date().toISOString(),
+      isNew: true,
+    };
+    
+    setMessages(prev => [...prev, newMessage]);
+    setNewMessage("");
     
     try {
-      // Geçici olarak gösterilecek mesaj objesi
-      const tempMessage = {
-        id: `temp-${Date.now()}`, // Geçici ID
-        senderId: currentUser.id,
-        receiverId: selectedConversation.sender.id,
-        content: newMessage.trim(),
-        sentAt: new Date().toISOString(),
-        isRead: false,      // Başlangıçta okunmadı
-        isDelivered: false, // Başlangıçta teslim edilmedi
-        senderInfo: {
-          id: currentUser.id,
-          username: currentUser.username,
-          fullName: currentUser.fullName,
-          profileImage: currentUser.profileImage
-        }
-      };
+      await messageService.sendMessage(selectedConversation.id, newMessage.content);
       
-      // Mesajı UI'da hemen göster (tek tik ile)
-      setMessages(prev => [...prev, tempMessage]);
-      
-      // Yazma durumunu temizle
-      if (typingTimeout) {
-        clearTimeout(typingTimeout);
+      // Yazıyor durumunu iptal et
+      if (isTyping) {
         sendTypingStatus(false);
       }
       
-      // Input'u temizle
-      setNewMessage('');
-      
-      // WebSocket üzerinden mesajı gönder
-      const messageToSend = {
-        senderId: currentUser.id,
-        receiverId: selectedConversation.sender.id,
-        content: tempMessage.content,
-        mediaUrl: '', // Medya eklenecekse burası doldurulmalı
-        mediaType: '' // Medya eklenecekse burası doldurulmalı
-      };
-      
-      wsRef.current.send(JSON.stringify(messageToSend));
-      console.log("WebSocket üzerinden mesaj gönderildi (geçici ID:", tempMessage.id, ")");
-      
-      // Konuşmalar listesini geçici mesajla güncelle
-      updateConversationsWithNewMessage({
-        ...tempMessage, 
-        // updateConversations için gereken ek alanlar varsa buraya eklenebilir
-      });
-      
+      // Mesaj gönderildikten sonra mesajları yeniden yükle
+      setTimeout(() => {
+        fetchMessages(selectedConversation.id);
+      }, 1000);
     } catch (error) {
-      console.error('Mesaj gönderme hatası:', error);
-      setError('Mesaj gönderilemedi: ' + error.message);
-      // Başarısız olan geçici mesajı UI'dan kaldırmak isteyebilirsiniz
-      // setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
+      console.error("Mesaj gönderilirken hata:", error);
+      toast.error("Mesaj gönderilemedi, lütfen tekrar deneyin");
+      setMessages(prev => prev.filter(msg => msg.id !== newMessage.id));
     }
   };
 
@@ -1230,6 +1327,37 @@ const Messages = () => {
       continueWithConversation();
     }
 
+  };
+
+  // Dosya seçimi
+  const handleFileSelect = (event) => {
+    if (isUploading) return;
+    
+    const fileHandler = mediaService.handleFileSelect(
+      (fileData) => {
+        setMediaFile(fileData);
+      },
+      (error) => {
+        toast.error(error.message);
+      },
+      {
+        generatePreview: true
+      }
+    );
+    
+    fileHandler(event);
+  };
+  
+  // Dosya seçim butonuna tıklama
+  const handleFileButtonClick = () => {
+    if (fileInputRef.current && !isUploading) {
+      fileInputRef.current.click();
+    }
+  };
+  
+  // Seçilen dosyayı temizle
+  const handleCancelMedia = () => {
+    setMediaFile(null);
   };
 
   return (
@@ -1466,45 +1594,56 @@ const Messages = () => {
                 </div>
                 
                 {/* Mesaj yazma alanı */} 
-                <form onSubmit={handleSendMessage} className="p-3 px-4 border-t border-gray-700/50 flex-shrink-0 bg-gray-800/70">
-                  <div className="flex items-center space-x-3 bg-gray-700/50 border border-gray-600/60 rounded-xl px-2 py-1.5">
-                    <button
-                      type="button"
-                      className="p-2 rounded-lg text-gray-400 hover:text-indigo-400 hover:bg-gray-600/50 transition-colors"
+                <div className="message-input-container border-t border-gray-700 p-3">
+                  {mediaFile && !isUploading && (
+                    <MediaPreview 
+                      media={mediaFile} 
+                      onCancel={handleCancelMedia} 
+                    />
+                  )}
+                  
+                  {isUploading && <UploadProgress progress={uploadProgress} />}
+                  
+                  <form onSubmit={handleSendMessage} className="flex items-center">
+                    <input 
+                      type="file" 
+                      ref={fileInputRef}
+                      className="hidden" 
+                      onChange={handleFileSelect}
+                      accept="image/*, video/*" 
+                    />
+                    
+                    <button 
+                      type="button" 
+                      className="p-2 text-gray-400 hover:text-white transition-colors mr-2"
+                      onClick={handleFileButtonClick}
+                      disabled={isUploading}
                     >
-                      <Image size={20} />
+                      {isUploading ? (
+                        <Loader size={20} className="animate-spin" />
+                      ) : (
+                        <Image size={20} />
+                      )}
                     </button>
-                    <div className="flex-1 relative">
-                      <input
-                        type="text"
-                        placeholder="Mesajınızı yazın..."
-                        value={newMessage}
-                        onChange={handleMessageInputChange}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendMessage(e);
-                          }
-                        }}
-                        ref={messageInputRef}
-                        className="w-full bg-transparent text-gray-100 placeholder-gray-400/80 focus:outline-none text-sm py-1"
-                      />
-                      {/* Emoji butonu (opsiyonel) */} 
-                      {/* <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"> <Smile size={18} /> </button> */}
-                    </div>
+                    
+                    <input
+                      type="text"
+                      value={newMessage}
+                      onChange={handleMessageInputChange}
+                      placeholder="Mesajınızı yazın..."
+                      className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-full focus:outline-none"
+                      disabled={isUploading}
+                    />
+                    
                     <button
                       type="submit"
-                      disabled={!newMessage.trim()}
-                      className={`p-2 rounded-lg transition-all duration-200 ${ 
-                        newMessage.trim()
-                          ? 'bg-indigo-600 text-white hover:bg-indigo-700 scale-100'
-                          : 'bg-gray-600/50 text-gray-500 scale-95 cursor-not-allowed'
-                      }`}
+                      className={`p-2 ml-2 text-white rounded-full ${(!newMessage.trim() && !mediaFile) || isUploading ? 'bg-gray-600' : 'bg-blue-500 hover:bg-blue-600'}`}
+                      disabled={(!newMessage.trim() && !mediaFile) || isUploading}
                     >
-                      <Send size={18} className={`${newMessage.trim() ? 'rotate-0' : '-rotate-45'} transition-transform duration-200`} />
+                      <Send size={20} />
                     </button>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </>
             )}
           </div>

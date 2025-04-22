@@ -55,16 +55,6 @@ type Follow struct {
 	UpdatedAt     time.Time
 }
 
-// FollowRequest - Takip isteği modeli
-type FollowRequest struct {
-	ID          uint `gorm:"primaryKey"`
-	FollowerID  uint
-	FollowingID uint
-	Status      string `gorm:"default:'pending'"` // pending, accepted, rejected
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-}
-
 // EmailVerification - Stores verification codes for new registrations
 type EmailVerification struct {
 	ID        uint      `gorm:"primaryKey"`

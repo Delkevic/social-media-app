@@ -1,8 +1,11 @@
 package controllers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"social-media-app/backend/auth"
@@ -41,8 +44,43 @@ type Response struct {
 	Token   string      `json:"token,omitempty"`
 }
 
+// Yardımcı fonksiyonlar
+// 6 haneli rastgele kod oluşturur
+func UserGenerateRandomCode() string {
+	rand.Seed(time.Now().UnixNano())
+	code := fmt.Sprintf("%06d", rand.Intn(1000000))
+	return code
+}
+
+// Zaman dilimini "x gün önce" formatında döndürür
+func UserFormatTimeAgo(t time.Time) string {
+	now := time.Now()
+	diff := now.Sub(t)
+
+	seconds := int(diff.Seconds())
+	minutes := seconds / 60
+	hours := minutes / 60
+	days := hours / 24
+	months := days / 30
+	years := months / 12
+
+	if years > 0 {
+		return fmt.Sprintf("%d yıl önce", years)
+	} else if months > 0 {
+		return fmt.Sprintf("%d ay önce", months)
+	} else if days > 0 {
+		return fmt.Sprintf("%d gün önce", days)
+	} else if hours > 0 {
+		return fmt.Sprintf("%d saat önce", hours)
+	} else if minutes > 0 {
+		return fmt.Sprintf("%d dakika önce", minutes)
+	} else {
+		return "az önce"
+	}
+}
+
 // InitiateRegister initiates the registration process by sending a verification code
-func InitiateRegister(c *gin.Context) {
+func UserInitiateRegister(c *gin.Context) {
 	var request RegisterRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -75,7 +113,7 @@ func InitiateRegister(c *gin.Context) {
 	}
 
 	// Generate a random 6-digit code
-	verificationCode := generateRandomCode()
+	verificationCode := UserGenerateRandomCode()
 	fmt.Printf("Generated verification code: %s for email: %s\n", verificationCode, request.Email)
 
 	// Serialize user data
@@ -136,7 +174,7 @@ func InitiateRegister(c *gin.Context) {
 }
 
 // CompleteRegistration completes the registration process after code verification
-func CompleteRegistration(c *gin.Context) {
+func UserCompleteRegistration(c *gin.Context) {
 	var request struct {
 		Email string `json:"email" binding:"required,email"`
 		Code  string `json:"code" binding:"required"`
@@ -406,7 +444,7 @@ func Register(c *gin.Context) {
 }
 
 // Login handler
-func Login(c *gin.Context) {
+func UserLogin(c *gin.Context) {
 	var request LoginRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -510,7 +548,7 @@ func Login(c *gin.Context) {
 }
 
 // Auth Middleware
-func AuthMiddleware() gin.HandlerFunc {
+func UserAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := c.GetHeader("Authorization")
 		if tokenString == "" {
@@ -623,56 +661,49 @@ func GetUserByUsername(c *gin.Context) {
 	database.DB.Model(&models.Post{}).Where("user_id = ?", user.ID).Count(&postCount)
 
 	// Takip Durumu ve Gizlilik Kontrolü
-	followStatus := "none" // none, following, pending
+	followStatus := "none" // none, following, pending, self
 	canViewProfile := true // Profilin içeriğini (gönderiler, listeler) görebilir mi?
 
+	// Mevcut kullanıcı (token ile kimlik doğrulaması yapılmış)
 	if currentUserExists {
 		currentID := currentUserID.(uint)
-		// Kendisi mi?
+
+		// Kendi profili mi?
 		if currentID == user.ID {
-			followStatus = "self" // Kendisi için özel durum
+			followStatus = "self"
 			canViewProfile = true
 		} else {
-			// Takip ediyor mu?
+			// Takip ediyor mu kontrol et
 			var followCount int64
 			database.DB.Model(&models.Follow{}).
 				Where("follower_id = ? AND following_id = ?", currentID, user.ID).
 				Count(&followCount)
+
 			if followCount > 0 {
 				followStatus = "following"
-				canViewProfile = true // Takip ediyorsa görebilir
+				canViewProfile = true
 			} else {
-				// Takip etmiyor, gizli mi?
-				if user.IsPrivate {
-					canViewProfile = false // Gizliyse ve takip etmiyorsa göremez
-					// Bekleyen takip isteği var mı?
-					var requestCount int64
-					database.DB.Model(&models.FollowRequest{}).
-						Where("follower_id = ? AND following_id = ? AND status = ?", currentID, user.ID, "pending").
-						Count(&requestCount)
-					if requestCount > 0 {
-						followStatus = "pending" // İstek gönderilmiş
-					} else {
-						followStatus = "none" // İstek yok, takip etmiyor
-					}
+				// Takip isteği gönderilmiş mi kontrol et
+				var requestCount int64
+				database.DB.Model(&models.FollowRequest{}).
+					Where("follower_id = ? AND following_id = ? AND status = ?",
+						currentID, user.ID, "pending").
+					Count(&requestCount)
+
+				if requestCount > 0 {
+					followStatus = "pending"
+					canViewProfile = false
 				} else {
-					// Gizli değilse takip etmese de görebilir (ama followStatus 'none' kalır)
-					canViewProfile = true
 					followStatus = "none"
+					canViewProfile = !user.IsPrivate // Hesap gizli değilse profili görebilir
 				}
 			}
 		}
 	} else {
-		// Oturum açmamış kullanıcı
-		if user.IsPrivate {
-			canViewProfile = false // Gizliyse göremez
-		} else {
-			canViewProfile = true // Gizli değilse görebilir
-		}
-		followStatus = "none" // Oturum açmamışsa takip durumu 'none'
+		// Oturum açmamış kullanıcı sadece herkese açık profilleri görebilir
+		canViewProfile = !user.IsPrivate
 	}
 
-	// Yanıtı oluştur
 	userData := map[string]interface{}{
 		"id":             user.ID,
 		"username":       user.Username,
@@ -800,7 +831,7 @@ func GetUserPosts(c *gin.Context) {
 				"content":   post.Content,
 				"likes":     post.LikeCount,
 				"comments":  post.CommentCount,
-				"createdAt": formatTimeAgo(post.CreatedAt),
+				"createdAt": UserFormatTimeAgo(post.CreatedAt),
 				"liked":     isLiked,
 				"saved":     isSaved,
 				"images":    imageURLs,
@@ -1332,5 +1363,114 @@ func GetLoginActivities(c *gin.Context) {
 	c.JSON(http.StatusOK, Response{
 		Success: true,
 		Data:    responseData,
+	})
+}
+
+// UpdatePrivacy - Kullanıcının hesap gizliliğini günceller
+func UpdatePrivacy(c *gin.Context) {
+	// Kullanıcı ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		fmt.Printf("[DEBUG] UpdatePrivacy - Oturum bilgisi bulunamadı! (UserID yok)\n")
+		c.JSON(http.StatusUnauthorized, Response{Success: false, Message: "Oturum bilgisi bulunamadı"})
+		return
+	}
+
+	// Request body
+	var request struct {
+		IsPrivate bool `json:"isPrivate"`
+	}
+
+	// Önce raw body'i logla
+	rawBody, _ := c.GetRawData()
+	fmt.Printf("[DEBUG] UpdatePrivacy - Raw body: %s\n", string(rawBody))
+
+	// Body'i geri ayarla
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(rawBody))
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		fmt.Printf("[DEBUG] UpdatePrivacy - Geçersiz istek formatı: %v\n", err)
+		c.JSON(http.StatusBadRequest, Response{Success: false, Message: "Geçersiz istek formatı: " + err.Error()})
+		return
+	}
+
+	fmt.Printf("[DEBUG] UpdatePrivacy - İstek alındı (UserID: %v) - isPrivate=%v\n", userID, request.IsPrivate)
+
+	// Önce kullanıcının mevcut durumunu kontrol et
+	var user models.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		fmt.Printf("[DEBUG] UpdatePrivacy - Kullanıcı bulunamadı (UserID: %v): %v\n", userID, err)
+		c.JSON(http.StatusNotFound, Response{Success: false, Message: "Kullanıcı bulunamadı"})
+		return
+	}
+
+	fmt.Printf("[DEBUG] UpdatePrivacy - Mevcut kullanıcı durumu (UserID: %v) - IsPrivate=%v\n", userID, user.IsPrivate)
+
+	// Bir değişiklik var mı kontrol et
+	if user.IsPrivate == request.IsPrivate {
+		fmt.Printf("[DEBUG] UpdatePrivacy - IsPrivate değeri zaten %v (değişiklik yok)\n", request.IsPrivate)
+		c.JSON(http.StatusOK, Response{
+			Success: true,
+			Message: "Hesap gizliliği değişmedi (zaten aynı değer)",
+			Data: map[string]interface{}{
+				"user": map[string]interface{}{
+					"id":        user.ID,
+					"username":  user.Username,
+					"isPrivate": user.IsPrivate,
+				},
+			},
+		})
+		return
+	}
+
+	// GORM, yapı alanlarını snake_case'e çevirir, bu yüzden User.IsPrivate, veritabanında is_private olarak saklanır
+	// Güncellemeyi maps kullanarak yapalım
+	updates := map[string]interface{}{
+		"IsPrivate": request.IsPrivate,
+	}
+
+	// Kullanıcıyı güncelle
+	if err := database.DB.Model(&user).Updates(updates).Error; err != nil {
+		fmt.Printf("[DEBUG] UpdatePrivacy - Güncelleme hatası (UserID: %v): %v\n", userID, err)
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Hesap gizliliği güncellenemedi: " + err.Error()})
+		return
+	}
+
+	fmt.Printf("[DEBUG] UpdatePrivacy - Güncelleme başarılı (UserID: %v) - Yeni değer: isPrivate=%v\n", userID, request.IsPrivate)
+
+	// Güncellenmiş kullanıcı bilgilerini tekrar al
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		fmt.Printf("[DEBUG] UpdatePrivacy - Güncellenmiş kullanıcı bilgileri alınamadı (UserID: %v): %v\n", userID, err)
+	} else {
+		fmt.Printf("[DEBUG] UpdatePrivacy - Güncelleme sonrası kontrol (UserID: %v) - IsPrivate=%v\n", userID, user.IsPrivate)
+
+		// Eğer veritabanındaki değer beklediğimiz gibi değilse ek bir güncelleme dene
+		if user.IsPrivate != request.IsPrivate {
+			fmt.Printf("[DEBUG] UpdatePrivacy - Veritabanı değeri beklenen değerle eşleşmiyor, alternatif güncelleme deneniyor\n")
+
+			// Direkt SQL sorgusu ile güncelleme dene
+			updateSQL := "UPDATE users SET is_private = ? WHERE id = ?"
+			if err := database.DB.Exec(updateSQL, request.IsPrivate, userID).Error; err != nil {
+				fmt.Printf("[DEBUG] UpdatePrivacy - Alternatif güncelleme başarısız: %v\n", err)
+			} else {
+				fmt.Printf("[DEBUG] UpdatePrivacy - Alternatif güncelleme başarılı oldu\n")
+				// Tekrar kontrol et
+				database.DB.First(&user, userID)
+				fmt.Printf("[DEBUG] UpdatePrivacy - Alternatif güncelleme sonrası: IsPrivate=%v\n", user.IsPrivate)
+			}
+		}
+	}
+
+	// Response yapısını kullanarak cevap gönder
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Hesap gizliliği başarıyla güncellendi",
+		Data: map[string]interface{}{
+			"user": map[string]interface{}{
+				"id":        user.ID,
+				"username":  user.Username,
+				"isPrivate": user.IsPrivate, // Veritabanından okunan değeri kullan
+			},
+		},
 	})
 }

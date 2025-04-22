@@ -25,23 +25,28 @@ const PrivacySettings = () => {
 
   // Mevcut ayarları API'den çek
   useEffect(() => {
-    const fetchPrivacySettings = async () => {
-      console.log("useEffect: fetchPrivacySettings başlıyor...");
+    const fetchPrivacySettings = () => {
+      console.log("PrivacySettings useEffect: fetchPrivacySettings başlıyor...");
       setLoading(true);
       setError(null);
+
       if (user) {
-        console.log("useEffect: Kullanıcı bilgisi bulundu, state güncelleniyor.");
-        setIsPrivateAccount(user.isPrivate || false);
+        console.log("PrivacySettings useEffect: AuthContext'ten user alındı:", JSON.stringify(user));
+        console.log("PrivacySettings useEffect: Alınan user.isPrivate değeri:", user.isPrivate);
+        
+        const initialIsPrivate = user.isPrivate === true;
+        setIsPrivateAccount(initialIsPrivate);
         setCommentPermission(user.commentPermission || 'all');
         setTagPermission(user.tagPermission || 'all');
-        setLoading(false);
-        console.log("useEffect: setLoading(false) çağrıldı.");
+        
+        console.log(`PrivacySettings useEffect: State başlatıldı, isPrivateAccount=${initialIsPrivate}`);
       } else {
-        console.error("useEffect: AuthContext'te kullanıcı bulunamadı!");
-        setError("Kullanıcı bilgileri yüklenemedi.");
-        setLoading(false);
-        console.log("useEffect: Hata durumu, setLoading(false) çağrıldı.");
+        console.error("PrivacySettings useEffect: AuthContext'ten user alınamadı! (user null veya undefined)");
+        setError("Kullanıcı bilgileri yüklenemedi. Lütfen tekrar giriş yapın.");
       }
+      
+      setLoading(false);
+      console.log("PrivacySettings useEffect: fetchPrivacySettings bitti, setLoading(false).");
     };
 
     fetchPrivacySettings();
@@ -57,25 +62,47 @@ const PrivacySettings = () => {
     });
     setSaving(true);
     setError(null);
+    
     try {
-      const settingsData = {
-        isPrivate: isPrivateAccount,
-        commentPermission: commentPermission,
-        tagPermission: tagPermission,
-      };
+      // Sadece gizlilik ayarını updatePrivacy ile güncelleyin
+      const privacyResponse = await api.user.updatePrivacy(isPrivateAccount);
+      console.log("Privacy API yanıtı:", JSON.stringify(privacyResponse));
       
-      const response = await api.user.updateProfile(settingsData);
-
-      if (response.success) {
-        toast.success('Gizlilik ayarları başarıyla kaydedildi!');
-        if (response.data?.user) {
-          updateUser(response.data.user);
-          if (localStorage.getItem('user')) localStorage.setItem('user', JSON.stringify(response.data.user));
-          if (sessionStorage.getItem('user')) sessionStorage.setItem('user', JSON.stringify(response.data.user));
+      if (privacyResponse.success) {
+        // Diğer ayarları updateProfile ile güncelleyin
+        const settingsData = {
+          "commentPermission": commentPermission,
+          "tagPermission": tagPermission,
+        };
+        
+        const profileResponse = await api.user.updateProfile(settingsData);
+        console.log("Profile API yanıtı:", JSON.stringify(profileResponse));
+        
+        if (profileResponse.success) {
+          toast.success('Gizlilik ayarları başarıyla kaydedildi!');
+          
+          if (profileResponse.data?.user) {
+            const updatedUser = profileResponse.data.user;
+            console.log("Güncellenmiş kullanıcı verisi:", JSON.stringify(updatedUser));
+            console.log("Güncellenmiş gizlilik ayarı:", updatedUser.isPrivate);
+            
+            // State'i güncelleyelim
+            setIsPrivateAccount(updatedUser.isPrivate === true); 
+            setCommentPermission(updatedUser.commentPermission || 'all');
+            setTagPermission(updatedUser.tagPermission || 'all');
+            
+            // AuthContext'teki kullanıcıyı ve depolamayı güncelle
+            updateUser(updatedUser); 
+          } else {
+            console.warn("Kullanıcı verisi API yanıtında bulunamadı:", profileResponse);
+          }
+        } else {
+          setError(profileResponse.message || 'Ayarlar kaydedilirken bir hata oluştu.');
+          toast.error(profileResponse.message || 'Ayarlar kaydedilemedi!');
         }
       } else {
-        setError(response.message || 'Ayarlar kaydedilirken bir hata oluştu.');
-        toast.error(response.message || 'Ayarlar kaydedilemedi!');
+        setError(privacyResponse.message || 'Gizlilik ayarları kaydedilemedi');
+        toast.error(privacyResponse.message || 'Gizlilik ayarları kaydedilemedi!');
       }
     } catch (err) {
       setError("Ayarlar kaydedilirken bir hata oluştu: " + err.message);
@@ -84,6 +111,12 @@ const PrivacySettings = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Gizli hesap değiştirme işleyicisi
+  const handlePrivateAccountChange = (checked) => {
+    console.log(`Gizli hesap değişti: ${isPrivateAccount} -> ${checked}`);
+    setIsPrivateAccount(checked);
   };
 
   const handleUnblockUser = (userId) => {
@@ -96,7 +129,7 @@ const PrivacySettings = () => {
     console.log('Sessize alma kaldırıldı, kullanıcı ID:', userId);
   };
 
-  console.log(`Render: loading=${loading}, saving=${saving}`);
+  console.log(`Render: loading=${loading}, saving=${saving}, isPrivate=${isPrivateAccount}`);
 
   if (loading) {
     return (
@@ -142,7 +175,7 @@ const PrivacySettings = () => {
                   type="checkbox"
                   className="sr-only peer"
                   checked={isPrivateAccount}
-                  onChange={(e) => setIsPrivateAccount(e.target.checked)}
+                  onChange={(e) => handlePrivateAccountChange(e.target.checked)}
                   disabled={saving}
                 />
                 <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>

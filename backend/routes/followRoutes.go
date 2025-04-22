@@ -12,7 +12,7 @@ func SetupFollowRoutes(router *gin.RouterGroup) {
 	// --- Takip Etme / Takipten Çıkma ---
 	// Kimlik doğrulaması gerektiren /users/:username altındaki route'lar
 	followUserGroup := router.Group("/users/:username")
-	followUserGroup.Use(controllers.AuthMiddleware())
+	followUserGroup.Use(controllers.UserAuthMiddleware())
 	{
 		// POST /api/v1/users/:username/follow - Takip et / İstek gönder
 		followUserGroup.POST("/follow", controllers.HandleFollowUser)
@@ -27,7 +27,7 @@ func SetupFollowRoutes(router *gin.RouterGroup) {
 	// --- Takip İstekleri Yönetimi ---
 	// Kimlik doğrulaması gerektiren /follow-requests altındaki route'lar
 	followRequestGroup := router.Group("/follow-requests")
-	followRequestGroup.Use(controllers.AuthMiddleware())
+	followRequestGroup.Use(controllers.UserAuthMiddleware())
 	{
 		// GET /api/v1/follow-requests/pending - Bekleyen takip isteklerini listele
 		followRequestGroup.GET("/pending", controllers.GetPendingFollowRequests)

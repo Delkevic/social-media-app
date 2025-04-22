@@ -50,32 +50,32 @@ func SetupRoutes() *gin.Engine {
 	api := router.Group("/api")
 	{
 		// Auth routes - public
-		api.POST("/initiate-register", controllers.InitiateRegister)
-		api.POST("/complete-registration", controllers.CompleteRegistration)
-		api.POST("/login", controllers.Login)
+		api.POST("/initiate-register", controllers.UserInitiateRegister)
+		api.POST("/complete-registration", controllers.UserCompleteRegistration)
+		api.POST("/login", controllers.UserLogin)
 
 		// Password reset routes - public
 		api.POST("/forgot-password", controllers.RequestPasswordReset)
 		api.POST("/verify-reset-code", controllers.VerifyResetCode)
 		api.POST("/reset-password", controllers.SetNewPassword)
 
-		// Görsel ve video servis etme yolları - public
+		// Görsel ve video servis etme yolları - public
 		api.GET("/images/:name", controllers.ServeUploadedImage)
 		api.GET("/thumbnails/:name", controllers.ServeUploadedThumbnail)
 		api.GET("/videos/:name", controllers.ServeUploadedVideo)
 
-		// Static dosya sunucusu - yüklenen dosyalara erişim için
+		// Static dosya sunucusu - yüklenen dosyalara erişim için
 		router.Static("/uploads", "./uploads")
 
-		// Bu endpointi özellikle izole edelim ve her seferinde log çıktısı alalım
+		// Bu endpointi özellikle izole edelim ve her seferinde log çıktısı alalım
 		video := api.Group("/upload")
 		video.Use(logRequestInfo)
-		video.Use(controllers.AuthMiddleware())
+		video.Use(controllers.UserAuthMiddleware())
 		video.POST("/video", controllers.UploadVideo)
 
 		// Standart korumalı endpointler
 		auth := api.Group("/")
-		auth.Use(controllers.AuthMiddleware())
+		auth.Use(controllers.UserAuthMiddleware())
 		{
 			// Image upload endpointi
 			auth.POST("/upload/image", controllers.UploadImage)
@@ -83,15 +83,20 @@ func SetupRoutes() *gin.Engine {
 			// Kullanıcı profili ve ayarları
 			auth.GET("/user", controllers.GetUserProfile)
 			auth.PUT("/user/profile", controllers.UpdateProfile)
+			auth.PUT("/user/privacy", controllers.UpdatePrivacy)
 			auth.PUT("/user/password", controllers.UpdatePassword)
 			auth.DELETE("/user", controllers.DeleteAccount)
 			auth.GET("/user/login-activity", controllers.GetLoginActivities)
 
-			// Kullanıcı takip etme/çıkarma
-			auth.GET("/user/following", controllers.GetFollowing)
-			auth.GET("/user/followers", controllers.GetFollowers)
-			auth.POST("/user/follow/:id", controllers.FollowUser)
-			auth.DELETE("/user/follow/:id", controllers.UnfollowUser)
+			// Kullanıcı takip etme/çıkarma (Kullanıcı adına göre güncellendi)
+			auth.POST("/user/follow/:username", controllers.SendFollowRequestToUser)
+			auth.DELETE("/user/follow/:username", controllers.UnfollowUser)
+			auth.DELETE("/user/follow-request/:username", controllers.CancelFollowRequestByUsername)
+
+			// Takip İstekleri Yönetimi
+			auth.GET("/follow-requests/pending", controllers.GetPendingFollowRequestsList)
+			auth.POST("/follow-requests/:request_id/accept", controllers.AcceptFollowRequestById)
+			auth.POST("/follow-requests/:request_id/reject", controllers.RejectFollowRequestById)
 
 			// Kullanıcı following/followers - kullanıcı adına göre
 			auth.GET("/profile/:username/following", controllers.GetFollowing)
@@ -144,6 +149,36 @@ func SetupRoutes() *gin.Engine {
 
 			// Geri Bildirim Rotası (Yeni Eklendi)
 			auth.POST("/feedback", controllers.SubmitFeedback)
+
+			// Bildirim Ayarları
+			auth.GET("/notifications/settings", controllers.GetNotificationSettings)
+			auth.PUT("/notifications/settings", controllers.UpdateNotificationSettings)
+
+			// Uygulama Ayarları
+			auth.GET("/app/settings", controllers.GetAppSettings)
+			auth.PUT("/app/settings", controllers.UpdateAppSettings)
+
+			// Yapay Zeka Ayarları
+			auth.GET("/ai/settings", controllers.GetAISettings)
+			auth.PUT("/ai/settings", controllers.UpdateAISettings)
+
+			// Güvenlik Ayarları
+			auth.GET("/security/settings", controllers.GetSecuritySettings)
+			auth.PUT("/security/settings", controllers.UpdateSecuritySettings)
+
+			// Veri Gizliliği Ayarları
+			auth.GET("/data-privacy/settings", controllers.GetDataPrivacySettings)
+			auth.PUT("/data-privacy/settings", controllers.UpdateDataPrivacySettings)
+			auth.POST("/data-privacy/download-request", controllers.RequestDataDownload)
+			auth.POST("/data-privacy/deletion-request", controllers.RequestDataDeletion)
+
+			// Destek ve Geri Bildirim
+			auth.POST("/support/tickets", controllers.CreateSupportTicket)
+			auth.GET("/support/tickets", controllers.GetUserTickets)
+			auth.GET("/support/tickets/:id", controllers.GetTicketDetails)
+			auth.POST("/support/tickets/:id/messages", controllers.AddTicketMessage)
+			auth.PUT("/support/tickets/:id/close", controllers.CloseTicket)
+			auth.PUT("/support/tickets/:id/reopen", controllers.ReopenTicket)
 		}
 
 		// Kullanıcı arama rotası (auth dışında)

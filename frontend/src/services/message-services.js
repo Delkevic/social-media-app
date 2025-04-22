@@ -1,160 +1,172 @@
 // message-service.js
+import api from './api';
+import { API_URL } from '../config/constants';
+import websocketService from './websocket-service';
 
-// API endpoint URL'leri - kendi API adresinizle değiştirin
-const API_URL = "https://api.your-app.com";
-
-// Tüm konuşmaları getiren fonksiyon
+// Tüm konuşmaları getiren fonksiyon
 export const getConversations = async () => {
   try {
-    // Gerçek API çağrısı
-    // const response = await fetch(${API_URL}/conversations);
-    // if (!response.ok) throw new Error('Konuşmaları getirme hatası');
-    // const data = await response.json();
-    // return data;
-
-    // Geliştirme sırasında kullanılacak örnek veri
-    return [
-      {
-        id: "1",
-        username: "Ahmet Yılmaz",
-        avatar: "https://randomuser.me/api/portraits/men/1.jpg",
-        lastMessage: "Projeyi ne zaman bitirebiliriz?",
-        lastSeen: "2023-09-15T14:30:00Z",
-        online: true,
-        unreadCount: 3
-      },
-      {
-        id: "2",
-        username: "Ayşe Demir",
-        avatar: "https://randomuser.me/api/portraits/women/2.jpg",
-        lastMessage: "Toplantı yarın saat 14:00'te",
-        lastSeen: "2023-09-15T12:45:00Z",
-        online: false,
-        unreadCount: 0
-      },
-      {
-        id: "3",
-        username: "Mehmet Kaya",
-        avatar: null,
-        lastMessage: "Dosyaları inceledim, geri dönüş yapacağım",
-        lastSeen: "2023-09-14T18:20:00Z",
-        online: false,
-        unreadCount: 1
-      }
-    ];
+    const response = await api.messages.getConversations();
+    if (response.success) {
+      return response.data || [];
+    }
+    throw new Error(response.message || 'Konuşmaları getirme hatası');
   } catch (error) {
-    console.error("Konuşmaları getirme hatası:", error);
+    console.error("Konuşmaları getirme hatası:", error);
     throw error;
   }
 };
 
-// Belirli bir konuşmanın mesajlarını getiren fonksiyon
-export const getMessages = async (conversationId) => {
+// Belirli bir konuşmanın mesajlarını getiren fonksiyon
+export const getMessages = async (userId) => {
   try {
-    // Gerçek API çağrısı
-    // const response = await fetch(${API_URL}/conversations/${conversationId}/messages);
-    // if (!response.ok) throw new Error('Mesajları getirme hatası');
-    // const data = await response.json();
-    // return data;
-
-    // Geliştirme sırasında kullanılacak örnek veriler
-    const messages = [
-      {
-        id: "101",
-        conversationId: "1",
-        content: "Merhaba, projenin son durumu nedir?",
-        sender: "user2",
-        timestamp: "2023-09-15T09:30:00Z"
-      },
-      {
-        id: "102",
-        conversationId: "1",
-        content: "Merhaba! Frontend kısmı tamamlandı, backend entegrasyonuna başlıyoruz.",
-        sender: "currentUser",
-        timestamp: "2023-09-15T09:35:00Z"
-      },
-      {
-        id: "103",
-        conversationId: "1",
-        content: "Harika! Ne zaman bitirebiliriz?",
-        sender: "user2",
-        timestamp: "2023-09-15T09:40:00Z"
-      },
-      {
-        id: "201",
-        conversationId: "2",
-        content: "Yarınki toplantı için hazırlık yaptın mı?",
-        sender: "user3",
-        timestamp: "2023-09-15T10:15:00Z"
-      },
-      {
-        id: "202",
-        conversationId: "2",
-        content: "Evet, sunumu hazırladım.",
-        sender: "currentUser",
-        timestamp: "2023-09-15T10:20:00Z"
-      },
-      {
-        id: "203",
-        conversationId: "2",
-        content: "Toplantı yarın saat 14:00'te",
-        sender: "user3",
-        timestamp: "2023-09-15T10:25:00Z"
-      },
-      {
-        id: "301",
-        conversationId: "3",
-        content: "Gönderdiğim dosyaları inceleyebilir misin?",
-        sender: "currentUser",
-        timestamp: "2023-09-14T17:00:00Z"
-      },
-      {
-        id: "302",
-        conversationId: "3",
-        content: "Tabii, hemen bakıyorum.",
-        sender: "user4",
-        timestamp: "2023-09-14T17:10:00Z"
-      },
-      {
-        id: "303",
-        conversationId: "3",
-        content: "Dosyaları inceledim, geri dönüş yapacağım",
-        sender: "user4",
-        timestamp: "2023-09-14T18:20:00Z"
-      }
-    ];
-
-    // Yalnızca ilgili konuşmaya ait mesajları filtrele
-    return messages.filter(message => message.conversationId === conversationId);
+    const response = await api.messages.getConversation(userId);
+    if (response.success) {
+      return response.data || [];
+    }
+    throw new Error(response.message || 'Mesajları getirme hatası');
   } catch (error) {
     console.error("Mesajları getirme hatası:", error);
     throw error;
   }
 };
 
-// Yeni mesaj gönderen fonksiyon
-export const sendMessage = async (conversationId, content) => {
+// Yeni mesaj gönderen fonksiyon
+export const sendMessage = async (userId, content, mediaUrl = null) => {
   try {
-    // Gerçek API çağrısı
-    // const response = await fetch(${API_URL}/conversations/${conversationId}/messages, {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({ content })
-    // });
-    // if (!response.ok) throw new Error('Mesaj gönderme hatası');
-    // const data = await response.json();
-    // return data;
-
-    // Geliştirme sırasında sahte bir gecikme oluştur
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ success: true });
-      }, 1000);
+    const messageData = {
+      content,
+      mediaUrl
+    };
+    
+    const response = await api.messages.sendMessage({
+      receiverId: userId,
+      content: content,
+      mediaUrl: mediaUrl
     });
+    
+    if (response.success) {
+      return response.data;
+    }
+    throw new Error(response.message || 'Mesaj gönderme hatası');
   } catch (error) {
-    console.error("Mesaj gönderme hatası:", error);
+    console.error("Mesaj gönderme hatası:", error);
     throw error;
   }
+};
+
+// Mesajı okundu olarak işaretle
+export const markMessageAsRead = async (messageId) => {
+  try {
+    const response = await api.messages.markAsRead(messageId);
+    return response.success;
+  } catch (error) {
+    console.error("Mesajı okundu olarak işaretleme hatası:", error);
+    throw error;
+  }
+};
+
+// Yazıyor durumu gönder
+export const sendTypingStatus = async (userId, isTyping) => {
+  try {
+    // WebSocket bağlantısı varsa kullan
+    if (websocketService.getStatus() === 'OPEN') {
+      return websocketService.sendTypingStatus(userId, isTyping);
+    } 
+    
+    // WebSocket yoksa veya kapalıysa HTTP isteği yap
+    const response = await fetch(`${API_URL}/messages/${userId}/typing`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionStorage.getItem('token') || localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({ isTyping })
+    });
+    
+    return response.ok;
+  } catch (error) {
+    console.error("Yazıyor durumu gönderme hatası:", error);
+    return false;
+  }
+};
+
+// Önceki sohbetleri getir
+export const getPreviousChats = async () => {
+  try {
+    const response = await api.messages.getPreviousChats();
+    if (response.success) {
+      return response.data || [];
+    }
+    throw new Error(response.message || 'Önceki sohbetleri getirme hatası');
+  } catch (error) {
+    console.error("Önceki sohbetleri getirme hatası:", error);
+    throw error;
+  }
+};
+
+// WebSocket bağlantısını başlat
+export const initializeWebSocket = (token) => {
+  return websocketService.connect(token);
+};
+
+// WebSocket bağlantısını yenile
+export const refreshWebSocketConnection = async () => {
+  const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+  return websocketService.connect(token, true);
+};
+
+// WebSocket'i getir
+export const getWebSocket = () => {
+  return websocketService.getWebSocket();
+};
+
+// WebSocket mesaj dinleyicisi ekle
+export const addMessageListener = (callback) => {
+  websocketService.addMessageListener(callback);
+};
+
+// WebSocket yazıyor durumu dinleyicisi ekle
+export const addTypingListener = (callback) => {
+  websocketService.addTypingListener(callback);
+};
+
+// WebSocket bağlantı dinleyicisi ekle
+export const addConnectListener = (callback) => {
+  websocketService.addConnectListener(callback);
+};
+
+// WebSocket bağlantı kesme dinleyicisi ekle
+export const addDisconnectListener = (callback) => {
+  websocketService.addDisconnectListener(callback);
+};
+
+// WebSocket hata dinleyicisi ekle
+export const addErrorListener = (callback) => {
+  websocketService.addErrorListener(callback);
+};
+
+// WebSocket dinleyici kaldır
+export const removeMessageListener = (callback) => {
+  websocketService.removeMessageListener(callback);
+};
+
+// WebSocket dinleyici kaldır
+export const removeTypingListener = (callback) => {
+  websocketService.removeTypingListener(callback);
+};
+
+// WebSocket dinleyici kaldır
+export const removeConnectListener = (callback) => {
+  websocketService.removeConnectListener(callback);
+};
+
+// WebSocket dinleyici kaldır
+export const removeDisconnectListener = (callback) => {
+  websocketService.removeDisconnectListener(callback);
+};
+
+// WebSocket dinleyici kaldır
+export const removeErrorListener = (callback) => {
+  websocketService.removeErrorListener(callback);
 };

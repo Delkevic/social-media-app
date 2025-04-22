@@ -93,7 +93,7 @@ uyarılar:
   - Dosya yapısına sadık kalınmalı
   - API çağrıları merkezi bir dosyadan yönetilmeli
 
-tasarımlar için ant.design veya material ui gibi küthüphaneler kullanılabilir
+tasarımlar için material ui gibi küthüphaneler kullanılabilir
 
 söylemediğim yerleri kafana göre değiştirme sadece söylediklerimi yap
 

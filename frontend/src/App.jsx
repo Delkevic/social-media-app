@@ -11,6 +11,7 @@ import Profile from './pages/Profile';
 import Reels from './pages/Reels'; // Uncommented this line
 import Messages from './pages/Messages'; // Messages sayfasını import ettik
 import SettingsPage from './pages/Settings/SettingsPage'; // Settings sayfasını import ediyoruz
+import FollowRequestsPage from './pages/FollowRequestsPage'; // Takip istekleri sayfasını import ediyoruz
 import { ChatPanel } from './components/chat/ChatPanel';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TOKEN_NAME } from './config/constants';
@@ -117,6 +118,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <SettingsPage />
+              </ProtectedRoute>
+            } 
+          />
+          {/* Takip İstekleri sayfası */}
+          <Route 
+            path="/follow-requests"
+            element={
+              <ProtectedRoute>
+                <FollowRequestsPage />
               </ProtectedRoute>
             } 
           />

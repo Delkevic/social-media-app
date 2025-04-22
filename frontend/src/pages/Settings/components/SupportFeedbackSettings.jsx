@@ -6,7 +6,9 @@ import { toast } from 'react-hot-toast'; // Import toast for notifications
 const SupportFeedbackSettings = () => {
   // State değişkenleri
   const [feedbackType, setFeedbackType] = useState('issue');
+  const [feedbackSubject, setFeedbackSubject] = useState('');
   const [feedbackText, setFeedbackText] = useState('');
+  const [rating, setRating] = useState(5);
   const [isSubmitting, setIsSubmitting] = useState(false); // Add submitting state
 
   // SSS bölümü için göster/gizle state'i
@@ -15,6 +17,11 @@ const SupportFeedbackSettings = () => {
   // Form gönderme işlemi
   const handleSubmitFeedback = async (e) => {
     e.preventDefault();
+    if (!feedbackSubject.trim()) {
+      toast.error('Lütfen bir konu başlığı girin.');
+      return;
+    }
+    
     if (!feedbackText.trim()) {
       toast.error('Lütfen geri bildiriminizi yazın.');
       return;
@@ -22,12 +29,15 @@ const SupportFeedbackSettings = () => {
 
     setIsSubmitting(true);
     try {
-      const response = await api.feedback.submit({ // Use the api service
+      const response = await api.support.submitFeedback({
         type: feedbackType,
-        text: feedbackText,
+        subject: feedbackSubject,
+        message: feedbackText,
+        rating: rating
       });
 
       if (response.success) {
+        setFeedbackSubject('');
         setFeedbackText(''); // Formu sıfırla
         toast.success('Geri bildiriminiz için teşekkür ederiz! En kısa sürede incelenecektir.');
       } else {
@@ -105,9 +115,9 @@ const SupportFeedbackSettings = () => {
                   <input
                     type="radio"
                     name="feedbackType"
-                    value="issue"
-                    checked={feedbackType === 'issue'}
-                    onChange={() => setFeedbackType('issue')}
+                    value="hata"
+                    checked={feedbackType === 'hata'}
+                    onChange={() => setFeedbackType('hata')}
                     className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500 focus:ring-offset-gray-800"
                   />
                   <span className="ms-2 text-sm text-gray-300">Sorun Bildir</span>
@@ -116,19 +126,47 @@ const SupportFeedbackSettings = () => {
                   <input
                     type="radio"
                     name="feedbackType"
-                    value="suggestion"
-                    checked={feedbackType === 'suggestion'}
-                    onChange={() => setFeedbackType('suggestion')}
+                    value="öneri"
+                    checked={feedbackType === 'öneri'}
+                    onChange={() => setFeedbackType('öneri')}
                     className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500 focus:ring-offset-gray-800"
                   />
                   <span className="ms-2 text-sm text-gray-300">Öneri Gönder</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    name="feedbackType"
+                    value="iyileştirme"
+                    checked={feedbackType === 'iyileştirme'}
+                    onChange={() => setFeedbackType('iyileştirme')}
+                    className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500 focus:ring-offset-gray-800"
+                  />
+                  <span className="ms-2 text-sm text-gray-300">İyileştirme Öner</span>
                 </label>
               </div>
             </div>
             
             <div>
+              <label htmlFor="feedbackSubject" className="block text-sm font-medium text-gray-200 mb-2">
+                Konu
+              </label>
+              <input
+                type="text"
+                id="feedbackSubject"
+                value={feedbackSubject}
+                onChange={(e) => setFeedbackSubject(e.target.value)}
+                className="w-full p-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-sm text-white focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Konu başlığı giriniz"
+                required
+                disabled={isSubmitting}
+              />
+            </div>
+            
+            <div>
               <label htmlFor="feedbackText" className="block text-sm font-medium text-gray-200 mb-2">
-                {feedbackType === 'issue' ? 'Sorunu açıklayın' : 'Önerinizi açıklayın'}
+                {feedbackType === 'hata' ? 'Sorunu açıklayın' : 
+                 feedbackType === 'öneri' ? 'Önerinizi açıklayın' : 'İyileştirme fikrinizi açıklayın'}
               </label>
               <textarea
                 id="feedbackText"
@@ -136,12 +174,45 @@ const SupportFeedbackSettings = () => {
                 value={feedbackText}
                 onChange={(e) => setFeedbackText(e.target.value)}
                 className="w-full p-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-sm text-white focus:ring-blue-500 focus:border-blue-500"
-                placeholder={feedbackType === 'issue' 
+                placeholder={feedbackType === 'hata' 
                   ? 'Lütfen karşılaştığınız sorunu detaylı bir şekilde açıklayın...' 
-                  : 'Lütfen önerinizi detaylı bir şekilde açıklayın...'}
+                  : feedbackType === 'öneri'
+                  ? 'Lütfen önerinizi detaylı bir şekilde açıklayın...'
+                  : 'Lütfen iyileştirme fikrinizi detaylı bir şekilde açıklayın...'}
                 required
                 disabled={isSubmitting} // Disable textarea while submitting
               ></textarea>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-200 mb-2">
+                Değerlendirme (1-5)
+              </label>
+              <div className="flex space-x-4">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <label key={value} className="flex flex-col items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="rating"
+                      value={value}
+                      checked={rating === value}
+                      onChange={() => setRating(value)}
+                      className="sr-only"
+                    />
+                    <div className={`w-8 h-8 flex items-center justify-center rounded-full ${
+                      rating === value ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'
+                    }`}>
+                      {value}
+                    </div>
+                    <span className="mt-1 text-xs text-gray-400">
+                      {value === 1 ? 'Kötü' : 
+                       value === 2 ? 'Orta' : 
+                       value === 3 ? 'İyi' : 
+                       value === 4 ? 'Çok İyi' : 'Mükemmel'}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
             
             <button
@@ -199,12 +270,11 @@ const SupportFeedbackSettings = () => {
             </p>
             <ul className="list-disc list-inside space-y-2">
               {communityGuidelines.map((rule, index) => (
-                <li key={index} className="text-sm text-gray-300">{rule}</li>
+                <li key={index} className="text-sm text-gray-300">
+                  {rule}
+                </li>
               ))}
             </ul>
-            <p className="text-sm text-gray-400 mt-4">
-              Bu kuralları ihlal eden içerikler kaldırılabilir ve hesabınız geçici veya kalıcı olarak askıya alınabilir.
-            </p>
           </div>
         </div>
       </section>

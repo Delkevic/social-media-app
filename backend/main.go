@@ -5,6 +5,7 @@ import (
 	"os"
 	"social-media-app/backend/database"
 	"social-media-app/backend/routes"
+
 	"github.com/joho/godotenv"
 )
 
@@ -12,10 +13,10 @@ func main() {
 	// .env dosyasını yükle
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("HATA: .env dosyası yüklenemedi")
+		log.Println("Uyarı: .env dosyası yüklenemedi, varsayılan değerler kullanılacak")
 	}
 
-	// Veritabanı bağlantısı
+	// Veritabanı bağlantısı kur
 	database.ConnectDatabase()
 
 	// API rotalarını ayarla

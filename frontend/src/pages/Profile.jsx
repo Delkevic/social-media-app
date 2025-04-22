@@ -12,6 +12,7 @@ import { useAuth } from "../context/AuthContext"; // useAuth eklendi
 import { Lock, LogOut } from 'lucide-react'; // Kilit ikonu ve LogOut ikonu eklendi
 import { toast } from 'react-hot-toast'; // toast eklendi
 import { GlowingEffect } from '../components/ui/GlowingEffect'; // GlowingEffect import edildi
+import websocketService from "../services/websocket-service"; // WebSocket servisini import et
 
 const Profile = () => {
   const [user, setUser] = useState(null);
@@ -144,8 +145,8 @@ const Profile = () => {
       if (profileResponse.success && profileResponse.data.user) {
         const userData = profileResponse.data.user;
         setUser(userData);
-        // Backend'den gelen followStatus'u basitçe takip edip etmediğine çevir
-        setFollowStatus(userData.followStatus === 'following' ? 'following' : 'none'); 
+        // Backend'den gelen followStatus'u olduğu gibi kullan (veya yoksa 'none' olsun)
+        setFollowStatus(userData.followStatus || 'none');
         setCanViewProfile(userData.canViewProfile === undefined ? true : userData.canViewProfile);
 
         // İstatistikleri ayarla
@@ -371,34 +372,76 @@ const Profile = () => {
     if (isFollowRequestInProgress || !user || isOwnProfile) return; // Kendi profilinde işlem yapma
     setIsFollowRequestInProgress(true);
 
-    const action = followStatus === 'following' ? api.user.unfollow : api.user.follow;
-    const targetUserId = user.id; // Username yerine ID kullan
+    let action;
+    let actionLabel;
+    let wsAction;
+    
+    if (followStatus === 'following') {
+      action = api.user.unfollow;
+      actionLabel = 'Takipten çıkma';
+      wsAction = null; // Takipten çıkma için WebSocket bildirimi gönderilmiyor
+    } else if (followStatus === 'pending') {
+      action = api.user.cancelFollowRequest;
+      actionLabel = 'Takip isteği iptal etme';
+      wsAction = websocketService.sendCancelFollowRequest;
+    } else {
+      action = api.user.follow;
+      actionLabel = 'Takip etme';
+      wsAction = websocketService.sendFollowRequest;
+    }
+    
+    const targetUserId = user.id;
+    console.log(`${actionLabel} işlemi başlatılıyor: ${user.username} (id: ${targetUserId}), mevcut durum: ${followStatus}`);
 
     try {
-      const response = await action(targetUserId); // API'yi ID ile çağır
+      const response = await action(targetUserId);
+      console.log(`${actionLabel} API yanıtı:`, response);
 
       if (response.success) {
-        const wasFollowing = followStatus === 'following';
-        const newStatus = wasFollowing ? 'none' : 'following';
+        let newStatus;
+        if (followStatus === 'following') {
+          newStatus = 'none';
+          toast.success(`${user.username} kullanıcısını takip etmeyi bıraktınız.`);
+        } else if (followStatus === 'pending') {
+          newStatus = 'none';
+          toast.success(`${user.username} kullanıcısına gönderilen takip isteği iptal edildi.`);
+          
+          // Takip isteği iptal bildirimini WebSocket ile gönder
+          if (wsAction) wsAction(targetUserId);
+        } else {
+          // API yanıtından istek durumunu kontrol et
+          newStatus = response.data?.requiresApproval ? 'pending' : 'following';
+          
+          if (newStatus === 'pending') {
+            toast.success(`${user.username} kullanıcısına takip isteği gönderildi.`);
+            
+            // Takip isteği bildirimini WebSocket ile gönder
+            if (wsAction) wsAction(targetUserId);
+          } else {
+            toast.success(`${user.username} kullanıcısını takip etmeye başladınız.`);
+          }
+        }
+        
+        console.log(`Takip durumu güncellendi: ${followStatus} -> ${newStatus}`);
         setFollowStatus(newStatus);
 
-        // Takipçi sayısını anlık güncelle
-        setStats(prevStats => ({
-          ...prevStats,
-          followers: wasFollowing 
-            ? Math.max(0, prevStats.followers - 1) 
-            : prevStats.followers + 1
-        }));
+        // Takipçi sayısını anlık güncelle (sadece doğrudan takip edildiğinde)
+        if (newStatus === 'following' || followStatus === 'following') {
+          setStats(prevStats => ({
+            ...prevStats,
+            followers: newStatus === 'following'
+              ? prevStats.followers + 1
+              : Math.max(0, prevStats.followers - 1)
+          }));
+        }
         
-        // toast.success(wasFollowing ? 'Takipten çıkarıldı.' : 'Takip edildi.');
-
       } else {
         toast.error(response.message || "İşlem sırasında bir hata oluştu.");
-        console.error("Takip işlemi başarısız:", response.message);
+        console.error(`${actionLabel} işlemi başarısız:`, response.message);
       }
     } catch (error) {
       toast.error("İşlem sırasında bir hata oluştu.");
-      console.error("Takip işlemi sırasında hata:", error);
+      console.error(`${actionLabel} işlemi sırasında hata:`, error);
     } finally {
       setIsFollowRequestInProgress(false);
     }
@@ -551,8 +594,8 @@ const Profile = () => {
     switch (followStatus) {
       case 'following':
         return { text: 'Takibi Bırak', style: 'bg-gray-700 text-white hover:bg-gray-800 border border-gray-600' };
-      // case 'pending': // Şimdilik kaldırıldı
-      //   return { text: 'İstek Gönderildi', style: 'bg-gray-600 text-gray-300 hover:bg-gray-700 border border-gray-500' };
+      case 'pending':
+        return { text: 'İstek Gönderildi', style: 'bg-gray-600 text-gray-300 hover:bg-gray-700 border border-gray-500' };
       case 'none':
       default: // none veya bilinmeyen durum
         return { text: 'Takip Et', style: 'bg-blue-600 text-white hover:bg-blue-700' };

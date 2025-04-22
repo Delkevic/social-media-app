@@ -1,7 +1,6 @@
 package database
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -9,7 +8,7 @@ import (
 	"social-media-app/backend/models"
 
 	"github.com/joho/godotenv"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -42,33 +41,23 @@ func ConnectDatabase() {
 		},
 	}
 
-	// Railway üzerinden MySQL bağlantısı için DSN (Data Source Name)
-	user := getEnvWithDefault("MYSQLUSER", "root")
-	password := getEnvWithDefault("MYSQLPASSWORD", "")
-	host := getEnvWithDefault("MYSQLHOST", "turntable.proxy.rlwy.net")
-	port := getEnvWithDefault("MYSQLPORT", "3306")
-	dbname := getEnvWithDefault("MYSQLDATABASE", "railway")
+	// SQLite veritabanı dosyası
+	dbPath := getEnvWithDefault("SQLITE_DB_PATH", "development.db")
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		user, password, host, port, dbname)
-
-	// MySQL veritabanına bağlan
-	db, err := gorm.Open(mysql.Open(dsn), config)
+	// SQLite veritabanına bağlan
+	db, err := gorm.Open(sqlite.Open(dbPath), config)
 	if err != nil {
-		log.Fatalf("MySQL veritabanı bağlantısı başarısız: %v", err)
+		log.Fatalf("SQLite veritabanı bağlantısı başarısız: %v", err)
 	}
-
-	// Bağlantı havuzu ayarları
-	sqlDB, err := db.DB()
-	if err != nil {
-		log.Fatal("Veritabanı bağlantı havuzu ayarlanamadı:", err)
-	}
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	DB = db
-	log.Println("MySQL veritabanı bağlantısı başarılı!")
+	log.Println("SQLite veritabanı bağlantısı başarılı!")
+
+	// SQLite için bazı pragmaları ayarla (performans iyileştirmeleri)
+	db.Exec("PRAGMA journal_mode = WAL;")
+	db.Exec("PRAGMA synchronous = NORMAL;")
+	db.Exec("PRAGMA cache_size = 1000;")
+	db.Exec("PRAGMA foreign_keys = ON;")
 
 	// Tabloları otomatik oluştur
 	err = db.AutoMigrate(
@@ -89,6 +78,13 @@ func ConnectDatabase() {
 		&models.LoginActivity{},
 		&models.PasswordReset{},
 		&models.EmailVerification{},
+		&models.AppSettings{},
+		&models.AISettings{},
+		&models.SecuritySettings{},
+		&models.DataPrivacySettings{},
+		&models.NotificationSettings{},
+		&models.SupportTicket{},
+		&models.SupportMessage{},
 	)
 
 	if err != nil {
@@ -105,4 +101,9 @@ func getEnvWithDefault(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// GetDB returns the database instance
+func GetDB() *gorm.DB {
+	return DB
 }
