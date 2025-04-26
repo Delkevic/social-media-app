@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
@@ -235,12 +236,34 @@ func AcceptFollowRequest(c *gin.Context) {
 		return
 	}
 
+	// Bildirim oluştur
+	var follower models.User
+	if err := tx.Select("id, username, full_name").First(&follower, request.FollowerID).Error; err != nil {
+		tx.Commit() // Takip işlemi başarılı olduğu için transaction'ı commit et
+		c.JSON(http.StatusOK, Response{Success: true, Message: "Takip isteği kabul edildi fakat bildirim için kullanıcı bilgileri alınamadı"})
+		return
+	}
+
+	notification := models.Notification{
+		UserID:      request.FollowerID,
+		SenderID:    request.FollowingID,
+		Type:        "follow_accepted",
+		Content:     fmt.Sprintf("%s takip isteğinizi kabul etti", follower.FullName),
+		ReferenceID: uint(userID.(uint)),
+		IsRead:      false,
+		CreatedAt:   time.Now(),
+	}
+
+	if err := tx.Create(&notification).Error; err != nil {
+		tx.Commit() // Takip işlemi başarılı olduğu için transaction'ı commit et
+		c.JSON(http.StatusOK, Response{Success: true, Message: "Takip isteği kabul edildi fakat bildirim oluşturulamadı"})
+		return
+	}
+
 	if err := tx.Commit().Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "İşlem tamamlanırken hata: " + err.Error()})
 		return
 	}
-
-	// TODO: Bildirim gönderilebilir
 
 	c.JSON(http.StatusOK, Response{Success: true, Message: "Takip isteği kabul edildi"})
 }

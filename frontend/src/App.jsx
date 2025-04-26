@@ -14,6 +14,8 @@ import SettingsPage from './pages/Settings/SettingsPage'; // Settings sayfasın�
 import FollowRequestsPage from './pages/FollowRequestsPage'; // Takip istekleri sayfasını import ediyoruz
 import { ChatPanel } from './components/chat/ChatPanel';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider, useNotification } from './context/NotificationContext'; // useNotification hook'unu da import ediyoruz
+import NotificationPanel from './components/notifications/NotificationPanel'; // NotificationPanel import edildi
 import { TOKEN_NAME } from './config/constants';
 import RegisterPage from './pages/auth/RegisterPage'; // Import the RegisterPage
 
@@ -34,6 +36,12 @@ const ProtectedRoute = ({ children }) => {
   }
   
   return children;
+};
+
+// NotificationPanel bileşenini içeren bir wrapper bileşen
+const NotificationPanelWrapper = () => {
+  const { isPanelOpen, closePanel } = useNotification();
+  return <NotificationPanel isOpen={isPanelOpen} onClose={closePanel} />;
 };
 
 function App() {
@@ -65,74 +73,88 @@ function App() {
   
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          {/* Ana sayfa için koruma ekledik */}
-          <Route 
-            path="/" 
-            element={
-              <ProtectedRoute>
-                <Home />
-              </ProtectedRoute>
-            } 
-          />
-          {/* Authentication routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<RegisterPage />} /> {/* Updated to use RegisterPage */}
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/verify-code" element={<VerifyCode />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route 
-            path="/profile/:username"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/reels" 
-            element={<Reels />} // Using Reels component without protection to test
-          />
-          {/* Mesajlar sayfası */}
-          <Route 
-            path="/messages"
-            element={
-              <ProtectedRoute>
-                <Messages />
-              </ProtectedRoute>
-            } 
-          />
-          {/* Belirli bir kullanıcı ile mesajlaşma */}
-          <Route 
-            path="/messages/:userId"
-            element={
-              <ProtectedRoute>
-                <Messages />
-              </ProtectedRoute>
-            } 
-          />
-          {/* Ayarlar sayfası */}
-          <Route 
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <SettingsPage />
-              </ProtectedRoute>
-            } 
-          />
-          {/* Takip İstekleri sayfası */}
-          <Route 
-            path="/follow-requests"
-            element={
-              <ProtectedRoute>
-                <FollowRequestsPage />
-              </ProtectedRoute>
-            } 
-          />
-        </Routes>
-        <ChatPanel />
-      </Router>
+      <NotificationProvider> { /* NotificationProvider eklendi */ }
+        <Router>
+          <NotificationPanelWrapper /> { /* NotificationPanel wrapper ile render ediliyor */ }
+          <Routes>
+            {/* Ana sayfa için koruma ekledik */}
+            <Route 
+              path="/" 
+              element={
+                <ProtectedRoute>
+                  <Home />
+                </ProtectedRoute>
+              } 
+            />
+            {/* Authentication routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<RegisterPage />} /> {/* Updated to use RegisterPage */}
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/verify-code" element={<VerifyCode />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route 
+              path="/profile/:username"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/reels" 
+              element={<Reels />} // Using Reels component without protection to test
+            />
+            {/* Mesajlar sayfası */}
+            <Route 
+              path="/messages"
+              element={
+                <ProtectedRoute>
+                  <Messages />
+                </ProtectedRoute>
+              } 
+            />
+            {/* Belirli bir kullanıcı ile mesajlaşma */}
+            <Route 
+              path="/messages/:userId"
+              element={
+                <ProtectedRoute>
+                  <Messages />
+                </ProtectedRoute>
+              } 
+            />
+            {/* Ayarlar sayfası */}
+            <Route 
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <SettingsPage />
+                </ProtectedRoute>
+              } 
+            />
+            {/* Takip İstekleri sayfası */}
+            <Route 
+              path="/follow-requests"
+              element={
+                <ProtectedRoute>
+                  <FollowRequestsPage />
+                </ProtectedRoute>
+              } 
+            />
+            {/* Bildirimler sayfası route'u kaldırıldı */}
+            {/* 
+            <Route 
+              path="/notifications"
+              element={
+                <ProtectedRoute>
+                  <Notifications />
+                </ProtectedRoute>
+              } 
+            /> 
+            */}
+          </Routes>
+          <ChatPanel />
+        </Router>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

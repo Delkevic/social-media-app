@@ -3,9 +3,11 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"log"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
 )
@@ -63,163 +65,190 @@ func GetComments(c *gin.Context) {
 	})
 }
 
-// AddComment yeni bir yorum ekler
+// AddComment adds a comment to a post
 func AddComment(c *gin.Context) {
-	// Gönderi ID'sini al
-	postID, err := strconv.Atoi(c.Param("id"))
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Kullanıcı oturumu bulunamadı"})
+		return
+	}
+
+	postIDStr := c.Param("postID")
+	postID, err := strconv.Atoi(postIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz gönderi ID'si"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz gönderi ID'si"})
 		return
 	}
 
-	// Kullanıcı ID'sini al
-	userID := c.GetUint("userID")
-
-	// İstek gövdesini parse et
-	var request struct {
-		Content  string `json:"content" binding:"required"`
-		ParentID *uint  `json:"parentId"`
-	}
-
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz yorum verisi"})
-		return
-	}
-
-	// Gönderiyi kontrol et
 	var post models.Post
 	if err := database.DB.First(&post, postID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Gönderi bulunamadı"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Gönderi bulunamadı"})
 		return
 	}
 
-	// Eğer bir üst yorum ID'si varsa, varlığını kontrol et
-	if request.ParentID != nil {
-		var parentComment models.Comment
-		if err := database.DB.First(&parentComment, request.ParentID).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Üst yorum bulunamadı"})
-			return
+	var input struct {
+		Content string `json:"content" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "İçerik gerekli"})
+		return
+	}
+
+	// Yorumu oluştur
+	comment := models.Comment{
+		PostID:  uint(postID),
+		UserID:  userID.(uint),
+		Content: input.Content,
+	}
+
+	if err := database.DB.Create(&comment).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Yorum eklenirken hata oluştu"})
+		return
+	}
+
+	// Post'un yorum sayısını güncelle
+	database.DB.Model(&post).Update("comment_count", post.CommentCount+1)
+
+	// Yorum yapan kullanıcının bilgilerini al
+	var user models.User
+	database.DB.Select("id, username, profile_image").First(&user, userID)
+
+	// Post sahibine bildirim oluştur (kendi postuna yorum yapıyorsa bildirim oluşturma)
+	if post.UserID != userID.(uint) {
+		notification := models.Notification{
+			UserID:      post.UserID,
+			SenderID:    userID.(uint),
+			Type:        "comment",
+			ReferenceID: uint(postID),
+			Content:     user.Username + " gönderinize yorum yaptı",
+			IsRead:      false,
+		}
+
+		if err := database.DB.Create(&notification).Error; err != nil {
+			// Bildirim oluşturulamazsa sadece log kaydı tut, ana işlemi etkileme
+			log.Printf("Bildirim oluşturma hatası: %v", err)
 		}
 	}
 
-	// Yeni yorumu oluştur
-	comment := models.Comment{
-		Content:  request.Content,
-		UserID:   userID,
-		PostID:   uint(postID),
-		ParentID: request.ParentID,
+	// Oluşturulan yorumu kullanıcı bilgileriyle birlikte döndür
+	responseComment := struct {
+		ID        uint      `json:"id"`
+		PostID    uint      `json:"postID"`
+		Content   string    `json:"content"`
+		LikeCount int       `json:"likeCount"`
+		CreatedAt time.Time `json:"createdAt"`
+		User      struct {
+			ID           uint   `json:"id"`
+			Username     string `json:"username"`
+			ProfileImage string `json:"profileImage,omitempty"`
+		} `json:"user"`
+	}{
+		ID:        comment.ID,
+		PostID:    comment.PostID,
+		Content:   comment.Content,
+		LikeCount: comment.LikeCount,
+		CreatedAt: comment.CreatedAt,
+		User: struct {
+			ID           uint   `json:"id"`
+			Username     string `json:"username"`
+			ProfileImage string `json:"profileImage,omitempty"`
+		}{
+			ID:           user.ID,
+			Username:     user.Username,
+			ProfileImage: user.ProfileImage,
+		},
 	}
-
-	// Yorumu veritabanına kaydet
-	if err := database.DB.Create(&comment).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Yorum kaydedilirken bir hata oluştu"})
-		return
-	}
-
-	// Kullanıcı bilgilerini yükle
-	database.DB.Preload("User").First(&comment, comment.ID)
-
-	// Gönderi yorum sayısını güncelle
-	database.DB.Model(&post).UpdateColumn("comment_count", post.CommentCount+1)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
-		"data": gin.H{
-			"comment": comment,
-		},
+		"message": "Yorum başarıyla eklendi",
+		"comment": responseComment,
 	})
 }
 
-// ToggleCommentLike yorum beğenme/beğeni kaldırma işlemini yapar
+// ToggleCommentLike handles liking/unliking a comment
 func ToggleCommentLike(c *gin.Context) {
-	// Yorum ID'sini al
-	commentIDStr := c.Param("id")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Kullanıcı oturumu bulunamadı"})
+		return
+	}
+
+	commentIDStr := c.Param("commentID")
 	commentID, err := strconv.Atoi(commentIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"message": "Geçersiz yorum ID'si",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz yorum ID'si"})
 		return
 	}
 
-	// Kullanıcı ID'sini al
-	userID := c.GetUint("userID")
-
-	// Yorumu kontrol et
 	var comment models.Comment
 	if err := database.DB.First(&comment, commentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Yorum bulunamadı",
-		})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Yorum bulunamadı"})
 		return
 	}
 
-	// Beğeniyi kontrol et (zaten beğenilmiş mi?)
+	// Mevcut like durumunu kontrol et
 	var existingLike models.CommentLike
-	result := database.DB.Unscoped().Where("comment_id = ? AND user_id = ? AND deleted_at IS NULL", commentID, userID).First(&existingLike)
-	if result.RowsAffected > 0 {
-		// Beğeniyi kaldır
+	likeExists := database.DB.Where("comment_id = ? AND user_id = ?", commentID, userID).First(&existingLike).Error == nil
+
+	if likeExists {
+		// Like varsa kaldır
 		if err := database.DB.Delete(&existingLike).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Beğeni kaldırılırken bir hata oluştu: " + err.Error(),
-			})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Beğeni kaldırılırken hata oluştu"})
 			return
 		}
 
-		// Yorum beğeni sayısını azalt
-		if comment.LikeCount > 0 {
-			database.DB.Model(&comment).Update("like_count", comment.LikeCount-1)
+		// Yorum beğeni sayısını güncelle
+		database.DB.Model(&comment).Update("like_count", comment.LikeCount-1)
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Yorum beğenisi kaldırıldı",
+			"liked":   false,
+		})
+	} else {
+		// Like yoksa ekle
+		like := models.CommentLike{
+			CommentID: uint(commentID),
+			UserID:    userID.(uint),
+		}
+
+		if err := database.DB.Create(&like).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Beğeni eklenirken hata oluştu"})
+			return
+		}
+
+		// Yorum beğeni sayısını güncelle
+		database.DB.Model(&comment).Update("like_count", comment.LikeCount+1)
+
+		// Beğeni yapan kullanıcının bilgilerini getir
+		var user models.User
+		database.DB.Select("id, username, profile_image").First(&user, userID)
+
+		// Yorum sahibine bildirim oluştur (kendi yorumunu beğeniyorsa bildirim oluşturma)
+		if comment.UserID != userID.(uint) {
+			notification := models.Notification{
+				UserID:      comment.UserID,
+				SenderID:    userID.(uint),
+				Type:        "comment_like",
+				ReferenceID: uint(commentID),
+				Content:     user.Username + " yorumunuzu beğendi",
+				IsRead:      false,
+			}
+
+			if err := database.DB.Create(&notification).Error; err != nil {
+				// Bildirim oluşturulamazsa sadece log kaydı tut, ana işlemi etkileme
+				log.Printf("Bildirim oluşturma hatası: %v", err)
+			}
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"message": "Yorum beğenisi başarıyla kaldırıldı",
-			"data": gin.H{
-				"isLiked":   false,
-				"likeCount": comment.LikeCount - 1,
-			},
+			"message": "Yorum beğenildi",
+			"liked":   true,
 		})
-		return
 	}
-
-	// Önce silinmiş (soft-deleted) beğenileri kontrol et
-	var deletedLike models.CommentLike
-	delResult := database.DB.Unscoped().Where("comment_id = ? AND user_id = ? AND deleted_at IS NOT NULL", commentID, userID).First(&deletedLike)
-
-	if delResult.RowsAffected > 0 {
-		// Silinmiş kaydı tamamen sil (hard delete)
-		database.DB.Unscoped().Delete(&deletedLike)
-	}
-
-	// Beğeni oluştur
-	like := models.CommentLike{
-		CommentID: uint(commentID),
-		UserID:    userID,
-	}
-
-	// Beğeniyi ekle
-	if err := database.DB.Create(&like).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Beğeni eklenirken bir hata oluştu: " + err.Error(),
-		})
-		return
-	}
-
-	// Yorum beğeni sayısını artır
-	database.DB.Model(&comment).Update("like_count", comment.LikeCount+1)
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Yorum başarıyla beğenildi",
-		"data": gin.H{
-			"isLiked":   true,
-			"likeCount": comment.LikeCount + 1,
-		},
-	})
 }
 
 // DeleteComment bir yorumu siler
@@ -340,5 +369,107 @@ func ReportComment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Yorum başarıyla şikayet edildi",
+	})
+}
+
+// ReplyToComment yanıt vermek için kullanılır
+func ReplyToComment(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "message": "Kullanıcı oturumu bulunamadı"})
+		return
+	}
+
+	commentIDStr := c.Param("commentID")
+	commentID, err := strconv.Atoi(commentIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Geçersiz yorum ID'si"})
+		return
+	}
+
+	var parentComment models.Comment
+	if err := database.DB.First(&parentComment, commentID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Yanıt verilecek yorum bulunamadı"})
+		return
+	}
+
+	var input struct {
+		Content string `json:"content" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "İçerik gerekli"})
+		return
+	}
+
+	// Yanıt yorumu oluştur
+	reply := models.Comment{
+		PostID:   parentComment.PostID,
+		UserID:   userID.(uint),
+		ParentID: &parentComment.ID,
+		Content:  input.Content,
+	}
+
+	if err := database.DB.Create(&reply).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Yanıt eklenirken hata oluştu"})
+		return
+	}
+
+	// Yanıt veren kullanıcının bilgilerini al
+	var user models.User
+	database.DB.Select("id, username, profile_image").First(&user, userID)
+
+	// Ana yorum sahibine bildirim oluştur (kendi yorumuna yanıt veriyorsa bildirim oluşturma)
+	if parentComment.UserID != userID.(uint) {
+		notification := models.Notification{
+			UserID:      parentComment.UserID,
+			SenderID:    userID.(uint),
+			Type:        "reply",
+			ReferenceID: reply.ID,
+			Content:     user.Username + " yorumunuza yanıt verdi",
+			IsRead:      false,
+		}
+
+		if err := database.DB.Create(&notification).Error; err != nil {
+			// Bildirim oluşturulamazsa sadece log kaydı tut, ana işlemi etkileme
+			log.Printf("Bildirim oluşturma hatası: %v", err)
+		}
+	}
+
+	// Yanıt veren kullanıcının bilgileriyle yanıtı döndür
+	responseReply := struct {
+		ID        uint      `json:"id"`
+		PostID    uint      `json:"postID"`
+		ParentID  uint      `json:"parentID"`
+		Content   string    `json:"content"`
+		LikeCount int       `json:"likeCount"`
+		CreatedAt time.Time `json:"createdAt"`
+		User      struct {
+			ID           uint   `json:"id"`
+			Username     string `json:"username"`
+			ProfileImage string `json:"profileImage,omitempty"`
+		} `json:"user"`
+	}{
+		ID:        reply.ID,
+		PostID:    reply.PostID,
+		ParentID:  *reply.ParentID,
+		Content:   reply.Content,
+		LikeCount: reply.LikeCount,
+		CreatedAt: reply.CreatedAt,
+		User: struct {
+			ID           uint   `json:"id"`
+			Username     string `json:"username"`
+			ProfileImage string `json:"profileImage,omitempty"`
+		}{
+			ID:           user.ID,
+			Username:     user.Username,
+			ProfileImage: user.ProfileImage,
+		},
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Yanıt başarıyla eklendi",
+		"reply":   responseReply,
 	})
 }

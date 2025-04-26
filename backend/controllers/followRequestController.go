@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
@@ -57,6 +58,13 @@ func SendFollowRequestToUser(c *gin.Context) {
 		return
 	}
 
+	// İsteği gönderen kullanıcı bilgilerini al
+	var currentUser models.User
+	if err := database.DB.Select("id, username, full_name, profile_image").First(&currentUser, followerID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Kullanıcı bilgileri alınamadı"})
+		return
+	}
+
 	// Hesap gizli değilse direkt takip et
 	if !targetUser.IsPrivate {
 		newFollow := models.Follow{
@@ -69,25 +77,30 @@ func SendFollowRequestToUser(c *gin.Context) {
 			return
 		}
 
-		// İsteği gönderen kullanıcı bilgilerini al
-		var currentUser models.User
-		database.DB.First(&currentUser, followerID)
+		// Bildirim oluştur
+		notification := models.Notification{
+			UserID:      targetUser.ID,
+			SenderID:    followerID.(uint),
+			Type:        "follow",
+			Content:     fmt.Sprintf("%s sizi takip etmeye başladı", currentUser.FullName),
+			ReferenceID: newFollow.ID,
+			IsRead:      false,
+			CreatedAt:   time.Now(),
+		}
 
-		// Bildirimi oluştur
-		go func() {
-			ctx := c.Request.Context()
-			notificationService := services.NewNotificationService()
-			notificationService.CreateFollowNotification(
-				ctx,
-				strconv.Itoa(int(targetUser.ID)),
-				strconv.Itoa(int(currentUser.ID)),
-				currentUser.FullName,
-				currentUser.Username,
-				currentUser.ProfileImage,
-			)
-		}()
+		if err := database.DB.Create(&notification).Error; err != nil {
+			// Bildirim oluşturulmazsa yine de başarılı sayılır
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Kullanıcı takip edildi fakat bildirim oluşturulamadı",
+				"follow":  newFollow,
+			})
+			return
+		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Kullanıcı takip edildi"})
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Kullanıcı takip edildi",
+			"follow":  newFollow,
+		})
 		return
 	}
 
@@ -98,30 +111,40 @@ func SendFollowRequestToUser(c *gin.Context) {
 		Status:      "pending",
 	}
 
+	// Veritabanına kaydet
 	if err := database.DB.Create(&followRequest).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Takip isteği gönderilemedi"})
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Takip isteği kaydedilirken hata: " + err.Error()})
 		return
 	}
 
-	// İsteği gönderen kullanıcı bilgilerini al
-	var follower models.User
-	database.DB.First(&follower, followerID)
-
 	// Takip isteği bildirimi oluştur
-	go func() {
-		ctx := c.Request.Context()
-		notificationService := services.NewNotificationService()
-		notificationService.CreateFollowRequestNotification(
-			ctx,
-			strconv.Itoa(int(targetUser.ID)),
-			strconv.Itoa(int(follower.ID)),
-			follower.FullName,
-			follower.Username,
-			follower.ProfileImage,
-		)
-	}()
+	notification := models.Notification{
+		UserID:      targetUser.ID,
+		SenderID:    followerID.(uint),
+		Type:        "follow_request",
+		Content:     fmt.Sprintf("%s size takip isteği gönderdi", currentUser.FullName),
+		ReferenceID: followRequest.ID,
+		IsRead:      false,
+		CreatedAt:   time.Now(),
+	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Takip isteği gönderildi"})
+	if err := database.DB.Create(&notification).Error; err != nil {
+		c.JSON(http.StatusOK, Response{
+			Success: true,
+			Message: "Takip isteği gönderildi fakat bildirim oluşturulamadı",
+			Data:    followRequest,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Takip isteği başarıyla gönderildi",
+		Data: gin.H{
+			"status":  "pending",
+			"request": followRequest,
+		},
+	})
 }
 
 // GetPendingFollowRequests - Kullanıcıya gelen takip isteklerini listeler

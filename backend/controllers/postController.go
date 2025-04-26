@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -253,54 +254,84 @@ func GetPostById(c *gin.Context) {
 	})
 }
 
-// Gönderiyi beğenme
-func LikePost(c *gin.Context) {
-	userID, _ := c.Get("userID")
-	postIDStr := c.Param("id")
-	postID, _ := strconv.Atoi(postIDStr)
+// ToggleLike beğeni durumunu değiştirir
+func ToggleLike(c *gin.Context) {
+	// Kullanıcı kimliğini al
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Kullanıcı oturumu bulunamadı"})
+		return
+	}
 
-	// Gönderiyi kontrol et
+	// Post ID'yi al
+	postIDStr := c.Param("id")
+	postID, err := strconv.Atoi(postIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz gönderi ID'si"})
+		return
+	}
+
+	// Postu kontrol et
 	var post models.Post
 	if err := database.DB.First(&post, postID).Error; err != nil {
-		c.JSON(http.StatusNotFound, Response{
-			Success: false,
-			Message: "Gönderi bulunamadı",
-		})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Gönderi bulunamadı"})
 		return
 	}
 
-	// Beğeniyi kontrol et (zaten beğenilmiş mi?)
-	var existingLike models.Like
-	result := database.DB.Where("user_id = ? AND post_id = ?", userID, postID).First(&existingLike)
-	if result.RowsAffected > 0 {
-		c.JSON(http.StatusBadRequest, Response{
-			Success: false,
-			Message: "Bu gönderi zaten beğenilmiş",
-		})
-		return
+	// Beğeni durumunu kontrol et
+	var like models.Like
+	result := database.DB.Where("user_id = ? AND post_id = ?", userID, postID).First(&like)
+	liked := true
+
+	// Eğer beğeni varsa kaldır, yoksa ekle
+	if result.Error == nil {
+		// Beğeni var, kaldır
+		database.DB.Delete(&like)
+		database.DB.Model(&post).Update("like_count", post.LikeCount-1)
+		liked = false
+	} else {
+		// Beğeni yok, ekle
+		newLike := models.Like{
+			UserID: userID.(uint),
+			PostID: uint(postID),
+		}
+		database.DB.Create(&newLike)
+		database.DB.Model(&post).Update("like_count", post.LikeCount+1)
+
+		// Kullanıcı kendi postunu beğenmiyorsa bildirim oluştur
+		if post.UserID != userID.(uint) {
+			// Beğeniyi yapan kullanıcı bilgilerini al
+			var user models.User
+			database.DB.Select("id, username").First(&user, userID)
+
+			// Bildirim oluştur
+			notification := models.Notification{
+				UserID:      post.UserID,
+				SenderID:    userID.(uint),
+				Type:        "like",
+				ReferenceID: uint(postID),
+				Content:     user.Username + " gönderinizi beğendi",
+				IsRead:      false,
+			}
+
+			if err := database.DB.Create(&notification).Error; err != nil {
+				// Bildirim oluşturulamazsa sadece log kaydı tut, ana işlemi etkileme
+				log.Printf("Bildirim oluşturma hatası: %v", err)
+			}
+		}
 	}
 
-	// Beğeni oluştur - created_at sütunu olmadığı için field list'ten çıkarıyoruz
-	like := models.Like{
-		UserID: userID.(uint),
-		PostID: uint(postID),
+	var message string
+	if liked {
+		message = "Gönderi beğenildi"
+	} else {
+		message = "Gönderi beğenisi kaldırıldı"
 	}
 
-	// Beğeniyi ekle
-	if err := database.DB.Omit("created_at").Create(&like).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, Response{
-			Success: false,
-			Message: "Beğeni eklenirken bir hata oluştu: " + err.Error(),
-		})
-		return
-	}
-
-	// Gönderi beğeni sayısını artır
-	database.DB.Model(&post).Update("like_count", post.LikeCount+1)
-
-	c.JSON(http.StatusOK, Response{
-		Success: true,
-		Message: "Gönderi başarıyla beğenildi",
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": message,
+		"liked":   liked,
 	})
 }
 

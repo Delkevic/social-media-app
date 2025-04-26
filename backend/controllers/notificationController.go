@@ -106,6 +106,33 @@ func MarkNotificationAsRead(c *gin.Context) {
 	})
 }
 
+// MarkAllNotificationsAsRead tüm bildirimleri okundu olarak işaretler
+func MarkAllNotificationsAsRead(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, Response{Success: false, Message: "Oturum bilgisi bulunamadı"})
+		return
+	}
+
+	// Kullanıcının okunmamış tüm bildirimlerini güncelle
+	result := database.DB.Model(&models.Notification{}).
+		Where("user_id = ? AND is_read = ?", userID, false).
+		Update("is_read", true)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Bildirimler okundu olarak işaretlenirken bir hata oluştu: " + result.Error.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: fmt.Sprintf("%d bildirim okundu olarak işaretlendi", result.RowsAffected),
+	})
+}
+
 // GetNotificationSettings bildirim ayarlarını getirir
 func GetNotificationSettings(c *gin.Context) {
 	userID, exists := c.Get("userID")

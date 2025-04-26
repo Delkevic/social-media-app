@@ -251,17 +251,27 @@ const api = {
   
   // Bildirim ile ilgili işlemler
   notifications: {
-    getAll: () => fetchWithAuth('/notifications'),
+    getAll: (limit = 0) => { // Varsayılan limit 0 (tümünü getir)
+      const endpoint = limit > 0 ? `/notifications?limit=${limit}` : '/notifications';
+      return fetchWithAuth(endpoint);
+    },
     markAsRead: (notificationId) => fetchWithAuth(`/notifications/${notificationId}/read`, {
       method: 'POST',
+    }),
+    markAllAsRead: () => fetchWithAuth('/notifications/read-all', {
+      method: 'POST',
+    }),
+    // Bildirim ayarları (varsa)
+    getSettings: () => fetchWithAuth('/notifications/settings'),
+    updateSettings: (settings) => fetchWithAuth('/notifications/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
     }),
   },
   
   // Mesajlaşma ile ilgili işlemler
   messages: {
-    getConversations: async () => {
-      return await fetchWithAuth('/messages');
-    },
+    getConversations: () => fetchWithAuth('/messages'),
     getConversation: async (userId) => {
       return await fetchWithAuth(`/messages/${userId}`);
     },
