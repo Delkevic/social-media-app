@@ -47,18 +47,23 @@ export const SparklesCore = (props) => {
   }, [init, controls]);
 
   const particlesLoaded = async (container) => {
+    if (!isMountedRef.current) return;
+    
     containerRef.current = container;
-    if (container && isMountedRef.current) {
-      setTimeout(() => {
-        if (isMountedRef.current) {
-          controls.start({
+    
+    if (container) {
+      if (isMountedRef.current) {
+        try {
+          await controls.start({
             opacity: 1,
             transition: {
               duration: 1,
             },
           });
+        } catch (err) {
+          console.log("Animation error handled:", err.message);
         }
-      }, 100);
+      }
     }
   };
 
@@ -66,8 +71,9 @@ export const SparklesCore = (props) => {
   
   return (
     <motion.div 
+      initial={{ opacity: 0 }}
       animate={controls} 
-      className={className ? `opacity-0 ${className}` : "opacity-0"}
+      className={className ? className : ""}
     >
       {init && (
         <Particles

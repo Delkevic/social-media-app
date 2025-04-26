@@ -85,6 +85,7 @@ func ConnectDatabase() {
 		&models.NotificationSettings{},
 		&models.SupportTicket{},
 		&models.SupportMessage{},
+		&models.TwoFactorAuth{},
 	)
 
 	if err != nil {

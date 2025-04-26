@@ -54,6 +54,10 @@ func SetupRoutes() *gin.Engine {
 		api.POST("/complete-registration", controllers.UserCompleteRegistration)
 		api.POST("/login", controllers.UserLogin)
 
+		// İki faktörlü doğrulama rotaları - public
+		api.POST("/verify-2fa", controllers.VerifyTwoFactorCode)
+		api.POST("/resend-2fa-code", controllers.Resend2FACode)
+
 		// Password reset routes - public
 		api.POST("/forgot-password", controllers.RequestPasswordReset)
 		api.POST("/verify-reset-code", controllers.VerifyResetCode)

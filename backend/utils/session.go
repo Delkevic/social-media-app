@@ -42,6 +42,22 @@ func GetSession(c *gin.Context) *Session {
 	}
 }
 
+// GetUserIDFromContext, gin context'ten kullanıcı ID'sini alır ve uint değerine dönüştürür
+func GetUserIDFromContext(c *gin.Context) (uint, bool) {
+	userIDValue, exists := c.Get("userID")
+	if !exists {
+		return 0, false
+	}
+
+	// Type assertion ile uint'e dönüştür
+	userID, ok := userIDValue.(uint)
+	if !ok {
+		return 0, false
+	}
+
+	return userID, true
+}
+
 // RequireAuth, yetkilendirme gerektiren rotalar için middleware
 func RequireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {

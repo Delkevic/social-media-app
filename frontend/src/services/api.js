@@ -685,6 +685,15 @@ const api = {
       }
     }
   },
+
+  // Güvenlik ayarları ile ilgili işlemler
+  security: {
+    getSettings: () => fetchWithAuth('/security/settings'),
+    updateSettings: (settings) => fetchWithAuth('/security/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+  },
 };
 
 // Yardımcı fonksiyonlar

@@ -65,11 +65,23 @@ const Login = () => {
           setLoading(false);
           return;
         }
+        
+        // İki faktörlü doğrulama kontrol et
+        if (data.data && data.data.twoFactorRequired) {
+          // 2FA gerektiren yanıt aldık, doğrulama sayfasına yönlendir
+          setLoading(false);
+          console.log('İki faktörlü doğrulama gerekiyor, yönlendiriliyor...');
+          navigate('/two-factor-verify', { 
+            state: { 
+              email: data.data.email,
+              rememberMe: rememberMe 
+            } 
+          });
+          return;
+        }
 
-        // AuthContext'e kullanıcı bilgilerini gönder
+        // Normal giriş işlemi (2FA yok)
         login(data.data.user, data.token, rememberMe);
-
-        // Kullanıcıyı ana sayfaya yönlendir
         setLoading(false);
         toast.success("Giriş başarılı!");
         navigate("/");
@@ -148,7 +160,7 @@ const Login = () => {
               ></span>
             </h1>
             <p className="mt-6 text-blue-100 opacity-80">
-              Hesabınıza Giriş Yapın
+              Hesabınıza Giriş Yapın
             </p>
           </div>
 
@@ -200,7 +212,7 @@ const Login = () => {
               <label
                 className="block text-sm font-medium text-blue-100"
               >
-                Şifre
+                Şifre
               </label>
               <div className="relative">
                 <div
@@ -251,12 +263,8 @@ const Login = () => {
                       fill="currentColor"
                       viewBox="0 0 20 20"
                     >
-                      <path
-                        fillRule="evenodd"
-                        d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z"
-                        clipRule="evenodd"
-                      ></path>
-                      <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z"></path>
+                      <path d="M10 2C5.03 2 1 6.03 1 11v4.33l3-2.88V11c0-3.31 2.69-6 6-6s6 2.69 6 6v1.45l3 2.88V11c0-4.97-4.03-9-9-9z"></path>
+                      <path d="M18 15.46l-2-1.91V11c0-3.31-2.69-6-6-6S4 7.69 4 11v2.55l-2 1.91V18h16z"></path>
                     </svg>
                   )}
                 </button>
@@ -266,78 +274,51 @@ const Login = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input
-                  id="remember"
+                  id="remember-me"
+                  name="remember-me"
                   type="checkbox"
                   checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded bg-slate-800 border-slate-600 text-blue-500"
+                  onChange={() => setRememberMe(!rememberMe)}
+                  className="h-4 w-4 rounded bg-slate-800 border-slate-700 text-blue-500 focus:ring-blue-500"
                 />
                 <label
-                  htmlFor="remember"
-                  className="ml-2 text-sm text-blue-100"
+                  htmlFor="remember-me"
+                  className="ml-2 block text-sm text-blue-100"
                 >
                   Beni Hatırla
                 </label>
               </div>
-              <Link
-                to="/forgot-password"
-                className="text-sm font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
-              >
-                Şifremi Unuttum
-                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
-              </Link>
+
+              <div className="text-sm">
+                <Link
+                  to="/forgot-password"
+                  className="font-medium text-blue-400 hover:text-blue-300"
+                >
+                  Şifremi Unuttum
+                </Link>
+              </div>
             </div>
 
-            {/* HoverButton kullanımı */}
-            <HoverButton
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center"
-              style={{
-                "--circle-start": "#3b82f6", 
-                "--circle-end": "#1e40af"
-              }}
-            >
-              {loading ? (
-                <>
-                  <svg
-                    className="animate-spin -ml-1 mr-2 h-5 w-5"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Giriş Yapılıyor...
-                </>
-              ) : (
-                "Giriş Yap"
-              )}
-            </HoverButton>
+            <div>
+              <HoverButton
+                type="submit"
+                className="w-full py-3 px-4 text-white font-medium rounded-lg"
+                disabled={loading}
+              >
+                {loading ? "Giriş Yapılıyor..." : "Giriş Yap"}
+              </HoverButton>
+            </div>
 
             <div className="text-center mt-4">
-              <p className="text-blue-100">
+              <span className="text-blue-100 text-sm">
                 Hesabınız yok mu?{" "}
                 <Link
                   to="/register"
-                  className="font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
+                  className="font-medium text-blue-400 hover:text-blue-300"
                 >
-                  Kayıt Ol
-                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
+                  Kayıt olun
                 </Link>
-              </p>
+              </span>
             </div>
           </form>
         </div>

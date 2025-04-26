@@ -1,173 +1,188 @@
 package controllers
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
-	"time"
+	"social-media-app/backend/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
-// SecuritySettingsRequest güvenlik ayarları request yapısı
+// SecuritySettingsRequest, güvenlik ayarları güncellemesi için gelen istekleri temsil eder
 type SecuritySettingsRequest struct {
 	TwoFactorEnabled     *bool   `json:"twoFactorEnabled"`
-	TwoFactorMethod      *string `json:"twoFactorMethod"` // sms, email, app
+	TwoFactorMethod      *string `json:"twoFactorMethod"`
 	LoginAlerts          *bool   `json:"loginAlerts"`
 	SuspiciousLoginBlock *bool   `json:"suspiciousLoginBlock"`
-	SessionTimeout       *int    `json:"sessionTimeout"` // in seconds
+	SessionTimeout       *int    `json:"sessionTimeout"`
 	RememberMe           *bool   `json:"rememberMe"`
 }
 
-// GetSecuritySettings güvenlik ayarlarını getirir
+// GetSecuritySettings, kullanıcının güvenlik ayarlarını getirir
 func GetSecuritySettings(c *gin.Context) {
-	userID, exists := c.Get("userID")
+	userID, exists := utils.GetUserIDFromContext(c)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, Response{Success: false, Message: "Oturum bilgisi bulunamadı"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Kullanıcı kimliği doğrulanamadı"})
 		return
 	}
+
+	log.Printf("DEBUG: GetSecuritySettings çağrıldı - userID: %v", userID)
 
 	var settings models.SecuritySettings
 	result := database.DB.Where("user_id = ?", userID).First(&settings)
 
-	// Eğer ayarlar bulunamadıysa, varsayılan ayarlar oluştur
-	if result.Error != nil {
-		fmt.Printf("[INFO] Kullanıcı için güvenlik ayarları bulunamadı (UserID: %v), varsayılan ayarlar oluşturuluyor\n", userID)
-		settings = models.SecuritySettings{
-			UserID:               userID.(uint),
+	if result.Error != nil || result.RowsAffected == 0 {
+		log.Printf("DEBUG: Ayarlar bulunamadı, varsayılan değerler oluşturuluyor - userID: %v, error: %v", userID, result.Error)
+
+		// Ayarlar bulunamadıysa varsayılan değerlerle yeni bir ayar oluştur
+		defaultSettings := models.SecuritySettings{
+			UserID:               userID,
 			TwoFactorEnabled:     false,
 			TwoFactorMethod:      "sms",
 			LoginAlerts:          true,
 			SuspiciousLoginBlock: true,
-			SessionTimeout:       7200, // 2 saat
+			SessionTimeout:       7200,
 			RememberMe:           true,
-			CreatedAt:            time.Now(),
-			UpdatedAt:            time.Now(),
 		}
 
-		// Veritabanına kaydet
-		if err := database.DB.Create(&settings).Error; err != nil {
-			fmt.Printf("[ERROR] Varsayılan güvenlik ayarları oluşturulurken hata (UserID: %v): %v\n", userID, err)
-			c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Güvenlik ayarları oluşturulurken bir hata oluştu"})
+		// Varsayılan ayarları veritabanına kaydet
+		if err := database.DB.Create(&defaultSettings).Error; err != nil {
+			log.Printf("ERROR: Varsayılan ayarlar oluşturulamadı - userID: %v, error: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Güvenlik ayarları oluşturulamadı", "details": err.Error()})
 			return
 		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"twoFactorEnabled":     defaultSettings.TwoFactorEnabled,
+			"twoFactorMethod":      defaultSettings.TwoFactorMethod,
+			"loginAlerts":          defaultSettings.LoginAlerts,
+			"suspiciousLoginBlock": defaultSettings.SuspiciousLoginBlock,
+			"sessionTimeout":       defaultSettings.SessionTimeout,
+			"rememberMe":           defaultSettings.RememberMe,
+		})
+		return
 	}
 
-	c.JSON(http.StatusOK, Response{
-		Success: true,
-		Data:    settings,
+	log.Printf("DEBUG: Mevcut ayarlar bulundu - userID: %v, twoFactorEnabled: %v, loginAlerts: %v",
+		userID, settings.TwoFactorEnabled, settings.LoginAlerts)
+
+	c.JSON(http.StatusOK, gin.H{
+		"twoFactorEnabled":     settings.TwoFactorEnabled,
+		"twoFactorMethod":      settings.TwoFactorMethod,
+		"loginAlerts":          settings.LoginAlerts,
+		"suspiciousLoginBlock": settings.SuspiciousLoginBlock,
+		"sessionTimeout":       settings.SessionTimeout,
+		"rememberMe":           settings.RememberMe,
 	})
 }
 
-// UpdateSecuritySettings güvenlik ayarlarını günceller
+// UpdateSecuritySettings, kullanıcının güvenlik ayarlarını günceller
 func UpdateSecuritySettings(c *gin.Context) {
-	userID, exists := c.Get("userID")
+	userID, exists := utils.GetUserIDFromContext(c)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, Response{Success: false, Message: "Oturum bilgisi bulunamadı"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Kullanıcı kimliği doğrulanamadı"})
 		return
 	}
 
 	var request SecuritySettingsRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, Response{Success: false, Message: "Geçersiz istek formatı: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz istek formatı", "details": err.Error()})
 		return
 	}
 
+	log.Printf("DEBUG: UpdateSecuritySettings çağrıldı - userID: %v, request: %+v", userID, request)
+
+	// Mevcut ayarları kontrol et
 	var settings models.SecuritySettings
 	result := database.DB.Where("user_id = ?", userID).First(&settings)
 
-	// Ayarlar yoksa oluştur, varsa güncelle
-	isNew := false
-	if result.Error != nil {
-		isNew = true
-		settings = models.SecuritySettings{
-			UserID: userID.(uint),
-		}
-	}
-
-	// Request'ten gelen değerleri ayarlara ekle (nil olmayan değerler için)
+	// Güncellenecek alanları yönetmek için map oluştur
 	updates := make(map[string]interface{})
+
+	// Gelen istekte değerlerin var olup olmadığını kontrol et ve map'e ekle
 	if request.TwoFactorEnabled != nil {
-		updates["TwoFactorEnabled"] = *request.TwoFactorEnabled
+		updates["two_factor_enabled"] = *request.TwoFactorEnabled
+		log.Printf("DEBUG: two_factor_enabled güncellenecek: %v", *request.TwoFactorEnabled)
 	}
 	if request.TwoFactorMethod != nil {
-		// Geçerli bir değer mi kontrol et
-		if *request.TwoFactorMethod == "sms" || *request.TwoFactorMethod == "email" || *request.TwoFactorMethod == "app" {
-			updates["TwoFactorMethod"] = *request.TwoFactorMethod
-		} else {
-			c.JSON(http.StatusBadRequest, Response{Success: false, Message: "Geçersiz iki faktörlü doğrulama yöntemi. Geçerli değerler: sms, email, app"})
-			return
-		}
+		updates["two_factor_method"] = *request.TwoFactorMethod
 	}
 	if request.LoginAlerts != nil {
-		updates["LoginAlerts"] = *request.LoginAlerts
+		updates["login_alerts"] = *request.LoginAlerts
+		log.Printf("DEBUG: login_alerts güncellenecek: %v", *request.LoginAlerts)
 	}
 	if request.SuspiciousLoginBlock != nil {
-		updates["SuspiciousLoginBlock"] = *request.SuspiciousLoginBlock
+		updates["suspicious_login_block"] = *request.SuspiciousLoginBlock
 	}
 	if request.SessionTimeout != nil {
-		// Session timeout değeri makul bir aralıkta mı kontrol et (min 15 dakika, max 1 hafta)
-		if *request.SessionTimeout >= 900 && *request.SessionTimeout <= 604800 {
-			updates["SessionTimeout"] = *request.SessionTimeout
-		} else {
-			c.JSON(http.StatusBadRequest, Response{Success: false, Message: "Geçersiz oturum zaman aşımı değeri. 900 (15 dakika) ile 604800 (1 hafta) arasında olmalıdır."})
-			return
-		}
+		updates["session_timeout"] = *request.SessionTimeout
 	}
 	if request.RememberMe != nil {
-		updates["RememberMe"] = *request.RememberMe
+		updates["remember_me"] = *request.RememberMe
 	}
 
-	// Güncelleme zamanını ekle
-	updates["UpdatedAt"] = time.Now()
+	// Eğer mevcut ayarlar bulunamadıysa yeni oluştur
+	if result.Error != nil || result.RowsAffected == 0 {
+		log.Printf("DEBUG: Güvenlik ayarları bulunamadı, yeni oluşturuluyor - userID: %v", userID)
 
-	if isNew {
-		// Tüm alanları varsayılan değerlerle doldur
-		if request.TwoFactorEnabled == nil {
-			settings.TwoFactorEnabled = false
-		}
-		if request.TwoFactorMethod == nil {
-			settings.TwoFactorMethod = "sms"
-		}
-		if request.LoginAlerts == nil {
-			settings.LoginAlerts = true
-		}
-		if request.SuspiciousLoginBlock == nil {
-			settings.SuspiciousLoginBlock = true
-		}
-		if request.SessionTimeout == nil {
-			settings.SessionTimeout = 7200 // 2 saat
-		}
-		if request.RememberMe == nil {
-			settings.RememberMe = true
+		// Varsayılan değerler
+		newSettings := models.SecuritySettings{
+			UserID:               userID,
+			TwoFactorEnabled:     false,
+			TwoFactorMethod:      "sms",
+			LoginAlerts:          true,
+			SuspiciousLoginBlock: true,
+			SessionTimeout:       7200,
+			RememberMe:           true,
 		}
 
-		// Diğer varsayılan değerleri ayarla
-		settings.CreatedAt = time.Now()
-		settings.UpdatedAt = time.Now()
+		// İstekteki değerler varsa güncelle
+		if request.TwoFactorEnabled != nil {
+			newSettings.TwoFactorEnabled = *request.TwoFactorEnabled
+		}
+		if request.TwoFactorMethod != nil {
+			newSettings.TwoFactorMethod = *request.TwoFactorMethod
+		}
+		if request.LoginAlerts != nil {
+			newSettings.LoginAlerts = *request.LoginAlerts
+		}
+		if request.SuspiciousLoginBlock != nil {
+			newSettings.SuspiciousLoginBlock = *request.SuspiciousLoginBlock
+		}
+		if request.SessionTimeout != nil {
+			newSettings.SessionTimeout = *request.SessionTimeout
+		}
+		if request.RememberMe != nil {
+			newSettings.RememberMe = *request.RememberMe
+		}
 
-		// Veritabanına yeni kayıt ekle
-		if err := database.DB.Create(&settings).Error; err != nil {
-			fmt.Printf("[ERROR] Güvenlik ayarları oluşturulurken hata (UserID: %v): %v\n", userID, err)
-			c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Güvenlik ayarları oluşturulurken bir hata oluştu"})
+		// Yeni ayarları veritabanına kaydet
+		if err := database.DB.Create(&newSettings).Error; err != nil {
+			log.Printf("ERROR: Yeni güvenlik ayarları oluşturulamadı - userID: %v, error: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Güvenlik ayarları oluşturulamadı", "details": err.Error()})
 			return
 		}
-	} else {
-		// Mevcut kaydı güncelle
-		if err := database.DB.Model(&settings).Updates(updates).Error; err != nil {
-			fmt.Printf("[ERROR] Güvenlik ayarları güncellenirken hata (UserID: %v): %v\n", userID, err)
-			c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Güvenlik ayarları güncellenirken bir hata oluştu"})
-			return
-		}
+
+		log.Printf("DEBUG: Yeni güvenlik ayarları başarıyla oluşturuldu - userID: %v", userID)
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "Güvenlik ayarları başarıyla güncellendi"})
+		return
 	}
 
-	// Güncel ayarları tekrar al
-	database.DB.Where("user_id = ?", userID).First(&settings)
+	// Eğer güncelleme yapılacak alan yoksa hata dön
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Güncellenecek ayar belirtilmedi"})
+		return
+	}
 
-	c.JSON(http.StatusOK, Response{
-		Success: true,
-		Message: "Güvenlik ayarları başarıyla güncellendi",
-		Data:    settings,
-	})
+	// Ayarları güncelle
+	if err := database.DB.Model(&settings).Updates(updates).Error; err != nil {
+		log.Printf("ERROR: Güvenlik ayarları güncellenemedi - userID: %v, error: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Güvenlik ayarları güncellenemedi", "details": err.Error()})
+		return
+	}
+
+	log.Printf("DEBUG: Güvenlik ayarları başarıyla güncellendi - userID: %v, updates: %+v", userID, updates)
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Güvenlik ayarları başarıyla güncellendi"})
 }

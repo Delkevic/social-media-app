@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShieldCheck, LockKeyhole, BellRing, LogOut } from 'lucide-react';
+import api from '../../../services/api';
 
 const SecuritySettings = () => {
   // State değişkenleri
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [suspiciousLoginAlerts, setSuspiciousLoginAlerts] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   
   // Aktif oturumlar (örnek veri)
   const [activeSessions, setActiveSessions] = useState([
@@ -12,6 +16,36 @@ const SecuritySettings = () => {
     { id: 2, device: 'Chrome - Windows', location: 'Ankara, Türkiye', lastActive: '3 saat önce', current: false },
     { id: 3, device: 'Safari - MacBook', location: 'İzmir, Türkiye', lastActive: '2 gün önce', current: false },
   ]);
+
+  // Sayfa yüklendiğinde güvenlik ayarlarını getir
+  useEffect(() => {
+    fetchSecuritySettings();
+  }, []);
+
+  // Güvenlik ayarlarını API'den getir
+  const fetchSecuritySettings = async () => {
+    setLoading(true);
+    setErrorMessage('');
+    
+    try {
+      const response = await api.security.getSettings();
+      
+      if (response.success) {
+        // API'den gelen ayarları state'e yükle
+        const settings = response.data;
+        setTwoFactorEnabled(settings.twoFactorEnabled || false);
+        setSuspiciousLoginAlerts(settings.loginAlerts !== undefined ? settings.loginAlerts : true);
+        console.log('Güvenlik ayarları başarıyla yüklendi:', settings);
+      } else {
+        setErrorMessage(response.message || 'Güvenlik ayarları yüklenemedi.');
+      }
+    } catch (error) {
+      console.error('Güvenlik ayarları getirilirken hata:', error);
+      setErrorMessage('Güvenlik ayarları yüklenemedi: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Belirli bir oturumu sonlandırma
   const terminateSession = (sessionId) => {
@@ -30,10 +64,58 @@ const SecuritySettings = () => {
   };
   
   // İki faktörlü doğrulamayı etkinleştirme işlemi
-  const enableTwoFactor = () => {
-    // Burada normalde iki faktörlü doğrulama akışı başlatılır
-    // Bu örnek için sadece state değişimi yapıyoruz
-    setTwoFactorEnabled(!twoFactorEnabled);
+  const enableTwoFactor = async () => {
+    setLoading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+    
+    try {
+      const newStatus = !twoFactorEnabled;
+      
+      const response = await api.security.updateSettings({ twoFactorEnabled: newStatus });
+      
+      if (response.success) {
+        setTwoFactorEnabled(newStatus);
+        setSuccessMessage(`İki faktörlü doğrulama başarıyla ${newStatus ? 'etkinleştirildi' : 'devre dışı bırakıldı'}.`);
+        console.log('2FA durumu güncellendi:', newStatus);
+      } else {
+        setErrorMessage(response.message || 'Güvenlik ayarları güncellenemedi.');
+      }
+    } catch (error) {
+      console.error('2FA güncelleme hatası:', error);
+      setErrorMessage('Güvenlik ayarları güncellenemedi: ' + (error.response?.data?.message || error.message));
+      // State'i backend durumuyla senkronize etmek için tekrar ayarları getir
+      fetchSecuritySettings();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Şüpheli giriş uyarılarını değiştirme
+  const toggleLoginAlerts = async () => {
+    setLoading(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+    
+    try {
+      const newStatus = !suspiciousLoginAlerts;
+      
+      const response = await api.security.updateSettings({ loginAlerts: newStatus });
+      
+      if (response.success) {
+        setSuspiciousLoginAlerts(newStatus);
+        setSuccessMessage(`Şüpheli giriş uyarıları ${newStatus ? 'etkinleştirildi' : 'devre dışı bırakıldı'}.`);
+      } else {
+        setErrorMessage(response.message || 'Güvenlik ayarları güncellenemedi.');
+      }
+    } catch (error) {
+      console.error('Giriş uyarıları güncelleme hatası:', error);
+      setErrorMessage('Güvenlik ayarları güncellenemedi: ' + (error.response?.data?.message || error.message));
+      // State'i backend durumuyla senkronize etmek için tekrar ayarları getir
+      fetchSecuritySettings();
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -44,6 +126,19 @@ const SecuritySettings = () => {
           Güvenlik Ayarları
         </h2>
       </div>
+
+      {/* Mesajlar */}
+      {errorMessage && (
+        <div className="p-3 bg-red-900/30 border border-red-500/50 text-red-300 rounded-md text-sm">
+          {errorMessage}
+        </div>
+      )}
+      
+      {successMessage && (
+        <div className="p-3 bg-green-900/30 border border-green-500/50 text-green-300 rounded-md text-sm">
+          {successMessage}
+        </div>
+      )}
 
       <section className="space-y-6">
         {/* İki Faktörlü Kimlik Doğrulama */}
@@ -69,13 +164,16 @@ const SecuritySettings = () => {
               </div>
               <button
                 onClick={enableTwoFactor}
+                disabled={loading}
                 className={`px-4 py-2 rounded-lg text-sm ${
-                  twoFactorEnabled 
-                    ? 'bg-red-600/20 hover:bg-red-600/30 text-red-300' 
-                    : 'bg-green-600/20 hover:bg-green-600/30 text-green-300'
+                  loading 
+                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed' 
+                    : twoFactorEnabled 
+                      ? 'bg-red-600/20 hover:bg-red-600/30 text-red-300' 
+                      : 'bg-green-600/20 hover:bg-green-600/30 text-green-300'
                 } transition-colors`}
               >
-                {twoFactorEnabled ? 'Devre Dışı Bırak' : 'Etkinleştir'}
+                {loading ? 'İşleniyor...' : (twoFactorEnabled ? 'Devre Dışı Bırak' : 'Etkinleştir')}
               </button>
             </div>
           </div>
@@ -100,10 +198,11 @@ const SecuritySettings = () => {
                 <input
                   type="checkbox"
                   className="sr-only peer"
-                  checked={suspiciousLoginAlerts}
-                  onChange={() => setSuspiciousLoginAlerts(!suspiciousLoginAlerts)}
+                  checked={suspiciousLoginAlerts === undefined ? true : suspiciousLoginAlerts}
+                  disabled={loading}
+                  onChange={toggleLoginAlerts}
                 />
-                <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className={`w-11 h-6 ${loading ? 'bg-gray-700' : 'bg-gray-700'} peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600`}></div>
               </label>
             </div>
           </div>

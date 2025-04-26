@@ -6,6 +6,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import VerifyCode from './pages/VerifyCode';
 import ResetPassword from './pages/ResetPassword';
+import TwoFactorVerify from './pages/TwoFactorVerify'; // İki faktörlü doğrulama sayfasını import ediyoruz
 import Home from './pages/Home';
 import Profile from './pages/Profile';
 import Reels from './pages/Reels'; // Uncommented this line
@@ -92,6 +93,7 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/verify-code" element={<VerifyCode />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/two-factor-verify" element={<TwoFactorVerify />} /> {/* İki faktörlü doğrulama rotası eklendi */}
             <Route 
               path="/profile/:username"
               element={

@@ -2,10 +2,11 @@ package controllers
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"os"
 	"social-media-app/backend/auth"
@@ -44,12 +45,26 @@ type Response struct {
 	Token   string      `json:"token,omitempty"`
 }
 
+// Verify2FARequest 2FA kodu doğrulama isteği
+type Verify2FARequest struct {
+	Email string `json:"email" binding:"required,email"`
+	Code  string `json:"code" binding:"required,len=6"`
+}
+
 // Yardımcı fonksiyonlar
 // 6 haneli rastgele kod oluşturur
-func UserGenerateRandomCode() string {
-	rand.Seed(time.Now().UnixNano())
-	code := fmt.Sprintf("%06d", rand.Intn(1000000))
-	return code
+func UserGenerateRandomCode() (string, error) {
+	const codeLength = 6
+	const digits = "0123456789"
+	code := make([]byte, codeLength)
+	for i := range code {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
+		if err != nil {
+			return "", fmt.Errorf("güvenli rastgele kod üretilemedi: %w", err)
+		}
+		code[i] = digits[num.Int64()]
+	}
+	return string(code), nil
 }
 
 // Zaman dilimini "x gün önce" formatında döndürür
@@ -91,30 +106,26 @@ func UserInitiateRegister(c *gin.Context) {
 		return
 	}
 
-	// Email kontrolü
+	// Kullanıcı adı veya e-posta zaten alınmış mı kontrol et
 	var existingUser models.User
-	result := database.DB.Where("email = ?", request.Email).First(&existingUser)
-	if result.RowsAffected > 0 {
+	if err := database.DB.Where("username = ? OR email = ?", request.Username, request.Email).First(&existingUser).Error; err == nil {
 		c.JSON(http.StatusBadRequest, Response{
 			Success: false,
-			Message: "Bu e-posta adresi zaten kullanılıyor",
+			Message: "Kullanıcı adı veya e-posta zaten kullanılıyor",
 		})
 		return
 	}
 
-	// Kullanıcı adı kontrolü
-	result = database.DB.Where("username = ?", request.Username).First(&existingUser)
-	if result.RowsAffected > 0 {
-		c.JSON(http.StatusBadRequest, Response{
+	// verificationCode := UserGenerateRandomCode() // Eski kod
+	verificationCode, err := UserGenerateRandomCode() // Yeni kod: hata kontrolü eklendi
+	if err != nil {
+		fmt.Println("Error generating verification code:", err) // Hata loglandı
+		c.JSON(http.StatusInternalServerError, Response{
 			Success: false,
-			Message: "Bu kullanıcı adı zaten kullanılıyor",
+			Message: "Doğrulama kodu üretilirken bir hata oluştu",
 		})
 		return
 	}
-
-	// Generate a random 6-digit code
-	verificationCode := UserGenerateRandomCode()
-	fmt.Printf("Generated verification code: %s for email: %s\n", verificationCode, request.Email)
 
 	// Serialize user data
 	userData, err := json.Marshal(request)
@@ -443,6 +454,101 @@ func Register(c *gin.Context) {
 	})
 }
 
+// generate2FACode 6 haneli rastgele bir kod üretir
+func generate2FACode() (string, error) {
+	const codeLength = 6
+	const digits = "0123456789"
+	code := make([]byte, codeLength)
+	for i := range code {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(digits))))
+		if err != nil {
+			return "", err
+		}
+		code[i] = digits[num.Int64()]
+	}
+	return string(code), nil
+}
+
+// send2FACode E-posta ile 2FA kodunu gönderir
+func send2FACode(email, code string) error {
+	client := resty.New()
+	client.SetTimeout(15 * time.Second) // Makul bir zaman aşımı ayarla
+
+	brevoApiKey := os.Getenv("BREVO_API_KEY")
+	supportEmail := os.Getenv("SUPPORT_EMAIL_ADDRESS")
+	senderEmail := os.Getenv("SUPPORT_SENDER_EMAIL")
+	senderName := os.Getenv("SUPPORT_NAME")
+
+	// Ortam değişkenlerini doğrula
+	if brevoApiKey == "" {
+		return fmt.Errorf("BREVO_API_KEY eksik")
+	}
+	if supportEmail == "" {
+		return fmt.Errorf("SUPPORT_EMAIL_ADDRESS eksik")
+	}
+	if senderEmail == "" {
+		return fmt.Errorf("SUPPORT_SENDER_EMAIL eksik")
+	}
+	if senderName == "" {
+		return fmt.Errorf("SUPPORT_NAME eksik")
+	}
+
+	// E-posta içeriğini oluştur
+	htmlContent := fmt.Sprintf(`
+		<html>
+		<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+				<div style="text-align: center; margin-bottom: 20px;">
+					<h1 style="color: #3b82f6;">Buzzify - İki Faktörlü Doğrulama</h1>
+				</div>
+				<p>Merhaba,</p>
+				<p>Hesabınıza giriş yapmak için iki faktörlü doğrulama kodunuz:</p>
+				<div style="text-align: center; margin: 30px 0;">
+					<div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; background-color: #f0f4f8; padding: 15px; border-radius: 6px; color: #3b82f6;">%s</div>
+				</div>
+				<p>Bu kod 5 dakika süreyle geçerlidir.</p>
+				<p>Eğer bu giriş işlemini siz başlatmadıysanız, lütfen şifrenizi değiştirin ve hesabınızı kontrol edin.</p>
+				<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+				<p style="font-size: 12px; color: #666; text-align: center;">İyi günler,<br>Buzzify Ekibi</p>
+			</div>
+		</body>
+		</html>
+	`, code)
+
+	payload := map[string]interface{}{
+		"sender": map[string]string{
+			"name":  senderName,
+			"email": senderEmail,
+		},
+		"to": []map[string]string{
+			{
+				"email": email,
+			},
+		},
+		"subject":     "Buzzify - İki Faktörlü Doğrulama Kodunuz",
+		"htmlContent": htmlContent,
+	}
+
+	fmt.Printf("İki faktörlü doğrulama e-postası gönderiliyor: %s (Brevo API ile)\n", email)
+
+	resp, err := client.R().
+		SetHeader("Accept", "application/json").
+		SetHeader("Content-Type", "application/json").
+		SetHeader("api-key", brevoApiKey).
+		SetBody(payload).
+		Post("https://api.brevo.com/v3/smtp/email")
+
+	if err != nil {
+		return fmt.Errorf("istek hatası: %v", err)
+	}
+
+	if resp.StatusCode() != 201 {
+		return fmt.Errorf("e-posta gönderimi başarısız, durum kodu: %d, yanıt: %s", resp.StatusCode(), resp.Body())
+	}
+
+	return nil
+}
+
 // Login handler
 func UserLogin(c *gin.Context) {
 	var request LoginRequest
@@ -465,24 +571,8 @@ func UserLogin(c *gin.Context) {
 		result = database.DB.Unscoped().Where("username = ?", request.Identifier).First(&user)
 	}
 
-	// Kullanıcı hiç bulunamadıysa
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusUnauthorized, Response{
-				Success: false,
-				Message: "Kullanıcı adı/e-posta veya şifre hatalı",
-			})
-		} else {
-			c.JSON(http.StatusInternalServerError, Response{
-				Success: false,
-				Message: "Veritabanı hatası: " + result.Error.Error(),
-			})
-		}
-		return
-	}
-
-	// Şifreyi kontrol et
-	if err := auth.CheckPassword(request.Password, user.Password); err != nil {
+	// Kullanıcı hiç bulunamadıysa veya şifre yanlışsa
+	if result.Error != nil || auth.CheckPassword(request.Password, user.Password) != nil {
 		c.JSON(http.StatusUnauthorized, Response{
 			Success: false,
 			Message: "Kullanıcı adı/e-posta veya şifre hatalı",
@@ -500,21 +590,67 @@ func UserLogin(c *gin.Context) {
 			return
 		}
 		fmt.Printf("Kullanıcı hesabı yeniden aktive edildi: %s\n", user.Username)
-		// user nesnesini güncelleyelim ki yanıt doğru dönsün
 		user.DeletedAt = gorm.DeletedAt{Time: time.Time{}, Valid: false}
 	}
 
-	// BAŞARILI GİRİŞ - Aktiviteyi Kaydet
+	// Kullanıcının güvenlik ayarlarını al
+	var securitySettings models.SecuritySettings
+	database.DB.Where("user_id = ?", user.ID).FirstOrCreate(&securitySettings, models.SecuritySettings{UserID: user.ID})
+
+	// İki faktörlü doğrulama aktif mi kontrol et
+	if securitySettings.TwoFactorEnabled {
+		// 2FA kodu üret
+		code, err := generate2FACode()
+		if err != nil {
+			fmt.Printf("[ERROR] 2FA kodu üretilemedi (UserID: %d): %v\n", user.ID, err)
+			c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Doğrulama kodu oluşturulurken bir hata oluştu."})
+			return
+		}
+
+		// Kodu veritabanına kaydet (5 dakika geçerli)
+		expiresAt := time.Now().Add(5 * time.Minute)
+		twoFactorAuth := models.TwoFactorAuth{
+			UserID:    user.ID,
+			Code:      code,
+			ExpiresAt: expiresAt,
+		}
+		if err := database.DB.Create(&twoFactorAuth).Error; err != nil {
+			fmt.Printf("[ERROR] 2FA kodu kaydedilemedi (UserID: %d): %v\n", user.ID, err)
+			c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Doğrulama kodu kaydedilirken bir hata oluştu."})
+			return
+		}
+
+		// Kodu e-posta ile gönder
+		if err := send2FACode(user.Email, code); err != nil {
+			fmt.Printf("[ERROR] 2FA e-postası gönderilemedi (UserID: %d): %v\n", user.ID, err)
+			// Kullanıcıya hata dönebiliriz ama kod kaydedildiği için devam etmek daha iyi olabilir
+			// c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Doğrulama kodu e-postası gönderilirken bir hata oluştu."})
+			// return
+		}
+
+		// Frontend'e 2FA gerektiğini bildir (henüz token yok)
+		c.JSON(http.StatusOK, Response{
+			Success: true,
+			Message: "İki faktörlü doğrulama gerekli",
+			Data: gin.H{
+				"twoFactorRequired": true,
+				"email":             user.Email, // Frontend'in hangi email'e kod gönderildiğini bilmesi için
+			},
+		})
+		return // Token üretmeden çık
+	}
+
+	// --- 2FA Aktif Değilse --- //
+
+	// BAŞARILI GİRİŞ - Aktiviteyi Kaydet (2FA yoksa burada)
 	loginActivity := models.LoginActivity{
 		UserID:    user.ID,
 		Timestamp: time.Now(),
-		IPAddress: c.ClientIP(),          // İstek yapanın IP adresini al
-		UserAgent: c.Request.UserAgent(), // Tarayıcı bilgisini al
+		IPAddress: c.ClientIP(),
+		UserAgent: c.Request.UserAgent(),
 		Success:   true,
-		// Location: // IP'den konum tahmini için ek kütüphane/servis gerekir (şimdilik boş)
 	}
 	if err := database.DB.Create(&loginActivity).Error; err != nil {
-		// Loglama yapabiliriz ama kullanıcıya hata dönmeyelim
 		fmt.Printf("Login aktivitesi kaydedilemedi (UserID: %d): %v\n", user.ID, err)
 	}
 
@@ -534,16 +670,158 @@ func UserLogin(c *gin.Context) {
 	c.JSON(http.StatusOK, Response{
 		Success: true,
 		Message: "Giriş başarılı",
-		Data: map[string]interface{}{ // Yanıta Phone da eklenebilir
+		Data: map[string]interface{}{
 			"user": map[string]interface{}{
 				"id":       user.ID,
 				"username": user.Username,
 				"fullName": user.FullName,
 				"email":    user.Email,
-				"phone":    user.Phone, // Phone eklendi
+				"phone":    user.Phone,
 			},
 		},
 		Token: token,
+	})
+}
+
+// VerifyTwoFactorCode 2FA kodunu doğrular ve token üretir
+func VerifyTwoFactorCode(c *gin.Context) {
+	var request Verify2FARequest
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Message: "Geçersiz istek formatı: " + err.Error()})
+		return
+	}
+
+	// Kullanıcıyı e-posta ile bul
+	var user models.User
+	if err := database.DB.Where("email = ?", request.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, Response{Success: false, Message: "Geçersiz kullanıcı veya kod"})
+		return
+	}
+
+	// Kayıtlı 2FA kodunu bul
+	var twoFactorAuth models.TwoFactorAuth
+	result := database.DB.Where("user_id = ? AND code = ? AND expires_at > ?", user.ID, request.Code, time.Now()).Order("created_at desc").First(&twoFactorAuth)
+
+	if result.Error != nil {
+		c.JSON(http.StatusUnauthorized, Response{Success: false, Message: "Geçersiz veya süresi dolmuş doğrulama kodu"})
+		return
+	}
+
+	// Kod doğrulandı, şimdi token üret ve giriş işlemlerini tamamla
+
+	// BAŞARILI GİRİŞ - Aktiviteyi Kaydet
+	loginActivity := models.LoginActivity{
+		UserID:    user.ID,
+		Timestamp: time.Now(),
+		IPAddress: c.ClientIP(),
+		UserAgent: c.Request.UserAgent(),
+		Success:   true,
+	}
+	if err := database.DB.Create(&loginActivity).Error; err != nil {
+		fmt.Printf("Login aktivitesi kaydedilemedi (UserID: %d): %v\n", user.ID, err)
+	}
+
+	// Son giriş zamanını güncelle
+	database.DB.Model(&user).Update("last_login", time.Now())
+
+	// JWT token oluştur
+	token, err := auth.GenerateToken(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Token oluşturulurken bir hata oluştu"})
+		return
+	}
+
+	// Kullanılmış 2FA kodunu sil
+	database.DB.Delete(&twoFactorAuth)
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Giriş başarılı",
+		Data: map[string]interface{}{
+			"user": map[string]interface{}{
+				"id":       user.ID,
+				"username": user.Username,
+				"fullName": user.FullName,
+				"email":    user.Email,
+				"phone":    user.Phone,
+			},
+		},
+		Token: token,
+	})
+}
+
+// Resend2FACode - Yeni bir 2FA kodu gönderir
+func Resend2FACode(c *gin.Context) {
+	var request struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Message: "Geçersiz istek formatı: " + err.Error()})
+		return
+	}
+
+	// Kullanıcıyı e-posta ile bul
+	var user models.User
+	if err := database.DB.Where("email = ?", request.Email).First(&user).Error; err != nil {
+		// Güvenlik açısından hata mesajını genelleştirelim
+		c.JSON(http.StatusOK, Response{Success: true, Message: "Yeni doğrulama kodu gönderildi, lütfen e-postanızı kontrol edin."})
+		return
+	}
+
+	// Kullanıcının güvenlik ayarlarını kontrol et
+	var securitySettings models.SecuritySettings
+	database.DB.Where("user_id = ?", user.ID).FirstOrCreate(&securitySettings, models.SecuritySettings{UserID: user.ID})
+
+	// 2FA etkin değilse hata dön
+	if !securitySettings.TwoFactorEnabled {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Message: "İki faktörlü doğrulama bu hesap için etkin değil"})
+		return
+	}
+
+	// 5 dakika içinde fazla istek gönderilmesini önle
+	var recentRequests int64
+	database.DB.Model(&models.TwoFactorAuth{}).
+		Where("user_id = ? AND created_at > ?", user.ID, time.Now().Add(-5*time.Minute)).
+		Count(&recentRequests)
+
+	if recentRequests >= 3 {
+		c.JSON(http.StatusTooManyRequests, Response{Success: false, Message: "Çok fazla kod isteği gönderdiniz. Lütfen 5 dakika sonra tekrar deneyin."})
+		return
+	}
+
+	// Yeni 2FA kodu üret
+	code, err := generate2FACode()
+	if err != nil {
+		fmt.Printf("[ERROR] 2FA kodu üretilemedi (UserID: %d): %v\n", user.ID, err)
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Doğrulama kodu oluşturulurken bir hata oluştu."})
+		return
+	}
+
+	// Kodu veritabanına kaydet (5 dakika geçerli)
+	expiresAt := time.Now().Add(5 * time.Minute)
+	twoFactorAuth := models.TwoFactorAuth{
+		UserID:    user.ID,
+		Code:      code,
+		ExpiresAt: expiresAt,
+	}
+	if err := database.DB.Create(&twoFactorAuth).Error; err != nil {
+		fmt.Printf("[ERROR] 2FA kodu kaydedilemedi (UserID: %d): %v\n", user.ID, err)
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Doğrulama kodu kaydedilirken bir hata oluştu."})
+		return
+	}
+
+	// Kodu e-posta ile gönder
+	if err := send2FACode(user.Email, code); err != nil {
+		fmt.Printf("[ERROR] 2FA e-postası gönderilemedi (UserID: %d): %v\n", user.ID, err)
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Doğrulama kodu e-postası gönderilirken bir hata oluştu."})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Yeni doğrulama kodu gönderildi, lütfen e-postanızı kontrol edin.",
 	})
 }
 
