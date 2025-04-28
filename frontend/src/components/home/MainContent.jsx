@@ -4,14 +4,17 @@ import PostList from './posts/PostList';
 import CreatePostForm from './posts/CreatePostForm';
 import api from '../../services/api';
 
-const MainContent = ({ user, showSearchOnly, hideSearch }) => {
+const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShowCreateForm }) => {
   const [activeTab, setActiveTab] = useState('general');
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [localShowCreateForm, localSetShowCreateForm] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+
+  const actualShowCreateForm = showCreateForm !== undefined ? showCreateForm : localShowCreateForm;
+  const actualSetShowCreateForm = setShowCreateForm || localSetShowCreateForm;
 
   useEffect(() => {
     // Gönderi verilerini çek
@@ -110,8 +113,8 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
       console.log('Post oluşturma cevabı:', response);
       
       if (response.success) {
-        // Formu kapat
-        setShowCreateForm(false);
+        // Formu kapat - güncellenmiş state kullanımı
+        actualSetShowCreateForm(false);
         
         // Başarı mesajı göster
         alert('Gönderi başarıyla oluşturuldu!');
@@ -149,7 +152,7 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
 
   return (
     <div className="space-y-4">
-      {/* Arama Çubuğu - GlowingEffect kaldırıldı */}
+      {/* Arama Çubuğu */}
       {!hideSearch && (
         <div className="relative">
           <SearchBar onSearch={handleSearch} />
@@ -158,31 +161,24 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
       
       {/* Arama sonuçları */}
       {isSearching && (
-        <div 
-          className="rounded-2xl p-4 backdrop-blur-lg"
-          style={{
-            backgroundColor: "rgba(20, 24, 36, 0.7)",
-            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-            border: "1px solid rgba(255, 255, 255, 0.1)"
-          }}
-        >
-          <h3 className="text-white text-lg font-medium mb-4">Arama Sonuçları</h3>
+        <div className="rounded-2xl p-4 backdrop-blur-lg bg-black/50 border border-[#0affd9]/20">
+          <h3 className="text-[#0affd9] text-lg font-medium mb-4">Arama Sonuçları</h3>
           
           {loading ? (
             <div className="text-center py-4">
-              <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-              <p className="mt-2 text-white/70">Aranıyor...</p>
+              <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#0affd9]"></div>
+              <p className="mt-2 text-gray-400">Aranıyor...</p>
             </div>
           ) : searchResults.length > 0 ? (
             <div className="space-y-3">
               {searchResults.map(user => (
                 <div 
                   key={user.id} 
-                  className="flex items-center p-2 hover:bg-white/10 rounded-lg transition-all cursor-pointer"
+                  className="flex items-center p-2 hover:bg-[#0affd9]/10 rounded-lg transition-all cursor-pointer"
                   onClick={() => window.location.href = `/profile/${user.username}`}
                 >
                   {/* Profil resmi */}
-                  <div className="w-12 h-12 rounded-full overflow-hidden mr-3">
+                  <div className="w-12 h-12 rounded-full overflow-hidden mr-3 bg-black/50">
                     {user.profileImage ? (
                       <img 
                         src={user.profileImage} 
@@ -190,7 +186,7 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                      <div className="w-full h-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold">
                         {user.username[0].toUpperCase()}
                       </div>
                     )}
@@ -200,17 +196,17 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
                   <div className="flex-1">
                     <p className="font-medium text-white">{user.username}</p>
                     {user.fullName && (
-                      <p className="text-white/70 text-sm">{user.fullName}</p>
+                      <p className="text-gray-300 text-sm">{user.fullName}</p>
                     )}
                     {user.bio && (
-                      <p className="text-white/50 text-xs truncate">{user.bio}</p>
+                      <p className="text-gray-400 text-xs truncate">{user.bio}</p>
                     )}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-center py-4 text-white/70">Sonuç bulunamadı.</p>
+            <p className="text-center py-4 text-gray-400">Sonuç bulunamadı.</p>
           )}
         </div>
       )}
@@ -220,134 +216,69 @@ const MainContent = ({ user, showSearchOnly, hideSearch }) => {
         <>
           {/* Hata mesajı */}
           {error && (
-            <div 
-              className="p-3 rounded-lg text-sm border text-center"
-              style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                color: '#ef4444',
-                borderColor: '#ef4444',
-              }}
-            >
+            <div className="p-3 rounded-lg text-sm border border-red-600 bg-red-600/10 text-red-400 text-center">
               {error}
             </div>
           )}
           
-          {/* Gönderi Oluşturma - GlowingEffect kaldırıldı */}
-          <div 
-            className="rounded-2xl p-4 backdrop-blur-lg"
-            style={{
-              backgroundColor: "rgba(20, 24, 36, 0.7)",
-              boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid rgba(255, 255, 255, 0.1)"
-            }}
-          >
-            {showCreateForm ? (
+          {/* Gönderi Oluşturma Kutusu - güncellenmiş state kullanımı */}
+          <div className="rounded-2xl p-4 backdrop-blur-lg bg-black/50 border border-[#0affd9]/20">
+            {actualShowCreateForm ? (
               <CreatePostForm 
                 onSubmit={handleCreatePost} 
-                onCancel={() => setShowCreateForm(false)} 
+                onCancel={() => actualSetShowCreateForm(false)} 
               />
             ) : (
               <div 
-                className="flex items-center cursor-pointer p-2 rounded-lg transition-all hover:bg-slate-800/50"
-                onClick={() => setShowCreateForm(true)}
+                className="flex items-center cursor-pointer"
+                onClick={() => actualSetShowCreateForm(true)}
               >
-                <div className="flex-shrink-0 mr-3">
-                  {user.profileImage ? (
-                    <img 
-                      src={user.profileImage} 
-                      alt={user.username}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div 
-                      className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-500 text-white"
-                    >
-                      <span className="font-bold">
-                        {user.username.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex-1">
-                  <p className="text-blue-100">
-                    Post atmak için tıklayın, {user.username}?
-                  </p>
-                </div>
+                {/* Kullanıcı avatarı (varsa) */}
+                {user && (
+                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3 bg-black/50">
+                    {user.profileImage ? (
+                      <img 
+                        src={user.profileImage} 
+                        alt={user.username} 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold">
+                        {user.username[0].toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <span className="flex-1 text-gray-400 hover:text-gray-200 transition-colors">Bir şeyler paylaş...</span>
+                <button 
+                  className="px-3 py-1.5 rounded-lg font-medium bg-[#0affd9] text-black hover:bg-[#0affd9]/80 transition-colors"
+                >
+                  Paylaş
+                </button>
               </div>
             )}
           </div>
           
-          {/* Sekme Menüsü - GlowingEffect kaldırıldı */}
-          <div 
-            className="rounded-2xl overflow-hidden backdrop-blur-lg"
-            style={{
-              backgroundColor: "rgba(20, 24, 36, 0.7)",
-              boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-              border: "1px solid rgba(255, 255, 255, 0.1)"
-            }}
-          >
-            <div className="flex border-b" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+          {/* Sekmeler */}
+          <div className="border-b border-[#0affd9]/20 mb-4">
+            <nav className="flex space-x-4">
               <button
-                className={`flex-1 py-3 text-center font-medium transition-colors ${
-                  activeTab === 'following' 
-                    ? 'border-b-2' 
-                    : 'opacity-70'
-                }`}
-                style={{ 
-                  borderColor: activeTab === 'following' ? '#3b82f6' : 'transparent',
-                  color: 'white' 
-                }}
+                onClick={() => handleTabChange('general')}
+                className={`py-2 px-3 text-sm font-medium transition-colors ${activeTab === 'general' ? 'text-[#0affd9] border-b-2 border-[#0affd9]' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                Genel
+              </button>
+              <button
                 onClick={() => handleTabChange('following')}
+                className={`py-2 px-3 text-sm font-medium transition-colors ${activeTab === 'following' ? 'text-[#0affd9] border-b-2 border-[#0affd9]' : 'text-gray-400 hover:text-gray-200'}`}
               >
                 Takip Edilenler
               </button>
-              
-              <button
-                className={`flex-1 py-3 text-center font-medium transition-colors ${
-                  activeTab === 'general' 
-                    ? 'border-b-2' 
-                    : 'opacity-70'
-                }`}
-                style={{ 
-                  borderColor: activeTab === 'general' ? '#3b82f6' : 'transparent',
-                  color: 'white' 
-                }}
-                onClick={() => handleTabChange('general')}
-              >
-                Keşfet
-              </button>
-              
-              <button
-                className={`flex-1 py-3 text-center font-medium transition-colors ${
-                  activeTab === 'popular' 
-                    ? 'border-b-2' 
-                    : 'opacity-70'
-                }`}
-                style={{ 
-                  borderColor: activeTab === 'popular' ? '#3b82f6' : 'transparent',
-                  color: 'white' 
-                }}
-                onClick={() => handleTabChange('popular')}
-              >
-                Popüler
-              </button>
-            </div>
-            
-            <div className="p-4">
-              {/* İçerik */}
-              {loading ? (
-                <div className="flex justify-center py-8">
-                  <div className="animate-spin h-8 w-8 border-4 rounded-full border-blue-500 border-t-transparent"></div>
-                </div>
-              ) : (
-                <PostList 
-                  posts={posts}
-                  currentUser={user}
-                />
-              )}
-            </div>
+            </nav>
           </div>
+
+          {/* Gönderi Listesi */}
+          <PostList posts={posts} loading={loading} error={error} currentUser={user} />
         </>
       )}
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Upload, Video, Camera, ArrowRight, Music, Smile, Tag, Image as ImageIcon } from 'lucide-react';
+import { X, Upload, Video, Camera, ArrowRight, Music, Smile, Tag, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
@@ -14,6 +14,27 @@ const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB
 // Maksimum dosya boyutu (Thumbnail)
 const MAX_THUMBNAIL_SIZE = 5 * 1024 * 1024; // 5MB
+
+// Yardımcı Bileşenler (Diğer ayarlardan)
+const StyledButton = ({ children, onClick, disabled, variant = 'primary', loading = false, className = '', icon: Icon }) => {
+  const baseStyle = "px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2";
+  const primaryStyle = "bg-[#0affd9] text-black hover:bg-[#0affd9]/80";
+  const secondaryStyle = "bg-black/60 border border-[#0affd9]/30 text-[#0affd9] hover:bg-[#0affd9]/10";
+  const dangerStyle = "bg-red-800/30 border border-red-600/50 text-red-400 hover:bg-red-700/40";
+  
+  let variantStyle = primaryStyle;
+  if (variant === 'secondary') variantStyle = secondaryStyle;
+  if (variant === 'danger') variantStyle = dangerStyle;
+
+  const classList = [baseStyle, variantStyle, className].filter(Boolean).join(' ');
+
+  return (
+    <button onClick={onClick} disabled={disabled || loading} className={classList}>
+      {loading ? <Loader2 className="animate-spin h-4 w-4" /> : (Icon && <Icon className="h-4 w-4" />)}
+      {children}
+    </button>
+  );
+};
 
 const VideoUploader = ({ 
   isOpen, 
@@ -200,21 +221,21 @@ const VideoUploader = ({
     <AnimatePresence>
       {isOpen && (
         <motion.div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           <motion.div 
-            className="bg-slate-900 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden"
+            className="bg-black rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden border border-[#0affd9]/20"
             initial={{ scale: 0.9, y: 20, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.9, y: 20, opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-800">
-              <h3 className="text-lg font-semibold text-white">
+            <div className="flex items-center justify-between p-4 border-b border-[#0affd9]/10">
+              <h3 className="text-lg font-semibold text-[#0affd9]">
                 {uploadStep === 1 ? 'Yeni Reel Oluştur' : 
                  uploadStep === 2 ? 'Reel Detayları' : 
                  'Reel Yükleniyor'}
@@ -222,10 +243,10 @@ const VideoUploader = ({
               
               {!isUploading && (
                 <button 
-                  className="p-2 rounded-full hover:bg-slate-800 transition-colors"
+                  className="p-2 rounded-full hover:bg-black/60 transition-colors"
                   onClick={handleClose}
                 >
-                  <X className="h-5 w-5 text-white" />
+                  <X className="h-5 w-5 text-gray-400 hover:text-white" />
                 </button>
               )}
             </div>
@@ -233,10 +254,10 @@ const VideoUploader = ({
             {/* Adım 1: Dosya seçimi */}
             {uploadStep === 1 && (
               <div className="p-6">
-                <div className="flex flex-col items-center justify-center bg-slate-800/50 border-2 border-dashed border-slate-700 rounded-lg p-8 mb-4">
-                  <Upload className="h-12 w-12 text-slate-500 mb-4" />
+                <div className="flex flex-col items-center justify-center bg-black/50 border-2 border-dashed border-[#0affd9]/30 rounded-lg p-12 mb-6">
+                  <Upload className="h-12 w-12 text-[#0affd9]/60 mb-4" />
                   
-                  <h4 className="text-lg font-medium text-white mb-2">
+                  <h4 className="text-xl font-medium text-white mb-2">
                     Video Yükle
                   </h4>
                   
@@ -245,21 +266,20 @@ const VideoUploader = ({
                   </p>
                   
                   <div className="flex gap-4">
-                    <button 
-                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                    <StyledButton 
                       onClick={() => videoInputRef.current.click()}
+                      icon={Video}
                     >
-                      <Video className="h-4 w-4" />
-                      <span>Dosya Seç</span>
-                    </button>
+                      Dosya Seç
+                    </StyledButton>
                     
-                    <button 
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                    <StyledButton 
+                      variant="secondary" 
                       onClick={handleOpenCamera}
+                      icon={Camera}
                     >
-                      <Camera className="h-4 w-4" />
-                      <span>Kamera Kullan</span>
-                    </button>
+                      Kamera Kullan
+                    </StyledButton>
                   </div>
                   
                   <input 
@@ -276,52 +296,22 @@ const VideoUploader = ({
             {/* Adım 2: Detaylar */}
             {uploadStep === 2 && (
               <div className="p-6 flex flex-col md:flex-row gap-6">
-                {/* Sol Taraf: Önizleme ve Kapak Seçimi */}
+                {/* Sol Taraf: Sadece Önizleme */}
                 <div className="w-full md:w-1/2">
                   {/* Video Önizleme */}
-                  <div className="aspect-w-9 aspect-h-16 bg-black rounded-lg overflow-hidden mb-4">
+                  <div className="aspect-[9/16] bg-black/70 rounded-lg overflow-hidden mb-4 border border-[#0affd9]/10">
                     {videoPreviewURL ? (
                       <video src={videoPreviewURL} controls className="w-full h-full object-contain"></video>
                     ) : (
-                      <div className="flex items-center justify-center h-full text-slate-500">
+                      <div className="flex items-center justify-center h-full text-gray-500">
                         Video Önizleme
                       </div>
                     )}
                   </div>
-                  
-                  {/* Kapak Fotoğrafı Önizleme ve Seçimi */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Kapak Fotoğrafı (Opsiyonel)
-                    </label>
-                    <div className="flex items-center gap-4">
-                      <div className="w-20 h-20 bg-slate-800 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
-                        {thumbnailPreviewURL ? (
-                          <img src={thumbnailPreviewURL} alt="Kapak Önizleme" className="w-full h-full object-cover" />
-                        ) : (
-                          <ImageIcon className="h-8 w-8 text-slate-500" />
-                        )}
-                      </div>
-                      <button 
-                        type="button"
-                        className="text-sm px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-md transition-colors"
-                        onClick={() => thumbnailInputRef.current.click()}
-                      >
-                        Değiştir
-                      </button>
-                      <input 
-                        type="file" 
-                        ref={thumbnailInputRef} 
-                        className="hidden" 
-                        accept="image/jpeg,image/png,image/gif,image/webp" 
-                        onChange={handleThumbnailFileChange} 
-                      />
-                    </div>
-                  </div>
                 </div>
                 
-                {/* Sağ Taraf: Açıklama, Müzik vb. */}
-                <div className="w-full md:w-1/2">
+                {/* Sağ Taraf: Açıklama, Müzik, Kapak Fotoğrafı vb. */}
+                <div className="w-full md:w-1/2 flex flex-col">
                   {/* Açıklama */}
                   <div className="mb-4">
                     <label htmlFor="reelCaption" className="block text-sm font-medium text-gray-300 mb-1">
@@ -333,42 +323,90 @@ const VideoUploader = ({
                       value={reelCaption}
                       onChange={(e) => setReelCaption(e.target.value)}
                       placeholder="Reeliniz için bir açıklama yazın..."
-                      className="w-full p-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                      className="w-full p-2 bg-black/60 border border-[#0affd9]/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0affd9]/50 focus:border-[#0affd9]"
                     ></textarea>
                     <div className="flex justify-end text-xs text-gray-400 mt-1">
                       {reelCaption.length} / 150
                     </div>
                   </div>
                   
-                  {/* Müzik Seçimi (Basit hali) */}
+                  {/* Müzik Seçimi */}
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-300 mb-1">
                       Müzik
                     </label>
-                    <div className="flex items-center p-2 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:bg-slate-700/50 transition-colors" onClick={() => toast('Müzik seçimi özelliği yakında!')}>
-                      <Music className="h-5 w-5 text-purple-400 mr-3" />
+                    <div 
+                      className="flex items-center p-2 bg-black/60 border border-[#0affd9]/30 rounded-lg cursor-pointer hover:bg-black/70 transition-colors"
+                      onClick={() => toast('Müzik seçimi özelliği yakında!')}
+                    >
+                      <Music className="h-5 w-5 text-[#0affd9] mr-3" />
                       <span className="text-white flex-1 truncate">{reelMusic}</span>
                       <ArrowRight className="h-4 w-4 text-gray-400" />
                     </div>
                   </div>
 
-                  {/* Diğer Ayarlar (Placeholder) */}
-                  <div className="space-y-2">
-                     <div className="flex items-center justify-between p-2 text-sm text-gray-400 border-b border-slate-800">
-                      <span>Video Süresi:</span>
-                      <span className='text-white'>{videoDuration} saniye</span>
+                  {/* Diğer Ayarlar */}
+                  <div className="mb-4 flex flex-col space-y-2">
+                    <button 
+                      className="flex items-center p-2 text-sm text-gray-300 hover:bg-black/60 rounded-lg transition-colors"
+                      onClick={() => toast('Etiketleme özelliği yakında!')}
+                    >
+                      <Tag className="h-4 w-4 mr-2 text-[#0affd9]/80"/> Kişileri Etiketle
+                    </button>
+                    <button 
+                      className="flex items-center p-2 text-sm text-gray-300 hover:bg-black/60 rounded-lg transition-colors"
+                      onClick={() => toast('Emoji özelliği yakında!')}
+                    >
+                      <Smile className="h-4 w-4 mr-2 text-[#0affd9]/80"/> Emoji Ekle
+                    </button>
+                  </div>
+
+                  {/* Kapak Fotoğrafı Önizleme ve Seçimi */}
+                  <div className="mb-4 mt-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Kapak Fotoğrafı (Opsiyonel)
+                    </label>
+                    <div className="flex items-center gap-4">
+                      <div className="w-20 h-20 bg-black/50 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center border border-[#0affd9]/20">
+                        {thumbnailPreviewURL ? (
+                          <img src={thumbnailPreviewURL} alt="Kapak Önizleme" className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon className="h-8 w-8 text-[#0affd9]/50" />
+                        )}
+                      </div>
+                      <StyledButton 
+                        type="button"
+                        variant="secondary"
+                        onClick={() => thumbnailInputRef.current.click()}
+                      >
+                        Değiştir
+                      </StyledButton>
+                      <input 
+                        type="file" 
+                        ref={thumbnailInputRef} 
+                        className="hidden" 
+                        accept="image/jpeg,image/png,image/gif,image/webp" 
+                        onChange={handleThumbnailFileChange} 
+                      />
                     </div>
                   </div>
                   
-                  {/* Yükleme Butonu */}
-                  <div className="mt-6">
-                    <button 
-                      className="w-full flex justify-center items-center px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={handleUpload}
+                  {/* İleri ve Geri Butonları */}
+                  <div className="mt-auto flex justify-between pt-4 border-t border-[#0affd9]/10">
+                    <StyledButton 
+                      variant="secondary"
+                      onClick={() => setUploadStep(1)}
                       disabled={isUploading}
                     >
-                      {isUploading ? 'Yükleniyor...' : "Reel'i Paylaş"}
-                    </button>
+                      Geri
+                    </StyledButton>
+                    <StyledButton 
+                      onClick={handleUpload}
+                      disabled={isUploading}
+                      loading={isUploading}
+                    >
+                      Paylaş
+                    </StyledButton>
                   </div>
                 </div>
               </div>
@@ -376,20 +414,19 @@ const VideoUploader = ({
             
             {/* Adım 3: İşleniyor */}
             {uploadStep === 3 && (
-              <div className="p-8 flex flex-col items-center">
-                <div className="w-full bg-slate-700 rounded-full h-2.5 mb-4">
-                  <motion.div 
-                    className="bg-gradient-to-r from-purple-500 to-blue-500 h-2.5 rounded-full"
+              <div className="p-10 flex flex-col items-center justify-center">
+                <Loader2 className="h-12 w-12 text-[#0affd9] animate-spin mb-6" />
+                <p className="text-lg text-white mb-2">Reel Yükleniyor...</p>
+                <p className="text-sm text-gray-400 mb-4">Bu işlem birkaç saniye sürebilir.</p>
+                
+                {/* Yükleme İlerleme Çubuğu */}
+                <div className="w-full bg-black/50 rounded-full h-2.5 border border-[#0affd9]/20">
+                  <div 
+                    className="bg-[#0affd9] h-full rounded-full transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${uploadProgress}%` }}
-                    transition={{ duration: 0.5, ease: 'easeInOut' }}
-                  ></motion.div>
+                  ></div>
                 </div>
-                <p className="text-white text-center mb-2">Yükleniyor: {uploadProgress}%</p>
-                <p className="text-gray-400 text-sm text-center">
-                  Lütfen bekleyin, reeliniz işleniyor...
-                </p>
+                <p className="text-xs text-[#0affd9] mt-2">{uploadProgress}% Tamamlandı</p>
               </div>
             )}
           </motion.div>

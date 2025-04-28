@@ -25,12 +25,22 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
   const getFullMediaUrl = (url) => {
     if (!url) return '';
     if (url.startsWith('http')) return url;
-    return `${API_BASE_URL}${url}`;
+    // URL kontrolü - eğer URL başında slash yoksa ekle
+    const formattedUrl = url.startsWith('/') ? url : `/${url}`;
+    return `${API_BASE_URL}${formattedUrl}`;
   };
 
   // Yeni bir reel seçildiğinde videoyu yeniden oynat
   useEffect(() => {
     if (videoRef.current) {
+      // Video kaynağının geçerli olduğundan emin ol
+      const currentReel = reelsData[currentIndex];
+      if (!currentReel || !currentReel.videoURL) {
+        console.error('Geçerli bir video URL\'si bulunamadı:', currentReel);
+        setIsPlaying(false);
+        return;
+      }
+
       videoRef.current.load();
       
       // Otomatik oynatma
@@ -40,11 +50,13 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
       if (playPromise !== undefined) {
         playPromise.catch(error => {
           console.error('Otomatik oynatma engellendi:', error);
+          // Video kaynağını konsola yazdır (hata ayıklama)
+          console.log('Video kaynağı:', getFullMediaUrl(currentReel.videoURL));
           setIsPlaying(false);
         });
       }
     }
-  }, [currentIndex]);
+  }, [currentIndex, reelsData]); // reelsData eklenmeli, liste değiştiğinde ilkini oynat
 
   // Oynat/durdur işlevi
   const togglePlay = () => {
@@ -225,8 +237,8 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
   // Eğer reelsler yoksa
   if (reelsData.length === 0) {
     return (
-      <div className="rounded-2xl overflow-hidden bg-[rgba(20,24,36,0.7)] backdrop-blur-lg border border-[rgba(255,255,255,0.1)] p-4">
-        <h3 className="text-gray-300 font-medium text-sm mb-2">
+      <div className="rounded-2xl overflow-hidden bg-black/50 backdrop-blur-lg border border-[#0affd9]/20 p-4">
+        <h3 className="text-[#0affd9] font-medium text-sm mb-2">
           {isExploreMode ? "Keşfet - Reels" : "Mini Reels Oynatıcı"}
         </h3>
         <p className="text-gray-400 text-xs">
@@ -244,155 +256,128 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
   const reelOwner = isExploreMode ? currentReel?.user : user;
 
   return (
-    <div className="rounded-2xl overflow-hidden bg-[rgba(20,24,36,0.7)] backdrop-blur-lg border border-[rgba(255,255,255,0.1)] p-4">
-      <h3 className="text-gray-300 font-medium text-sm mb-2 flex items-center justify-between">
+    <div className="rounded-2xl overflow-hidden bg-black/70 backdrop-blur-lg border border-[#0affd9]/20 p-4">
+      <h3 className="text-[#0affd9] font-medium text-sm mb-2 flex items-center justify-between">
         <span>{isExploreMode ? "Keşfet - Reels" : "Mini Reels Oynatıcı"}</span>
-        {isExploreMode && <span className="text-xs text-blue-400">Tüm Reelsler</span>}
+        {isExploreMode && <span className="text-xs text-[#0affd9]/70">Tüm Reelsler</span>}
       </h3>
-      
       <div 
-        className="relative aspect-[9/16] rounded-lg overflow-hidden mb-3 bg-black" 
+        className="relative aspect-[9/16] w-full rounded-lg overflow-hidden cursor-pointer group"
+        onClick={togglePlay}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
       >
-        {/* Video Elementi */}
         <video
           ref={videoRef}
-          className="w-full h-full object-contain" 
-          loop
+          className="w-full h-full object-container rounded-xl"
+          poster={currentReel.thumbnail ? getFullMediaUrl(currentReel.thumbnail) : null}
           muted={isMuted}
+          loop
+          preload="auto"
           playsInline
-          onClick={togglePlay}
         >
-          <source src={getFullMediaUrl(currentReel?.media_url || currentReel?.videoURL)} type="video/mp4" />
-          Tarayıcınız video etiketini desteklemiyor.
+          <source src={getFullMediaUrl(currentReel.videoURL)} type="video/mp4" />
+          <source src={getFullMediaUrl(currentReel.videoURL)} type="video/webm" />
+          <source src={getFullMediaUrl(currentReel.videoURL)} type="video/ogg" />
+          Video formatı desteklenmiyor.
         </video>
         
-        {/* Oynatma Kontrolleri - Hover durumunda görünür */}
-        <div className={`absolute bottom-2 left-2 right-2 flex justify-between items-center transition-opacity duration-300 ${isHovering ? 'opacity-100' : 'opacity-0'}`}>
-          <button 
-            onClick={togglePlay}
-            className="bg-black bg-opacity-50 rounded-full p-1.5 text-white hover:bg-opacity-70"
+        {/* Video Oynat/Duraklat Butonu */} 
+        <div 
+          className={`absolute inset-0 flex items-center justify-center bg-black/30 
+                    transition-opacity duration-300 ${isHovering && !isPlaying ? 'opacity-100' : 'opacity-0'} group-hover:opacity-100`} 
           >
-            {isPlaying ? <FaPause size={12} /> : <FaPlay size={12} />}
-          </button>
-          
-          <button 
-            onClick={toggleMute}
-            className="bg-black bg-opacity-50 rounded-full p-1.5 text-white hover:bg-opacity-70"
-          >
-            {isMuted ? <FaVolumeMute size={12} /> : <FaVolumeUp size={12} />}
-          </button>
+          {!isPlaying && <FaPlay className="text-[#0affd9] text-3xl drop-shadow-lg" />}
         </div>
         
-        {/* İleri/Geri Butonları - Hover durumunda görünür */}
+        {/* Ses Kontrolü */} 
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleMute();
+          }}
+          className="absolute top-2 right-2 p-1.5 bg-black/50 rounded-full text-[#0affd9] hover:bg-[#0affd9]/20 transition-all z-10"
+        >
+          {isMuted ? <FaVolumeMute size={14} /> : <FaVolumeUp size={14} />}
+        </button>
+
+        {/* Önceki/Sonraki Reel Butonları */}
         {reelsData.length > 1 && (
           <>
             <button
-              onClick={goToPrevReel}
-              className={`absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 rounded-full p-1 text-white hover:bg-opacity-70 transition-opacity duration-300 ${isHovering ? 'opacity-100' : 'opacity-0'}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                goToPrevReel();
+              }}
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 rounded-full text-[#0affd9] hover:bg-[#0affd9]/20 transition-all z-10 opacity-0 group-hover:opacity-100 duration-300"
             >
               <IoChevronBack size={16} />
             </button>
             <button
-              onClick={goToNextReel}
-              className={`absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 rounded-full p-1 text-white hover:bg-opacity-70 transition-opacity duration-300 ${isHovering ? 'opacity-100' : 'opacity-0'}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                goToNextReel();
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 rounded-full text-[#0affd9] hover:bg-[#0affd9]/20 transition-all z-10 opacity-0 group-hover:opacity-100 duration-300"
             >
               <IoChevronForward size={16} />
             </button>
           </>
         )}
         
-        {/* Video üzerinde oynatma/durdurma göstergesi - Sadece tıklandığında kısa süre görünür */}
-        {!isPlaying && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="bg-black bg-opacity-30 rounded-full p-3">
-              <FaPlay size={24} className="text-white" />
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Reel Bilgileri */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center space-x-2">
+        {/* Kullanıcı ve Açıklama Bilgileri */} 
+        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 via-black/30 to-transparent">
+          <div className="flex items-center mb-1">
+            {reelOwner?.profileImage && (
           <img 
-            src={getFullMediaUrl(reelOwner?.profile_picture || reelOwner?.profileImage) || '/images/default-avatar.png'} 
-            alt={reelOwner?.username} 
-            className="w-6 h-6 rounded-full object-cover"
+                src={getFullMediaUrl(reelOwner.profileImage)} 
+                alt={reelOwner.username} 
+                className="w-6 h-6 rounded-full mr-2 border border-[#0affd9]/50"
           />
-          <span className="text-white text-xs font-medium">{reelOwner?.username}</span>
-        </div>
-        
-        {/* Takip Et butonu - Sadece explore modunda ve takip edilebilir kullanıcılar için görünür */}
-        {isExploreMode && reelOwner && reelOwner.id && (
+            )}
+            <span className="text-white text-xs font-medium drop-shadow-md">
+              {reelOwner?.username || 'Bilinmeyen Kullanıcı'}
+            </span>
+            {/* Keşfet modunda takip et butonu */}
+            {isExploreMode && reelOwner && !isOwnProfile && (
           <button
-            onClick={toggleFollow}
-            className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs ${
-              reelOwner.isFollowing 
-                ? 'bg-gray-600 text-white hover:bg-gray-700' 
-                : 'bg-blue-500 text-white hover:bg-blue-600'
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFollow();
+                }}
+                className={`ml-auto text-xs px-2 py-0.5 rounded-md transition-colors 
+                  ${reelOwner.isFollowing 
+                    ? 'bg-black/50 border border-[#0affd9]/30 text-[#0affd9] hover:bg-[#0affd9]/10' 
+                    : 'bg-[#0affd9] text-black hover:bg-[#0affd9]/80'
             }`}
           >
-            {reelOwner.isFollowing ? (
-              <>
-                <AiOutlineUserDelete size={12} />
-                <span>Takibi Bırak</span>
-              </>
-            ) : (
-              <>
-                <AiOutlineUserAdd size={12} />
-                <span>Takip Et</span>
-              </>
+                {reelOwner.isFollowing ? 'Takip Ediliyor' : 'Takip Et'}
+              </button>
             )}
-          </button>
-        )}
+          </div>
+          <p className="text-gray-300 text-[11px] line-clamp-2 drop-shadow-sm">
+            {currentReel.description}
+          </p>
       </div>
       
-      {/* Reel Açıklaması */}
-      {(currentReel?.caption || currentReel?.description) && (
-        <p className="text-gray-300 text-xs line-clamp-2">{currentReel?.caption || currentReel?.description}</p>
-      )}
-      
-      {/* Reel Numarası, Beğeni ve Kaydetme */}
-      <div className="mt-2 text-xs text-gray-400 flex justify-between items-center">
-        <span>{currentIndex + 1} / {reelsData.length}</span>
-        
-        <div className="flex items-center space-x-3">
+        {/* Beğenme, Kaydetme gibi aksiyonlar (sağ alt köşede) */}
+        <div className="absolute bottom-16 right-2 flex flex-col items-center space-y-3 z-10">
           <button 
-            onClick={toggleLike} 
-            className="flex items-center text-xs group focus:outline-none"
+            onClick={(e) => { e.stopPropagation(); toggleLike(); }}
+            className="flex flex-col items-center text-white transition-colors hover:text-[#0affd9]"
           >
-            <FaHeart 
-              className={`w-3.5 h-3.5 mr-1 transition-colors duration-200 ${currentReel?.isLiked ? 'text-red-500' : 'text-gray-300 group-hover:text-red-400'}`} 
-            />
-            <span className="text-gray-300">{currentReel?.likeCount || 0}</span>
+            <FaHeart size={18} className={`${currentReel.isLiked ? 'text-[#0affd9]' : 'text-white'} drop-shadow-md`} />
+            <span className="text-[10px] mt-0.5 drop-shadow-sm">{currentReel.likeCount || 0}</span>
           </button>
-          
           <button 
-            onClick={toggleSave} 
-            className="flex items-center text-xs group focus:outline-none"
-            title={currentReel?.isSaved ? "Kaydedildi" : "Kaydet"}
+            onClick={(e) => { e.stopPropagation(); toggleSave(); }}
+            className="flex flex-col items-center text-white transition-colors hover:text-[#0affd9]"
           >
-            <FaBookmark 
-              className={`w-3.5 h-3.5 transition-colors duration-200 ${currentReel?.isSaved ? 'text-blue-500' : 'text-gray-300 group-hover:text-blue-400'}`} 
-            />
+            <FaBookmark size={18} className={`${currentReel.isSaved ? 'text-[#0affd9]' : 'text-white'} drop-shadow-md`} />
+            <span className="text-[10px] mt-0.5 drop-shadow-sm">Kaydet</span>
           </button>
         </div>
       </div>
-      
-      {/* Kaydedilen Reels butonu - Sadece kendi profilindeyken görünür */}
-      {isOwnProfile && (
-        <div className="mt-3 pt-3 border-t border-gray-700/30">
-          <button 
-            onClick={navigateToSavedReels}
-            className="w-full flex items-center justify-center space-x-1 py-1.5 rounded-md bg-blue-500/20 hover:bg-blue-500/30 transition-colors text-blue-400 text-xs font-medium"
-          >
-            <FaBookmark size={12} />
-            <span>Kaydedilen Reels'leri Göster</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 };

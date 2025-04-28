@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
+	"social-media-app/backend/services"
 	"strconv"
 	"time"
 
@@ -61,16 +62,20 @@ func GetNotifications(c *gin.Context) {
 			"time":        formatTimeAgo(notification.CreatedAt),
 			"isRead":      notification.IsRead,
 			"referenceId": notification.ReferenceID,
+			"createdAt":   notification.CreatedAt,
 		}
 
 		responseNotifications = append(responseNotifications, notificationResponse)
 	}
+
+	fmt.Printf("Kullanıcı %v için %d bildirim gönderiliyor\n", userID, len(responseNotifications))
 
 	c.JSON(http.StatusOK, Response{
 		Success: true,
 		Data: map[string]interface{}{
 			"notifications": responseNotifications,
 		},
+		Message: fmt.Sprintf("%d bildirim bulundu", len(responseNotifications)),
 	})
 }
 
@@ -291,5 +296,128 @@ func UpdateNotificationSettings(c *gin.Context) {
 		Success: true,
 		Message: "Bildirim ayarları başarıyla güncellendi",
 		Data:    settings,
+	})
+}
+
+// TestCreateNotification - Sadece test amaçlı bildirim oluşturmak için kullanılır
+func TestCreateNotification(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, Response{Success: false, Message: "Oturum bilgisi bulunamadı"})
+		return
+	}
+
+	var request struct {
+		ReceiverID uint   `json:"receiverId" binding:"required"` // Bildirimin gönderileceği kullanıcı ID
+		Type       string `json:"type" binding:"required"`       // Bildirim tipi (follow, like, comment, vb.)
+		Message    string `json:"message" binding:"required"`    // Bildirim mesajı
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Message: "Geçersiz istek formatı: " + err.Error()})
+		return
+	}
+
+	// Veritabanına bildirim kaydı oluştur
+	notification := models.Notification{
+		UserID:      request.ReceiverID,
+		SenderID:    userID.(uint),
+		Type:        request.Type,
+		Content:     request.Message,
+		ReferenceID: 0, // Test bildirimi
+		IsRead:      false,
+		CreatedAt:   time.Now(),
+	}
+
+	// Kullanıcı bilgilerini al (SenderID için)
+	var sender models.User
+	if err := database.DB.Select("username, profile_image, full_name").First(&sender, userID).Error; err != nil {
+		fmt.Printf("[WARN] Bildirim gönderen kullanıcı bilgisi alınamadı (ID: %v): %v\n", userID, err)
+	}
+
+	if err := database.DB.Create(&notification).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Bildirim oluşturulurken bir hata oluştu: " + err.Error(),
+		})
+		return
+	}
+
+	// WebSocket üzerinden bildirim gönder
+	if notifService != nil {
+		// Bildirim tipini notification.Type'dan oluştur
+		var notificationType services.NotificationType
+		switch notification.Type {
+		case "follow":
+			notificationType = services.NotificationTypeFollow
+		case "like":
+			notificationType = services.NotificationTypeLike
+		case "comment":
+			notificationType = services.NotificationTypeComment
+		case "mention":
+			notificationType = services.NotificationTypeMention
+		case "reply":
+			notificationType = services.NotificationTypeReply
+		case "follow_request":
+			notificationType = services.NotificationTypeFollowRequest
+		case "follow_accept":
+			notificationType = services.NotificationTypeFollowAccept
+		case "message":
+			notificationType = services.NotificationTypeMessage
+		default:
+			notificationType = services.NotificationTypeSystem
+		}
+
+		// NotificationService için gerekli formatta bildirim oluştur
+		wsNotification := services.Notification{
+			ID:                fmt.Sprintf("%d", notification.ID),
+			UserID:            fmt.Sprintf("%d", notification.UserID),
+			ActorID:           fmt.Sprintf("%d", notification.SenderID),
+			ActorName:         sender.FullName,
+			ActorUsername:     sender.Username,
+			ActorProfileImage: sender.ProfileImage,
+			Type:              notificationType,
+			Content:           notification.Content,
+			EntityID:          fmt.Sprintf("%d", notification.ReferenceID),
+			EntityType:        "test", // Test bildirimi için sabit değer
+			IsRead:            notification.IsRead,
+			CreatedAt:         notification.CreatedAt,
+		}
+
+		// Bildirimi WebSocket üzerinden gönder
+		err := notifService.SendNotification(c.Request.Context(), wsNotification)
+		if err != nil {
+			fmt.Printf("[ERROR] WebSocket bildirimi gönderilemedi: %v\n", err)
+			// Yanıta hata ekle ama başarısız dönme
+			c.JSON(http.StatusOK, Response{
+				Success: true,
+				Message: "Bildirim oluşturuldu ama WebSocket üzerinden gönderilemedi",
+				Data: map[string]interface{}{
+					"notification":   notification,
+					"websocketError": err.Error(),
+				},
+			})
+			return
+		}
+
+		fmt.Printf("[INFO] Bildirim WebSocket üzerinden başarıyla gönderildi. Alıcı: %d\n", notification.UserID)
+	} else {
+		fmt.Println("[ERROR] Bildirim servisi bulunamadı, WebSocket bildirimi gönderilemedi")
+		c.JSON(http.StatusOK, Response{
+			Success: true,
+			Message: "Bildirim oluşturuldu ama bildirim servisi bulunamadığı için WebSocket üzerinden gönderilemedi",
+			Data: map[string]interface{}{
+				"notification": notification,
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Test bildirimi başarıyla oluşturuldu ve gönderildi",
+		Data: map[string]interface{}{
+			"notification": notification,
+		},
 	})
 }

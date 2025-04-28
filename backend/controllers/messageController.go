@@ -2,13 +2,18 @@
 package controllers
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"social-media-app/backend/auth"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
+	"social-media-app/backend/services"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -56,11 +61,20 @@ var (
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
+	// Notification servisi
+	notifService *services.NotificationService
 )
+
+// SetNotificationService - Notification servisini controller seviyesinde ayarlar
+func SetNotificationService(service *services.NotificationService) {
+	notifService = service
+	log.Println("MessageController: Notification servisi ayarlandı")
+}
 
 // WebSocketHandler gerçek zamanlı mesajlaşma için WebSocket bağlantıları yönetir
 func WebSocketHandler(c *gin.Context) {
 	fmt.Println("WebSocket bağlantı isteği alındı")
+	fmt.Printf("Bağlantı detayları: URL:%s, Headers:%v\n", c.Request.URL.String(), c.Request.Header)
 
 	// WebSocket bağlantısını yükselt
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true } // CORS kontrolünü devre dışı bırak
@@ -103,27 +117,79 @@ func WebSocketHandler(c *gin.Context) {
 		Token string `json:"token"`
 	}
 
+	// JSON'ı ayrıştır
 	if err := json.Unmarshal(p, &authMessage); err != nil {
-		fmt.Println("Auth mesajı ayrıştırma hatası:", err)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "Geçersiz auth mesajı formatı"}`))
+		fmt.Printf("Auth mesajı ayrıştırma hatası: %v, Alınan mesaj: %s\n", err, string(p))
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","error":"Auth mesajı geçersiz format"}`))
 		return
 	}
-	fmt.Println("Auth mesajı başarıyla ayrıştırıldı.")
 
+	fmt.Printf("Auth mesajı alındı. Tip: %s, Token uzunluğu: %d\n", authMessage.Type, len(authMessage.Token))
+
+	// Gerekli alanları kontrol et
 	if authMessage.Type != "auth" || authMessage.Token == "" {
-		fmt.Println("Geçersiz auth mesajı (Tip veya Token eksik):", authMessage)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "Geçersiz token veya auth tipi"}`))
-		return
+		fmt.Println("Geçersiz auth mesajı: Tip veya token eksik")
+		// Geçersiz mesaj durumunda istemciye hata gönder
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"Geçersiz auth mesajı formatı"}`))
+		return // Hata varsa fonksiyondan çık
 	}
 	fmt.Println("Auth mesajı tipi ve token varlığı doğrulandı.")
 
-	// Token'ı doğrula
-	userID, err := auth.VerifyToken(authMessage.Token)
-	if err != nil {
-		fmt.Println("Token doğrulama hatası:", err)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "Geçersiz token"}`))
+	// Tokeni doğrula ve kullanıcı ID'yi al
+	userID, tokenErr := auth.VerifyToken(authMessage.Token)
+
+	// Token süresi dolmuş olsa bile JWT içinden kullanıcı ID'yi çıkarmaya çalış
+	if tokenErr != nil {
+		// Token ayrıştırma hatası varsa, JWT'nin yapısını manuel olarak parse etmeyi deneyelim
+		isTokenExpired := strings.Contains(tokenErr.Error(), "expired")
+
+		// Eğer token süresi dolmuşsa client'a özel hata gönderelim,
+		// böylece frontend yenileme mekanizmasını çalıştırabilir
+		if isTokenExpired {
+			fmt.Println("Token doğrulama hatası:", tokenErr)
+
+			// Token'dan kullanıcı ID'yi çıkarmak için manuel parsing
+			var extractedUserID uint
+			jwtParts := strings.Split(authMessage.Token, ".")
+			if len(jwtParts) != 3 {
+				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"token is expired and format invalid"}`))
+				return
+			}
+
+			// Base64 decoding yaparak claims kısmını çıkar
+			claimBytes, err := base64.RawURLEncoding.DecodeString(jwtParts[1])
+			if err != nil {
+				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"token is expired and cannot be decoded"}`))
+				return
+			}
+
+			// JSON parse et
+			var claims map[string]interface{}
+			if err := json.Unmarshal(claimBytes, &claims); err != nil {
+				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"token is expired and cannot be parsed"}`))
+				return
+			}
+
+			// user_id field'ını bul
+			userIDFloat, ok := claims["user_id"].(float64)
+			if !ok {
+				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"token is expired and user_id not found"}`))
+				return
+			}
+
+			extractedUserID = uint(userIDFloat)
+
+			// Token süresi dolduğunu bildiren hata mesajı gönder
+			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"token is expired", "userId": `+fmt.Sprintf("%d", extractedUserID)+`}`))
+			return
+		}
+
+		// Diğer token hatalarında normal hata mesajı gönder
+		fmt.Println("Token doğrulama hatası:", tokenErr)
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"`+tokenErr.Error()+`"}`))
 		return
 	}
+
 	fmt.Printf("Token başarıyla doğrulandı. Kullanıcı ID: %d\n", userID)
 
 	// Kullanıcının önceden açık bir bağlantısı varsa kapat
@@ -141,6 +207,50 @@ func WebSocketHandler(c *gin.Context) {
 	connMutex.Unlock()
 
 	fmt.Printf("Kullanıcı %d yeni WebSocket bağlantısı havuza eklendi\n", userID)
+
+	// Bildirim sistemine de aynı bağlantıyı ekle
+	if notifService != nil {
+		// userID'yi string'e çevir (notification service string ID kullanıyor)
+		userIDStr := fmt.Sprintf("%d", userID)
+		notifService.RegisterClient(userIDStr, conn)
+
+		// Bağlantı kapandığında bildirim servisi kayıtlarını da temizle
+		defer func() {
+			notifService.UnregisterClient(userIDStr, conn)
+			fmt.Printf("Kullanıcı %s bildirim servisi WebSocket bağlantısı temizlendi.\n", userIDStr)
+		}()
+
+		fmt.Printf("Kullanıcı %s bildirim servisi WebSocket bağlantısı kaydedildi.\n", userIDStr)
+
+		// Test amaçlı bildirim gönder
+		go func() {
+			time.Sleep(5 * time.Second)
+
+			// Basit bir bildirim oluştur
+			notification := services.Notification{
+				ID:                fmt.Sprintf("test-%d", time.Now().Unix()),
+				UserID:            userIDStr,
+				ActorID:           "system",
+				ActorName:         "Sistem",
+				ActorUsername:     "sistem",
+				ActorProfileImage: "",
+				Type:              "system",
+				Content:           "Bu bir test bildirimidir.",
+				IsRead:            false,
+				CreatedAt:         time.Now(),
+			}
+
+			// Bildirimi gönder
+			err := notifService.SendNotification(context.Background(), notification)
+			if err != nil {
+				fmt.Printf("Test bildirimi gönderme hatası: %v\n", err)
+			} else {
+				fmt.Printf("Test bildirimi gönderildi: Kullanıcı: %s\n", userIDStr)
+			}
+		}()
+	} else {
+		fmt.Println("UYARI: Bildirim servisi bulunamadı, bildirimler için WebSocket kaydı yapılamadı.")
+	}
 
 	// Bağlantı sonlandığında temizle
 	defer func() {

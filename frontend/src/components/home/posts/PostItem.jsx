@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../../services/api';
 import { API_BASE_URL } from '../../../config/constants';
+import { formatDistanceToNow } from 'date-fns';
+import { tr } from 'date-fns/locale';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, X, Trash2, AlertCircle } from 'lucide-react';
 
 const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
   // Prop kontrolleri
@@ -61,6 +64,16 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       const response = await api.posts.getComments(post.id);
       
       console.log('Yorumlar API yanıtı:', response);
+      
+      // Post verisini kontrol et
+      if (post && post.id) {
+        console.log("Post görselleri:", {
+          imageUrls: post.imageUrls,
+          images: post.images, 
+          media: post.media,
+          image: post.image
+        });
+      }
       
       if (response.success) {
         // Yorum verilerini normalize et
@@ -206,7 +219,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
         postId: post.id
       });
       
-      // Formu hemen sıfırla, kullanıcı deneyimi için
+      // Yorum içeriğini saklayıp formu temizle
       const commentText = comment.trim();
       setComment('');
       
@@ -245,7 +258,6 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       }
       
       console.log('Yorum başarıyla eklendi');
-      
     } catch (err) {
       console.error('Yorum gönderme hatası:', err, 'Post ID:', post.id);
       setError('Yorum gönderilirken bir hata oluştu: ' + (err.message || 'Bilinmeyen hata'));
@@ -261,19 +273,21 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
 
   const handleDelete = async () => {
     if (isDeleting) return;
-    
-    if (window.confirm('Bu gönderiyi silmek istediğinizden emin misiniz?')) {
       setIsDeleting(true);
       try {
-        await onDelete(post.id);
+      const response = await api.posts.delete(post.id);
+      if (response.success) {
         setShowMenu(false);
-      } catch (error) {
-        console.error('Gönderi silinirken bir hata oluştu:', error);
-        setError('Gönderi silinirken bir hata oluştu');
-        setTimeout(() => setError(null), 3000);
+        if (onDelete) onDelete(post.id);
+      } else {
+        throw new Error(response.message || 'Gönderi silinemedi');
+      }
+    } catch (err) {
+      console.error('Gönderi silme hatası:', err);
+      setError('Gönderi silinirken bir hata oluştu: ' + err.message);
+      setShowMenu(false);
       } finally {
         setIsDeleting(false);
-      }
     }
   };
 
@@ -281,863 +295,680 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
     try {
       const response = await api.posts.report(post.id);
       if (response.success) {
-        setError('Gönderi başarıyla şikayet edildi');
-        setTimeout(() => setError(null), 3000);
+        alert('Gönderi bildirildi.');
+        setShowMenu(false);
+      } else {
+        throw new Error(response.message || 'Gönderi bildirilemedi');
       }
-    } catch (error) {
-      console.error('Gönderi şikayet edilirken bir hata oluştu:', error);
-      setError('Gönderi şikayet edilirken bir hata oluştu');
-      setTimeout(() => setError(null), 3000);
-    }
+    } catch (err) {
+      console.error('Gönderi bildirme hatası:', err);
+      setError('Gönderi bildirilirken bir hata oluştu: ' + err.message);
     setShowMenu(false);
+    }
   };
 
   // Görsel URL'lerini tam adrese dönüştürme yardımcı fonksiyonu
   const getFullImageUrl = (imageUrl) => {
-    if (!imageUrl) return null;
-
-    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-      // URL'nin HTTP/HTTPS ile başlaması durumunda çift slashları temizle
-      const urlParts = imageUrl.split('://');
-      if (urlParts.length === 2) {
-        const protocol = urlParts[0];
-        const path = urlParts[1].replace(/\/+/g, '/');
-        return `${protocol}://${path}`;
-      }
-      return imageUrl;
+    if (!imageUrl) {
+      console.log("Boş görsel URL'i, varsayılan görüntü döndürülüyor");
+      return `${API_BASE_URL}/uploads/images/no-image.jpg`; // Backend'deki varsayılan resim
     }
-
-    // URL'de çift slash varsa düzelt
-    const cleanUrl = imageUrl.replace(/\/+/g, '/');
     
-    if (cleanUrl.startsWith("/")) {
-      return `${API_BASE_URL}${cleanUrl}`;
-    } else {
-      return `${API_BASE_URL}/${cleanUrl}`;
+    try {
+      // Eğer URL bir obje ise (API yanıtı bazen böyle olabilir)
+      if (typeof imageUrl === 'object') {
+        if (imageUrl.url) {
+          imageUrl = imageUrl.url;
+        } else if (imageUrl.path) {
+          imageUrl = imageUrl.path;
+        } else {
+          console.error("Nesne türünde görsel URL'i beklenmeyen formatta:", imageUrl);
+          return `${API_BASE_URL}/uploads/images/missing-image.jpg`; // Backend'deki yedek resim
+        }
+      }
+      
+      // URL string olmalı
+      if (typeof imageUrl !== 'string') {
+        console.error("Görsel URL'i string değil:", typeof imageUrl, imageUrl);
+        return `${API_BASE_URL}/uploads/images/invalid-image.jpg`; // Backend'deki yedek resim
+      }
+      
+      // URL zaten HTTP/HTTPS ile başlıyorsa doğrudan kullan
+      if (imageUrl.startsWith('http')) {
+        return imageUrl;
+      }
+      
+      // Backend'in uploads klasörünü kontrol et
+      if (imageUrl.includes('uploads/')) {
+        // Eğer path zaten "uploads/" içeriyorsa, başındaki slash'ı kontrol et
+        return imageUrl.startsWith('/') 
+          ? `${API_BASE_URL}${imageUrl}`
+          : `${API_BASE_URL}/${imageUrl}`;
+      }
+      
+      // URL en başta slash ile başlıyorsa doğru şekilde birleştir
+      if (imageUrl.startsWith('/')) {
+        // Eğer URL /uploads/ ile başlamıyorsa, kontrol et
+        if (!imageUrl.startsWith('/uploads/')) {
+          // Uploads klasörünü ekle
+          return `${API_BASE_URL}/uploads${imageUrl}`;
+        }
+        return `${API_BASE_URL}${imageUrl}`; 
+      }
+      
+      // Diğer durumlar için /uploads/ klasörünü ekle
+      if (!imageUrl.startsWith('uploads/')) {
+        return `${API_BASE_URL}/uploads/${imageUrl}`;
+      }
+      
+      // Son durum: URL uploads/ ile başlıyor
+      return `${API_BASE_URL}/${imageUrl}`;
+    } catch (error) {
+      console.error("URL oluşturma hatası:", error, "Orijinal URL:", imageUrl);
+      return `${API_BASE_URL}/uploads/images/error-image.jpg`; // Backend'deki hata resmi
     }
   };
 
+  // Menüyü kapatmak için dışarı tıklama kontrolü
+    useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const formatDate = (dateString) => {
+    try {
+      if (!dateString) return 'Bilinmeyen tarih';
+      
+      // Özel durumlar: "şimdi" veya "biraz önce" gibi değerler için
+      if (typeof dateString === 'string') {
+        // Özel durumlar kontrolü
+        if (dateString === 'şimdi' || dateString === 'biraz önce' || dateString === 'just now') {
+          return 'biraz önce';
+        }
+        
+        // Diğer zaten formatlanmış tarihler
+        if (dateString.includes('önce') || 
+            dateString.includes('sonra') || 
+            dateString.includes('gün') || 
+            dateString.includes('ay') || 
+            dateString.includes('yıl') || 
+            dateString.includes('saat') || 
+            dateString.includes('dakika') || 
+            dateString.includes('saniye')) {
+          return dateString;
+        }
+      }
+      
+      // ISO string formatını kontrol et
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        console.warn("Geçersiz tarih formatı:", dateString, "biraz önce olarak gösteriliyor");
+        return 'biraz önce';
+      }
+      
+      return formatDistanceToNow(date, { addSuffix: true, locale: tr });
+    } catch (error) {
+      console.error("Tarih formatlama hatası:", error, "Tarih:", dateString);
+      return 'biraz önce';
+    }
+  };
+
+  const getImageArray = () => {
+    if (post.imageUrls && post.imageUrls.length > 0) return post.imageUrls;
+    if (post.images && post.images.length > 0) return post.images;
+    if (post.media && post.media.length > 0) return post.media;
+    if (post.image) return [post.image];
+    return [];
+  };
+
+  const nextImage = () => {
+    const images = getImageArray();
+    if (images.length === 0) return;
+    setCurrentImageIndex((prevIndex) => (prevIndex + 1) % images.length);
+  };
+
+  const prevImage = () => {
+    const images = getImageArray();
+    if (images.length === 0) return;
+    setCurrentImageIndex((prevIndex) => (prevIndex - 1 + images.length) % images.length);
+  };
+
+  const userProfileImageUrl = post.user?.profileImage 
+    ? (post.user.profileImage.startsWith('http') ? post.user.profileImage : `${API_BASE_URL}/${post.user.profileImage}`)
+    : null;
+
+  const currentUserProfileImageUrl = currentUser?.profileImage 
+    ? (currentUser.profileImage.startsWith('http') ? currentUser.profileImage : `${API_BASE_URL}/${currentUser.profileImage}`)
+    : null;
+
+  // ---- YORUM BİLEŞENİ ----
   const Comment = ({ comment, onReply, currentUser, setComments }) => {
-    // Prop kontrolleri
-    if (!comment) {
-      console.error('Comment: comment prop\'u gerekli');
-      return null;
-    }
+    const [replyText, setReplyText] = useState('');
+    const [showReplyInput, setShowReplyInput] = useState(false);
+    const [isReplying, setIsReplying] = useState(false); // Yanıt gönderirken yüklenme durumu
+    const [replyError, setReplyError] = useState(null);
+    const [isLikingComment, setIsLikingComment] = useState(false);
+    const [isDeletingComment, setIsDeletingComment] = useState(false);
+    const [commentMenuVisible, setCommentMenuVisible] = useState(false);
+    const commentMenuRef = useRef(null);
 
-    if (!currentUser) {
-      console.error('Comment: currentUser prop\'u gerekli');
-      return null;
-    }
-
-    if (!setComments) {
-      console.error('Comment: setComments prop\'u gerekli');
-      return null;
-    }
-
-    // Bir ref olştur ve bunu yorumun kendine özgü bir ID'sine bagla
-    // Bu şekilde component yeniden render edilse bile state korunacak
-    const commentId = comment?.id?.toString() || Math.random().toString();
-    const instanceKey = `comment-${commentId}`;
-    
-    // Her Comment instance'ının kendi benzersiz ID'si ile state'leri global olarak sakla
-    if (!window.commentStates) {
-      window.commentStates = {};
-    }
-    
-    if (!window.commentStates[instanceKey]) {
-      window.commentStates[instanceKey] = {
-        showReplies: false,
-        showReplyForm: false
+    // Yorum menüsünü kapatmak için dışarı tıklama
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (commentMenuRef.current && !commentMenuRef.current.contains(event.target)) {
+          setCommentMenuVisible(false);
+        }
       };
-    }
-
-    const [showReplyForm, setShowReplyForm] = useState(window.commentStates[instanceKey].showReplyForm);
-    const [showReplies, setShowReplies] = useState(window.commentStates[instanceKey].showReplies);
-    const [replyContent, setReplyContent] = useState('');
-    const [isLiking, setIsLiking] = useState(false);
-    const [showMenu, setShowMenu] = useState(false);
-    const menuRef = useRef(null);
-    const [isDeleting, setIsDeleting] = useState(false);
-    
-    // showReplies veya showReplyForm değiştiğinde, global state'i güncelle
-    useEffect(() => {
-      window.commentStates[instanceKey].showReplies = showReplies;
-    }, [showReplies, instanceKey]);
-    
-    useEffect(() => {
-      window.commentStates[instanceKey].showReplyForm = showReplyForm;
-    }, [showReplyForm, instanceKey]);
-
-    if (!comment || !comment.user) {
-      return null;
-    }
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }, []);
 
     const getInitial = (username) => {
-      if (!username) return '?';
-      return username.charAt(0).toUpperCase();
+      return username ? username[0].toUpperCase() : '?';
     };
 
-    const formatDate = (dateString) => {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diff = now - date;
-      const seconds = Math.floor(diff / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-      const days = Math.floor(hours / 24);
-
-      if (seconds < 60) return 'şimdi';
-      if (minutes < 60) return `${minutes} dk önce`;
-      if (hours < 24) return `${hours} saat önce`;
-      if (days < 7) return `${days} gün önce`;
-      if (days < 30) {
-        const weeks = Math.floor(days / 7);
-        return `${weeks} hafta önce`;
-      }
-      if (days < 365) {
-        const months = Math.floor(days / 30);
-        return `${months} ay önce`;
-      }
-      const years = Math.floor(days / 365);
-      return `${years} yıl önce`;
-    };
+    const commentUserProfileImageUrl = comment.user?.profileImage 
+      ? (comment.user.profileImage.startsWith('http') ? comment.user.profileImage : `${API_BASE_URL}/${comment.user.profileImage}`)
+      : null;
 
     const handleReplySubmit = async (e) => {
       e.preventDefault();
-      if (!replyContent.trim()) return;
+      if (!replyText.trim() || isReplying) return;
+
+      setIsReplying(true);
+      setReplyError(null);
       
       try {
-        setLoadingComments(true);
-        
-        console.log("Yanıt gönderiliyor:", {
-          content: replyContent.trim(),
-          parentId: comment.id,
-          postId: post.id
-        });
-        
-        // Yorum içeriğini saklayarak öncelikle formu temizle (UI daha iyi yanıt versin)
-        const savedReplyContent = replyContent.trim();
-        setReplyContent('');
-        
-        // UI durumunu güncelle - yanıtlar görüntülensin
-        setShowReplyForm(false);
-        setShowReplies(true);
-        
-        // API'ye yanıt gönder
-        const response = await api.posts.addComment(post.id, savedReplyContent, comment.id);
-        
-        console.log('Yanıt gönderme yanıtı:', response);
-        
-        if (!response.success) {
-          throw new Error(response.message || 'Yanıt gönderilirken bir hata oluştu');
+        const response = await api.posts.addComment(post.id, replyText, comment.id); // parentId olarak yorumun ID'sini ver
+        if (response.success) {
+          setReplyText('');
+          setShowReplyInput(false);
+          fetchComments(); // Ana post yorumlarını yeniden çekerek yanıtı da göster
+        } else {
+          throw new Error(response.message || 'Yanıt gönderilemedi');
         }
-        
-        // Gönderi yorum sayısını güncelle
-        post.comments += 1;
-        
-        // Tüm yorumları yeniden yükle (en güvenilir yaklaşım)
-        await fetchComments();
-        
-        console.log('Yanıt başarıyla eklendi ve yorumlar yeniden yüklendi');
-        
       } catch (err) {
-        console.error('Yanıt gönderilirken hata:', err, 'Post ID:', post.id, 'Comment ID:', comment.id);
-        setError('Yanıt gönderilirken bir hata oluştu: ' + (err.message || 'Bilinmeyen hata'));
-        setTimeout(() => setError(null), 3000);
-        
-        // Yorum gönderme başarısız olursa formu geri getir
-        setShowReplyForm(true);
-        
-        // Token hatası varsa oturumu temizle
-        if (err.message?.includes('token') || err.message?.includes('oturum')) {
-          console.error('Token hatası tespit edildi, yeniden giriş gerekebilir');
-        }
+        console.error('Yanıt gönderme hatası:', err);
+        setReplyError('Yanıt gönderilemedi: ' + err.message);
       } finally {
-        setLoadingComments(false);
+        setIsReplying(false);
       }
     };
 
     const handleCommentLike = async () => {
-      if (isLiking || !comment?.id) {
-        console.error('Beğeni işlemi yapılamıyor:', !comment?.id ? 'Geçersiz yorum ID\'si' : 'İşlem devam ediyor');
-        return;
-      }
-      
-      setIsLiking(true);
-      
-      // Mevcut beğeni durumunu ve sayısını sakla
-      const isCurrentlyLiked = comment.isLiked;
+      if (isLikingComment) return;
+      setIsLikingComment(true);
+
+      const currentLikedState = comment.isLiked;
       const currentLikeCount = comment.likeCount || 0;
       
-      // Önce UI'ı güncelle (optimistik yaklaşım)
-      setComments(prevComments => {
+      // Optimistic UI
         const updateCommentLikeStatus = (commentList) => {
-          if (!Array.isArray(commentList)) return [];
-          
           return commentList.map(c => {
-            if (!c) return null;
-            
             if (c.id === comment.id) {
-              return {
-                ...c,
-                isLiked: !isCurrentlyLiked,
-                likeCount: isCurrentlyLiked ? Math.max(0, currentLikeCount - 1) : currentLikeCount + 1
-              };
-            }
-            
-            if (c.replies && Array.isArray(c.replies)) {
-              return {
-                ...c, 
-                replies: updateCommentLikeStatus(c.replies)
-              };
-            }
-            
-            return c;
-          }).filter(Boolean);
-        };
-        
-        return updateCommentLikeStatus(prevComments);
-      });
-      
-      try {
-        // API çağrısını yap
-        const response = await api.comments.toggleLike(comment.id);
-        
-        // API yanıtında hata varsa
-        if (!response?.success) {
-          throw new Error(response?.message || 'Beğeni işlemi başarısız oldu');
-        }
-        
-        // Başarılıysa, API'den dönen kesin değerleri kullan
-        if (response?.success && response.data) {
-          setComments(prevComments => {
-            const updateWithServerData = (commentList) => {
-              if (!Array.isArray(commentList)) return [];
-              
-              return commentList.map(c => {
-                if (!c) return null;
-                
-                if (c.id === comment.id) {
-                  return {
-                    ...c,
-                    isLiked: response.data.isLiked,
-                    likeCount: response.data.likeCount
-                  };
-                }
-                
-                if (c.replies && Array.isArray(c.replies)) {
-                  return {
-                    ...c, 
-                    replies: updateWithServerData(c.replies)
-                  };
-                }
-                
-                return c;
-              }).filter(Boolean);
-            };
-            
-            return updateWithServerData(prevComments);
-          });
-          
-          console.log(`Yorum ${comment.id} beğeni durumu güncellendi:`, response.data);
-        }
-        
-      } catch (err) {
-        console.error('Yorum beğenirken hata:', err);
-        
-        // Hata durumunda orijinal beğeni durumunu geri yükle
-        setComments(prevComments => {
-          const revertCommentLikeStatus = (commentList) => {
-            if (!Array.isArray(commentList)) return [];
-            
-            return commentList.map(c => {
-              if (!c) return null;
-              
-              if (c.id === comment.id) {
-                return {
-                  ...c,
-                  isLiked: isCurrentlyLiked,
-                  likeCount: currentLikeCount
-                };
-              }
-              
-              if (c.replies && Array.isArray(c.replies)) {
-                return {
-                  ...c, 
-                  replies: revertCommentLikeStatus(c.replies)
-                };
-              }
-              
-              return c;
-            }).filter(Boolean);
-          };
-          
-          return revertCommentLikeStatus(prevComments);
-        });
-        
-        // UNIQUE constraint hatasını özel olarak ele al
-        if (err.message?.includes('UNIQUE constraint failed')) {
-          console.warn('Yorum zaten beğenilmiş, durumunu güncelliyorum');
-        } else {
-          // Diğer hataları kullanıcıya göster
-          setError(`Beğeni işlemi başarısız oldu: ${err.message}`);
-          setTimeout(() => setError(null), 3000);
-        }
-      } finally {
-        setIsLiking(false);
-      }
-    };
-
-    const handleDelete = async () => {
-      if (isDeleting) return;
-      
-      if (window.confirm('Bu yorumu silmek istediğinizden emin misiniz?')) {
-        setIsDeleting(true);
-        try {
-          const response = await api.comments.delete(comment.id);
-          if (response.success) {
-            setComments(prevComments => {
-              if (!Array.isArray(prevComments)) {
-                console.error('setComments: prevComments bir dizi degil');
-                return prevComments;
-              }
-              return prevComments.filter(c => c.id !== comment.id);
-            });
+            return { ...c, isLiked: !currentLikedState, likeCount: currentLikedState ? Math.max(0, currentLikeCount - 1) : currentLikeCount + 1 };
           }
-        } catch (error) {
-          console.error('Yorum silinirken bir hata oluştu:', error);
-          setError('Yorum silinirken bir hata oluştu');
-          setTimeout(() => setError(null), 3000);
-        } finally {
-          setIsDeleting(false);
-          setShowMenu(false);
+          if (c.replies) {
+            return { ...c, replies: updateCommentLikeStatus(c.replies) };
+          }
+            return c;
+        });
+        };
+      setComments(prevComments => updateCommentLikeStatus(prevComments));
+      
+      try {
+        const response = currentLikedState
+          ? await api.posts.unlikeComment(comment.id)
+          : await api.posts.likeComment(comment.id);
+        
+        if (!response.success) {
+          throw new Error(response.message || 'Yorum beğenme işlemi başarısız oldu');
         }
+        
+        // Sunucudan gelen güncel veriyi kullan (isteğe bağlı ama daha doğru)
+        if (response.data && typeof response.data.likeCount !== 'undefined') {
+            const updateWithServerData = (commentList) => {
+              return commentList.map(c => {
+                if (c.id === comment.id) {
+                  return { ...c, isLiked: response.data.isLiked, likeCount: response.data.likeCount };
+                }
+                if (c.replies) {
+                  return { ...c, replies: updateWithServerData(c.replies) };
+                }
+                return c;
+              });
+            };
+             setComments(prevComments => updateWithServerData(prevComments));
+        }
+
+      } catch (error) {
+        console.error('Yorum beğenme hatası:', error);
+        // Hata durumunda geri al
+          const revertCommentLikeStatus = (commentList) => {
+            return commentList.map(c => {
+              if (c.id === comment.id) {
+                return { ...c, isLiked: currentLikedState, likeCount: currentLikeCount };
+              }
+              if (c.replies) {
+                return { ...c, replies: revertCommentLikeStatus(c.replies) };
+              }
+              return c;
+            });
+          };
+        setComments(prevComments => revertCommentLikeStatus(prevComments));
+        setReplyError('Yorum beğenme işlemi başarısız oldu');
+      } finally {
+        setIsLikingComment(false);
       }
     };
 
-    const handleReport = async () => {
+     const handleDeleteComment = async () => {
+      if (isDeletingComment) return;
+      setIsDeletingComment(true);
       try {
-        const response = await api.comments.report(comment.id);
-        if (response.success) {
-          setError('Yorum başarıyla şikayet edildi');
-          setTimeout(() => setError(null), 3000);
+        const response = await api.posts.deleteComment(comment.id);
+          if (response.success) {
+           fetchComments(); // Yorumları yeniden çek
+        } else {
+          throw new Error(response.message || 'Yorum silinemedi');
         }
-      } catch (error) {
-        console.error('Yorum şikayet edilirken bir hata oluştu:', error);
-        setError('Yorum şikayet edilirken bir hata oluştu');
-        setTimeout(() => setError(null), 3000);
+      } catch (err) {
+        console.error('Yorum silme hatası:', err);
+        setReplyError('Yorum silinirken bir hata oluştu: ' + err.message);
+        } finally {
+        setIsDeletingComment(false);
+        setCommentMenuVisible(false);
       }
-      setShowMenu(false);
+    };
+
+     const handleReportComment = async () => {
+      try {
+          const response = await api.posts.reportComment(comment.id);
+        if (response.success) {
+            alert('Yorum bildirildi.');
+          } else {
+            throw new Error(response.message || 'Yorum bildirilemedi');
+          }
+        } catch (err) {
+          console.error('Yorum bildirme hatası:', err);
+          setReplyError('Yorum bildirilirken bir hata oluştu: ' + err.message);
+        } finally {
+           setCommentMenuVisible(false);
+        }
     };
 
     return (
-      <div className="space-y-3">
-        <div className="flex space-x-3">
-          <div className="flex-shrink-0">
-            <Link to={`/profile/${comment.user.username}`}>
-              {comment.user.profileImage ? (
-                <img 
-                  src={comment.user.profileImage} 
-                  alt={comment.user.username}
-                  className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/20"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 ring-2 ring-blue-500/20">
-                  <span className="text-white font-medium text-sm">
-                    {getInitial(comment.user.username)}
-                  </span>
+      <div className="flex space-x-3 py-2">
+        {/* Yorum Yapan Kullanıcı Avatarı */}
+        <Link to={`/profile/${comment.user?.username}`} className="flex-shrink-0">
+          {commentUserProfileImageUrl ? (
+            <img src={commentUserProfileImageUrl} alt={comment.user?.username} className="w-8 h-8 rounded-full object-cover bg-gray-700" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold">
+              {getInitial(comment.user?.username)}
                 </div>
               )}
             </Link>
-          </div>
-          
-          <div className="flex-1 space-y-2">
-            <div className="p-3 rounded-2xl bg-slate-800/50 backdrop-blur-sm border border-white/5">
-              <div className="flex justify-between items-start mb-1">
-                <div className="flex items-center space-x-2">
-                  <Link 
-                    to={`/profile/${comment.user.username}`}
-                    className="font-medium text-sm text-white hover:text-blue-400 transition-colors"
-                  >
-                    {comment.user.username}
+        
+        <div className="flex-1">
+          {/* Kullanıcı Adı ve Yorum İçeriği */}
+          <div className="bg-gray-800/50 rounded-lg p-2">
+            <div className="flex justify-between items-start">
+              <div>
+                <Link to={`/profile/${comment.user?.username}`} className="font-medium text-sm text-white hover:text-[#0affd9] transition-colors">
+                  {comment.user?.username}
                   </Link>
-                  <span className="text-xs text-blue-300/50">
-                    {formatDate(comment.createdAt)}
-                  </span>
+                <p className="text-sm text-gray-300 mt-1">{comment.content}</p>
                 </div>
-                {comment.user.id === currentUser.id && (
-                  <div className="relative">
+              {/* Yorum Menüsü Butonu */}   
+              {(currentUser?.id === comment.user?.id || currentUser?.isAdmin) && (
+                 <div className="relative" ref={commentMenuRef}>
                     <button 
-                      className="p-1 rounded-full text-blue-200 hover:bg-slate-700/50 transition-colors"
-                      onClick={() => setShowMenu(!showMenu)}
+                      onClick={() => setCommentMenuVisible(!commentMenuVisible)} 
+                      className="text-gray-500 hover:text-[#0affd9] p-1 rounded-full transition-colors"
                     >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
-                      </svg>
+                      <MoreHorizontal size={16} />
                     </button>
-
-                    {showMenu && (
-                      <div 
-                        ref={menuRef}
-                        className="absolute right-0 mt-1 py-1 w-48 rounded-lg shadow-lg"
-                        style={{
-                          backgroundColor: "rgba(30, 34, 46, 0.95)",
-                          backdropFilter: "blur(10px)",
-                          border: "1px solid rgba(255, 255, 255, 0.1)"
-                        }}
-                      >
+                    {commentMenuVisible && (
+                      <div className="absolute right-0 mt-1 w-32 bg-gray-900 border border-[#0affd9]/20 rounded-lg shadow-lg z-20 py-1">
+                         {currentUser?.id === comment.user?.id && (
                         <button
-                          className="w-full px-4 py-2 text-left text-sm hover:bg-red-500/20 text-red-400 flex items-center justify-between"
-                          onClick={handleDelete}
-                          disabled={isDeleting}
-                        >
-                          <span>Yorumu Sil</span>
-                          {isDeleting && (
-                            <div className="animate-spin h-4 w-4 border-2 border-red-400 border-t-transparent rounded-full"></div>
+                              onClick={handleDeleteComment}
+                              disabled={isDeletingComment}
+                              className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-red-600/20 disabled:opacity-50 transition-colors flex items-center"
+                            >
+                               <Trash2 size={14} className="mr-2"/> Sil {isDeletingComment && '...'}
+                             </button>
                           )}
+                           <button 
+                             onClick={handleReportComment}
+                             className="w-full text-left px-3 py-1.5 text-sm text-yellow-400 hover:bg-yellow-600/20 transition-colors flex items-center"
+                           >
+                             <AlertCircle size={14} className="mr-2"/> Bildir
                         </button>
                       </div>
                     )}
                   </div>
                 )}
               </div>
-              <p className="text-sm text-blue-100/90 leading-relaxed">
-                {comment.content}
-              </p>
             </div>
             
-            <div className="flex items-center space-x-4 px-1">
+          {/* Yorum Alt Bilgisi (Tarih, Beğen, Yanıtla) */}
+          <div className="flex items-center space-x-3 mt-1 text-xs text-gray-500">
+            <span>{formatDate(comment.createdAt)}</span>
               <button 
-                className={`flex items-center space-x-1 text-xs transition-colors ${
-                  comment.isLiked ? 'text-blue-400' : 'text-blue-300/50 hover:text-blue-400'
-                }`}
                 onClick={handleCommentLike}
-                disabled={isLiking}
-              >
-                <svg 
-                  className="w-4 h-4" 
-                  fill={comment.isLiked ? "currentColor" : "none"} 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={comment.isLiked ? "0" : "2"} 
-                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                  />
-                </svg>
-                <span>{comment.likeCount || 0}</span>
+               disabled={isLikingComment}
+               className={`font-medium flex items-center transition-colors ${comment.isLiked ? 'text-[#0affd9]' : 'hover:text-gray-300'}`}
+            >
+               <Heart size={12} className={`mr-1 ${comment.isLiked ? 'fill-current' : ''}`} /> {comment.likeCount || 0} Beğen
               </button>
-
               <button 
-                className="text-xs text-blue-300/50 hover:text-blue-400 transition-colors"
-                onClick={() => setShowReplyForm(!showReplyForm)}
+              onClick={() => setShowReplyInput(!showReplyInput)} 
+              className="font-medium hover:text-gray-300 transition-colors"
               >
                 Yanıtla
               </button>
-
-              {comment.replies?.length > 0 && (
-                <button 
-                  className="text-xs text-blue-300/50 hover:text-blue-400 transition-colors"
-                  onClick={() => setShowReplies(!showReplies)}
-                >
-                  {showReplies ? 'Yanıtları Gizle' : `${comment.replies.length} yanıtı göster`}
-                </button>
-              )}
             </div>
             
-            {showReplyForm && (
-              <form onSubmit={handleReplySubmit} className="flex mt-2">
+          {/* Yanıt Yazma Alanı */}
+          {showReplyInput && (
+            <form onSubmit={handleReplySubmit} className="mt-2 flex space-x-2 items-start">
+              <Link to={`/profile/${currentUser?.username}`} className="flex-shrink-0">
+                 {currentUserProfileImageUrl ? (
+                   <img src={currentUserProfileImageUrl} alt={currentUser?.username} className="w-6 h-6 rounded-full object-cover bg-gray-700" />
+                 ) : (
+                   <div className="w-6 h-6 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] text-xs font-bold">
+                     {getInitial(currentUser?.username)}
+                   </div>
+                 )}
+               </Link>
+               <div className="flex-1 relative">
                 <input
                   type="text"
-                  placeholder="Yanıt yaz..."
-                  value={replyContent}
-                  onChange={(e) => setReplyContent(e.target.value)}
-                  className="flex-1 px-4 py-2 rounded-l-xl bg-slate-800/50 border border-white/5 text-white text-sm placeholder-blue-300/30 focus:outline-none focus:border-blue-500/50"
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder={`${comment.user?.username || 'Kullanıcı'} adlı kişiye yanıt ver...`}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-full py-1.5 px-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0affd9] focus:border-[#0affd9] pr-10"
                 />
                 <button
                   type="submit"
-                  className="px-4 rounded-r-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-medium hover:from-blue-600 hover:to-blue-700 transition-all"
-                  disabled={!replyContent.trim()}
-                  style={{
-                    opacity: !replyContent.trim() ? 0.5 : 1,
-                  }}
-                >
-                  Gönder
+                     disabled={!replyText.trim() || isReplying}
+                     className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[#0affd9] disabled:text-gray-600 hover:text-white disabled:hover:text-gray-600 transition-colors p-1 rounded-full"
+                   >
+                     {isReplying ? <div className="w-4 h-4 border-2 border-t-[#0affd9] border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div> : <Send size={16} />}
                 </button>
+               </div>
               </form>
             )}
-          </div>
-        </div>
-        
-        {showReplies && comment.replies?.length > 0 && (
-          <div className="ml-11 space-y-3 border-l-2 border-blue-500/10 pl-4">
-            {comment.replies.map(reply => {
-              // ID kontrolü yap
-              if (!reply?.id) {
-                console.error('Geçersiz yanıt:', reply);
-                return null;
-              }
-              
-              return (
-                <Comment 
-                  key={`reply-${reply.id}-${Date.now()}`} 
-                  comment={reply} 
-                  onReply={(parentId, content) => handleSubmitComment({ 
-                    preventDefault: () => {}, 
-                    target: null 
-                  }, parentId)}
-                  currentUser={currentUser}
-                  setComments={setComments}
-                />
-              );
-            }).filter(Boolean)}
+           {replyError && <p className="text-xs text-red-400 mt-1">{replyError}</p>}
+          
+          {/* Yorumun Yanıtları */}
+          {comment.replies && comment.replies.length > 0 && (
+            <div className="mt-2 pl-6 border-l border-gray-700">
+              {comment.replies.map(reply => (
+                 <Comment key={reply.id} comment={reply} onReply={onReply} currentUser={currentUser} setComments={setComments} />
+              ))}
           </div>
         )}
+        </div>
       </div>
     );
   };
+  // ---- YORUM BİLEŞENİ SONU ----
 
   return (
-    <div 
-      className="rounded-2xl overflow-hidden backdrop-blur-lg mb-4"
-      style={{
-        backgroundColor: "rgba(20, 24, 36, 0.7)",
-        boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-        border: "1px solid rgba(255, 255, 255, 0.1)"
-      }}
-    >
-      {/* Gönderi başlığı */}
-      <div className="p-4 flex items-center">
-        <Link to={`/profile/${post.user.username}`} className="flex-shrink-0">
-          {post.user.profileImage ? (
-            <img 
-              src={post.user.profileImage} 
-              alt={post.user.username}
-              className="w-10 h-10 rounded-full object-cover"
-            />
+    <div className="rounded-2xl overflow-hidden bg-black/60 border border-[#0affd9]/20 backdrop-blur-lg shadow-lg mb-6">
+      {/* Gönderi Başlığı */} 
+      <div className="flex items-center justify-between p-3 border-b border-[#0affd9]/20">
+        <Link to={`/profile/${post.user?.username}`} className="flex items-center space-x-3 group">
+          {userProfileImageUrl ? (
+            <img src={userProfileImageUrl} alt={post.user?.username} className="w-10 h-10 rounded-full object-cover border-2 border-transparent group-hover:border-[#0affd9] transition-colors" />
           ) : (
-            <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-500"
-            >
-              <span className="text-white font-bold">
-                {post.user.username.charAt(0).toUpperCase()}
-              </span>
+            <div className="w-10 h-10 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold border-2 border-transparent group-hover:border-[#0affd9] transition-colors">
+              {post.user?.username ? post.user.username[0].toUpperCase() : 'P'}
             </div>
           )}
-        </Link>
-        
-        <div className="ml-3 min-w-0">
-          <Link 
-            to={`/profile/${post.user.username}`}
-            className="font-medium hover:underline text-white"
-          >
-            {post.user.username}
-          </Link>
-          <p className="text-xs text-blue-200/70">
-            {post.createdAt}
+          <div>
+            <p className="font-semibold text-sm text-white group-hover:text-[#0affd9] transition-colors">
+              {post.user?.username || 'Bilinmeyen Kullanıcı'}
+            </p>
+            <p className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">
+              {formatDate(post.createdAt || post.CreatedAt)}
           </p>
         </div>
+        </Link>
         
-        <div className="ml-auto relative">
+        {/* Seçenekler Menüsü */} 
+        {(currentUser?.id === post.user?.id || currentUser?.isAdmin) && (
+          <div className="relative" ref={menuRef}>
           <button 
-            className="p-1 rounded-full text-blue-200 hover:bg-slate-700/50 transition-colors"
             onClick={() => setShowMenu(!showMenu)}
+              className="text-gray-500 hover:text-[#0affd9] p-1 rounded-full transition-colors"
           >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
-            </svg>
+              <MoreHorizontal size={20} />
           </button>
-
           {showMenu && (
-            <div 
-              className="absolute right-0 mt-1 py-1 w-48 rounded-lg shadow-lg"
-              style={{
-                backgroundColor: "rgba(30, 34, 46, 0.95)",
-                backdropFilter: "blur(10px)",
-                border: "1px solid rgba(255, 255, 255, 0.1)"
-              }}
-            >
-              {post.user.id === currentUser.id && (
+              <div className="absolute right-0 mt-2 w-40 bg-gray-900 border border-[#0affd9]/20 rounded-lg shadow-lg z-10 py-1">
+                {currentUser?.id === post.user?.id && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-red-500/20 text-red-400 flex items-center justify-between"
                   onClick={handleDelete}
                   disabled={isDeleting}
+                    className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-red-600/20 disabled:opacity-50 transition-colors flex items-center"
                 >
-                  <span>Gönderiyi Sil</span>
-                  {isDeleting && (
-                    <div className="animate-spin h-4 w-4 border-2 border-red-400 border-t-transparent rounded-full"></div>
-                  )}
+                    <Trash2 size={14} className="mr-2" /> Sil {isDeleting && '...'}
                 </button>
               )}
               <button
-                className="w-full px-4 py-2 text-left text-sm hover:bg-slate-700/50 text-blue-200"
                 onClick={handleReport}
+                  className="w-full text-left px-3 py-1.5 text-sm text-yellow-400 hover:bg-yellow-600/20 transition-colors flex items-center"
               >
-                Gönderiyi Şikayet Et
+                 <AlertCircle size={14} className="mr-2"/> Bildir
               </button>
             </div>
           )}
         </div>
+        )}
       </div>
       
-      {/* Gönderi içeriği */}
-      <div className="px-4 pb-3">
-        <p className="text-white">{post.content}</p>
-      </div>
+      {/* Gönderi İçeriği (Metin) */} 
+      {post.content && (
+        <p className="p-3 text-sm text-gray-300 whitespace-pre-wrap break-words">
+          {post.content}
+        </p>
+      )}
       
-      {/* Gönderi görselleri (varsa) */}
-      {post.images && post.images.length > 0 && (
-        <div className="relative w-full flex justify-center bg-black">
-          {/* Görsel slider */}
-          <div className="relative w-full overflow-hidden" style={{ height: "calc(100vh - 400px)", minHeight: "400px", maxHeight: "600px" }}>
-            <div 
-              className="flex h-full transition-transform duration-300 ease-out"
-              style={{
-                transform: `translateX(-${currentImageIndex * 100}%)`,
-              }}
-            >
-              {post.images.map((image, index) => {
-                // Görsel URL'sini işle
-                let imageUrl = '';
-                
-                if (typeof image === 'string') {
-                  imageUrl = image;
-                } else if (image.url) {
-                  imageUrl = image.url;
-                }
-                
-                // URL'yi düzelt
-                if (imageUrl && !imageUrl.startsWith('http')) {
-                  imageUrl = getFullImageUrl(imageUrl);
+      {/* Gönderi Medyası (Resim veya Video) */} 
+      {(() => {
+        // Görsel veya video içerik olup olmadığını kontrol et
+        const hasImageUrls = post.imageUrls && post.imageUrls.length > 0;
+        const hasImages = post.images && post.images.length > 0;
+        const hasSingleImage = post.image; // Tekil image alanı
+        const hasMedia = post.media && post.media.length > 0;
+        const hasVideoUrl = post.videoUrl;
+        
+        // Kullanılacak resim dizisini belirle
+        let imagesToUse = null;
+        if (hasImageUrls) {
+          imagesToUse = post.imageUrls;
+        } else if (hasImages) {
+          imagesToUse = post.images;
+        } else if (hasMedia) {
+          imagesToUse = post.media;
+        } else if (hasSingleImage) {
+          imagesToUse = [post.image];
+        }
+        
+        // Herhangi bir medya içeriği yoksa, null döndür
+        if (!imagesToUse && !hasVideoUrl) {
+          return null;
                 }
                 
                 return (
-                  <div 
-                    key={`image-${index}-${typeof image === 'string' ? image : (image.id || Date.now())}`}
-                    className="flex-shrink-0 w-full h-full flex items-center justify-center bg-black"
-                  >
-                    <img 
-                      src={imageUrl}
-                      alt={`Gönderi görseli ${index + 1}`}
-                      className="max-w-full max-h-full object-contain"
+          <div className="relative bg-black">
+            {imagesToUse && imagesToUse.length > 0 && (
+              <img
+                src={getFullImageUrl(imagesToUse[currentImageIndex])}
+                alt={`Gönderi resmi ${currentImageIndex + 1}`}
+                className="w-full h-auto max-h-[70vh] object-contain"
                       onError={(e) => {
-                        console.error(`Görsel yüklenemedi (${index}): ${e.target.src}`);
-                        e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='24' fill='%23fff' text-anchor='middle' dominant-baseline='middle'%3EGörsel Yüklenemedi%3C/text%3E%3C/svg%3E";
-                        e.target.onerror = null;
-                      }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Kaydırma butonları */}
-            {post.images.length > 1 && (
+                  console.error("Görsel yükleme hatası:", e.target.src);
+                  e.target.src = `${API_BASE_URL}/uploads/images/image-error.jpg`; // Backend'deki hata resmi
+                }}
+              />
+            )}
+            
+            {hasVideoUrl && (
+              <video
+                src={getFullImageUrl(post.videoUrl)} 
+                controls
+                className="w-full h-auto max-h-[70vh] object-contain"
+                preload="metadata"
+                onError={(e) => {
+                  console.error("Video yükleme hatası:", e.target.src);
+                }}
+              >
+                Tarayıcınız video etiketini desteklemiyor.
+              </video>
+            )}
+            
+            {/* Resimler arası geçiş butonları */} 
+            {imagesToUse && imagesToUse.length > 1 && (
               <>
-                {/* Sol buton */}
-                {currentImageIndex > 0 && (
                   <button
-                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-                    onClick={() => setCurrentImageIndex(prev => prev - 1)}
+                  onClick={prevImage} 
+                  className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white p-1.5 rounded-full hover:bg-black/80 transition-opacity opacity-70 hover:opacity-100"
+                  aria-label="Önceki resim"
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
                   </button>
-                )}
-                
-                {/* Sağ buton */}
-                {currentImageIndex < post.images.length - 1 && (
-                  <button
-                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-                    onClick={() => setCurrentImageIndex(prev => prev + 1)}
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                )}
-
-                {/* Nokta göstergeleri */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
-                  {post.images.map((image, index) => (
                     <button
-                      key={`dot-${index}`}
-                      className={`w-2 h-2 rounded-full transition-colors ${
-                        index === currentImageIndex ? 'bg-white' : 'bg-white/50'
-                      }`}
-                      onClick={() => setCurrentImageIndex(index)}
+                  onClick={nextImage} 
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white p-1.5 rounded-full hover:bg-black/80 transition-opacity opacity-70 hover:opacity-100"
+                  aria-label="Sonraki resim"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                </button>
+                {/* Resim göstergesi */} 
+                <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1.5">
+                  {imagesToUse.map((_, index) => (
+                    <div 
+                      key={index} 
+                      className={`w-1.5 h-1.5 rounded-full ${index === currentImageIndex ? 'bg-white' : 'bg-white/50'}`}
                     />
                   ))}
                 </div>
               </>
             )}
           </div>
-        </div>
-      )}
+        );
+      })()}
       
-      {/* Etkilesim bilgileri */}
-      <div 
-        className="px-4 py-2 flex justify-between text-sm text-blue-200"
-      >
-        <div>
-          {post.likes > 0 && (
-            <span>{post.likes} begeni</span>
-          )}
-        </div>
-        <div>
-          {post.comments > 0 && (
-            <button onClick={() => setShowComments(!showComments)}>
-              {post.comments} yorum
-            </button>
-          )}
-        </div>
-      </div>
-      
-      {/* Etkilesim butonları */}
-      <div 
-        className="flex border-t border-b border-slate-700/50"
-      >
+      {/* Etkileşim Butonları */} 
+      <div className="flex justify-between items-center p-3 border-t border-[#0affd9]/20">
+        <div className="flex space-x-4 items-center">
+          {/* Beğen Butonu */} 
         <button 
-          className="flex-1 py-2 flex items-center justify-center transition-colors hover:bg-slate-800/30"
-          style={{
-            color: post.liked ? '#3b82f6' : 'white',
-          }}
           onClick={handleLike}
           disabled={isLiking}
-        >
-          {isLiking ? (
-            <div className="animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full"></div>
-          ) : (
-            <>
-              <svg 
-                className="w-5 h-5 mr-1" 
-                fill={post.liked ? "currentColor" : "none"}
-                stroke="currentColor" 
-                viewBox="0 0 24 24" 
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={post.liked ? "0" : "2"} 
-                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                ></path>
-              </svg>
-              <span>Begeni</span>
-            </>
-          )}
+            className={`flex items-center space-x-1 transition-colors ${post.liked ? 'text-[#0affd9]' : 'text-gray-400 hover:text-white'} disabled:opacity-50`}
+            aria-label={post.liked ? 'Beğeniyi geri al' : 'Beğen'}
+           >
+             <Heart size={22} className={`${post.liked ? 'fill-current' : ''}`} />
+             <span className="text-sm font-medium">{post.likeCount || post.likes || 0}</span>
         </button>
         
+          {/* Yorum Butonu */} 
         <button 
-          className="flex-1 py-2 flex items-center justify-center text-white hover:bg-slate-800/30 transition-colors"
           onClick={() => setShowComments(!showComments)}
-        >
-          <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth="2" 
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            ></path>
-          </svg>
-          <span>Yorum</span>
+             className="flex items-center space-x-1 text-gray-400 hover:text-white transition-colors"
+             aria-label="Yorumları göster/gizle"
+           >
+             <MessageCircle size={22} />
+             <span className="text-sm font-medium">{comments.length || post.commentCount || 0}</span>
         </button>
         
+          {/* Gönder Butonu (Paylaşım için placeholder) */} 
         <button 
-          className="flex-1 py-2 flex items-center justify-center hover:bg-slate-800/30 transition-colors"
-          style={{
-            color: post.saved ? '#3b82f6' : 'white',
-          }}
+             className="text-gray-400 hover:text-white transition-colors"
+             aria-label="Gönder"
+           >
+             <Send size={22} />
+           </button>
+         </div>
+         
+        {/* Kaydet Butonu */} 
+         <button 
           onClick={handleSave}
-        >
-          <svg 
-            className="w-5 h-5 mr-1" 
-            fill={post.saved ? "currentColor" : "none"} 
-            stroke="currentColor" 
-            viewBox="0 0 24 24" 
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth={post.saved ? "0" : "2"} 
-              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-            ></path>
-          </svg>
-          <span>Kaydet</span>
+           className={`transition-colors ${post.saved ? 'text-[#0affd9]' : 'text-gray-400 hover:text-white'}`}
+           aria-label={post.saved ? 'Kaydedileni kaldır' : 'Kaydet'}
+         >
+           <Bookmark size={22} className={`${post.saved ? 'fill-current' : ''}`} />
         </button>
       </div>
       
-      {/* Yorumlar ve yorum formu */}
+      {/* Hata Mesajı Alanı */} 
+       {error && (
+         <div className="px-3 pb-2 text-xs text-red-400">
+           {error}
+         </div>
+       )}
+       
+      {/* Yorumlar Bölümü */} 
       {showComments && (
-        <div className="p-4 space-y-4">
-          {/* Yorum formu */}
-          <form onSubmit={handleSubmitComment} className="flex">
+         <div className="p-3 border-t border-[#0affd9]/20">
+           {/* Yorum Yazma Alanı */} 
+           <form onSubmit={handleSubmitComment} className="flex items-center space-x-2 mb-4">
+             <Link to={`/profile/${currentUser?.username}`} className="flex-shrink-0">
+               {currentUserProfileImageUrl ? (
+                 <img src={currentUserProfileImageUrl} alt={currentUser?.username} className="w-8 h-8 rounded-full object-cover bg-gray-700" />
+               ) : (
+                 <div className="w-8 h-8 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold">
+                   {currentUser?.username ? currentUser.username[0].toUpperCase() : 'U'}
+                 </div>
+               )}
+             </Link>
+             <div className="flex-1 relative">
             <input
               type="text"
-              placeholder="Bir yorum yazın..."
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              className="flex-1 p-2 rounded-l-lg bg-slate-800/50 border-none text-white"
+                 placeholder="Yorum ekle..."
+                 className="w-full bg-gray-800 border border-gray-700 rounded-full py-2 px-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0affd9] focus:border-[#0affd9] pr-10"
             />
             <button
               type="submit"
-              className="px-3 rounded-r-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
               disabled={!comment.trim()}
-              style={{
-                opacity: !comment.trim() ? 0.7 : 1,
-              }}
+                 className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[#0affd9] disabled:text-gray-600 hover:text-white disabled:hover:text-gray-600 transition-colors p-1 rounded-full"
             >
-              Gönder
+                 <Send size={18} />
             </button>
+             </div>
           </form>
           
-          {/* Hata mesajı */}
-          {error && (
-            <div 
-              className="p-2 rounded-lg text-sm text-center bg-red-500/10 text-red-400 border border-red-500/20"
-            >
-              {error}
-            </div>
-          )}
-          
-          {/* Yorumlar listesi */}
+           {/* Mevcut Yorumlar */} 
           {loadingComments ? (
-            <div className="flex justify-center py-4">
-              <div className="animate-spin h-5 w-5 border-2 rounded-full border-blue-500 border-t-transparent"></div>
+             <div className="text-center py-4">
+               <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-[#0affd9]"></div>
+               <p className="mt-2 text-sm text-gray-400">Yorumlar yükleniyor...</p>
+             </div>
+           ) : comments.length > 0 ? (
+             <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+               {comments.map(commentData => (
+                 <Comment key={commentData.id} comment={commentData} onReply={handleSubmitComment} currentUser={currentUser} setComments={setComments} />
+               ))}
             </div>
           ) : (
-            <div className="space-y-4">
-              {comments.length === 0 ? (
-                <p className="text-center py-2 text-sm text-blue-200/70">
-                  Henüz yorum yapılmamış. İlk yorumu siz yapın!
-                </p>
-              ) : (
-                comments.map(comment => {
-                  // ID kontrolü yap
-                  if (!comment?.id) {
-                    console.error('Geçersiz yorum:', comment);
-                    return null;
-                  }
-                  
-                  return (
-                    <Comment 
-                      key={`comment-${comment.id}-${Date.now()}`} 
-                      comment={comment}
-                      onReply={(parentId, content) => handleSubmitComment({ 
-                        preventDefault: () => {}, 
-                        target: null 
-                      }, parentId)}
-                      currentUser={currentUser}
-                      setComments={setComments}
-                    />
-                  );
-                }).filter(Boolean)
-              )}
-            </div>
+             <p className="text-center text-sm text-gray-500 py-4">Henüz yorum yok.</p>
           )}
         </div>
       )}

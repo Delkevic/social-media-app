@@ -80,18 +80,24 @@ func ValidateToken(tokenString string) (*Claims, error) {
 		jwtSecret = "gizli_anahtar" // Varsayılan anahtar
 	}
 
+	// Token doğrulama başlangıcı
+	println("Token doğrulanıyor, uzunluk:", len(tokenString))
+
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(jwtSecret), nil
 	})
 
 	if err != nil {
+		println("Token doğrulama hatası:", err.Error())
 		return nil, err
 	}
 
 	if !token.Valid {
+		println("Token geçersiz")
 		return nil, errors.New("geçersiz token")
 	}
 
+	println("Token doğrulandı, kullanıcı ID:", claims.UserID)
 	return claims, nil
 }
 

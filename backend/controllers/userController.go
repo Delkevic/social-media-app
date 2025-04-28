@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"encoding/base64"
+
 	"github.com/gin-gonic/gin"
 	"github.com/go-resty/resty/v2"
 	"golang.org/x/crypto/bcrypt"
@@ -748,6 +750,150 @@ func VerifyTwoFactorCode(c *gin.Context) {
 			},
 		},
 		Token: token,
+	})
+}
+
+// RefreshToken - Süresi dolan token'ı yenilemek için endpoint
+func RefreshToken(c *gin.Context) {
+	// Token'ı alma yöntemleri - birden fazla yerde arama
+	tokenString := ""
+
+	// 1. Authorization header'dan token'ı al
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" && len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+		tokenString = authHeader[7:]
+		fmt.Println("Token Authorization header'dan alındı")
+	}
+
+	// 2. Eğer header'da yoksa, request body'den al
+	if tokenString == "" {
+		var tokenRequest struct {
+			Token string `json:"token"`
+		}
+
+		if err := c.ShouldBindJSON(&tokenRequest); err == nil && tokenRequest.Token != "" {
+			tokenString = tokenRequest.Token
+			fmt.Println("Token request body'den alındı")
+		}
+	}
+
+	// 3. Yine bulunamadıysa cookie'den al (varsa)
+	if tokenString == "" {
+		cookie, err := c.Cookie("token")
+		if err == nil && cookie != "" {
+			tokenString = cookie
+			fmt.Println("Token cookie'den alındı")
+		}
+	}
+
+	// Token bulunamadıysa hata döndür
+	if tokenString == "" {
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Yetkilendirme token'ı bulunamadı",
+		})
+		return
+	}
+
+	// Token'ı parsed edip claims içinden UserID'yi al
+	claims, err := auth.ValidateToken(tokenString)
+
+	// Token geçerliyse yeni token üretme
+	if err == nil && claims != nil {
+		// Token hala geçerliyse aynısını döndür
+		remainingTime := claims.ExpiresAt.Sub(time.Now())
+		if remainingTime.Hours() > 1 {
+			c.JSON(http.StatusOK, Response{
+				Success: true,
+				Message: "Token hala geçerli",
+				Token:   tokenString,
+			})
+			return
+		}
+	}
+
+	// Token süresi geçmiş olsa bile claims içindeki userID'yi çıkarmaya çalış
+	var userID uint
+
+	if claims != nil {
+		userID = claims.UserID
+	} else {
+		// JWT Parse edilemiyor, token'dan userID çıkarılamadı
+		// Token ayrıştırılırken hata oldu (muhtemelen süresi doldu)
+		jwtParts := strings.Split(tokenString, ".")
+		if len(jwtParts) != 3 {
+			c.JSON(http.StatusUnauthorized, Response{
+				Success: false,
+				Message: "Geçersiz token formatı",
+			})
+			return
+		}
+
+		// Claims kısmını (ortadaki bölüm) decode et
+		claimBytes, err := base64.RawURLEncoding.DecodeString(jwtParts[1])
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, Response{
+				Success: false,
+				Message: "Token çözümlenemedi",
+			})
+			return
+		}
+
+		var decodedClaims map[string]interface{}
+		if err := json.Unmarshal(claimBytes, &decodedClaims); err != nil {
+			c.JSON(http.StatusUnauthorized, Response{
+				Success: false,
+				Message: "Token içeriği çözümlenemedi",
+			})
+			return
+		}
+
+		// user_id alanını bul
+		userIDFloat, ok := decodedClaims["user_id"].(float64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, Response{
+				Success: false,
+				Message: "Token içinde kullanıcı ID'si bulunamadı",
+			})
+			return
+		}
+
+		userID = uint(userIDFloat)
+	}
+
+	// Kullanıcı ID ile kullanıcı bilgisini doğrula
+	var user models.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Kullanıcı bulunamadı",
+		})
+		return
+	}
+
+	// Yeni token oluştur
+	token, err := auth.GenerateToken(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Yeni token oluşturulurken bir hata oluştu",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Token başarıyla yenilendi",
+		Token:   token,
+		Data: map[string]interface{}{
+			"user": map[string]interface{}{
+				"id":       user.ID,
+				"username": user.Username,
+				"fullName": user.FullName,
+				"email":    user.Email,
+				"phone":    user.Phone,
+			},
+		},
 	})
 }
 
@@ -1750,5 +1896,87 @@ func UpdatePrivacy(c *gin.Context) {
 				"isPrivate": user.IsPrivate, // Veritabanından okunan değeri kullan
 			},
 		},
+	})
+}
+
+// TerminateSession belirtilen oturumu (login aktivitesini) sonlandırır
+func TerminateSession(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, Response{Success: false, Message: "Oturum bilgisi bulunamadı"})
+		return
+	}
+
+	// Parametre adını doğrula (gin-gonic'te URL parametresi tam olarak routes.go'daki gibi olmalı)
+	sessionID := c.Param("sessionId")
+	fmt.Printf("[DEBUG] TerminateSession çağrıldı - userID: %v, sessionID: %v\n", userID, sessionID)
+
+	if sessionID == "" {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Message: "Oturum ID'si belirtilmedi"})
+		return
+	}
+
+	// Oturumun gerçekten bu kullanıcıya ait olup olmadığını kontrol et
+	var activity models.LoginActivity
+	result := database.DB.Where("id = ? AND user_id = ?", sessionID, userID).First(&activity)
+
+	if result.Error != nil {
+		fmt.Printf("[HATA] TerminateSession - Oturum bulunamadı: sessionID: %v, userID: %v, hata: %v\n", sessionID, userID, result.Error)
+		c.JSON(http.StatusNotFound, Response{
+			Success: false,
+			Message: "Belirtilen oturum bulunamadı",
+		})
+		return
+	}
+
+	// İlgili oturumu sonlandır (soft delete)
+	result = database.DB.Delete(&activity)
+	if result.Error != nil {
+		fmt.Printf("[HATA] TerminateSession - Oturum silinemedi: sessionID: %v, hata: %v\n", sessionID, result.Error)
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Oturum sonlandırılırken bir hata oluştu: " + result.Error.Error(),
+		})
+		return
+	}
+
+	fmt.Printf("[INFO] TerminateSession - Oturum başarıyla silindi: sessionID: %v\n", sessionID)
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Oturum başarıyla sonlandırıldı",
+	})
+}
+
+// TerminateAllOtherSessions şu anki oturum hariç tüm diğer oturumları sonlandırır
+func TerminateAllOtherSessions(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, Response{Success: false, Message: "Oturum bilgisi bulunamadı"})
+		return
+	}
+
+	// Şu anki oturumun IP ve User-Agent bilgilerini al
+	currentIP := c.ClientIP()
+	currentUserAgent := c.Request.UserAgent()
+
+	fmt.Printf("[DEBUG] TerminateAllOtherSessions çağrıldı - userID: %v, IP: %v\n", userID, currentIP)
+
+	// Mevcut oturum hariç diğer tüm oturumları sonlandır
+	result := database.DB.Where("user_id = ? AND (ip_address <> ? OR user_agent <> ?)",
+		userID, currentIP, currentUserAgent).Delete(&models.LoginActivity{})
+
+	if result.Error != nil {
+		fmt.Printf("[HATA] TerminateAllOtherSessions - Oturumlar silinemedi: userID: %v, hata: %v\n", userID, result.Error)
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Oturumlar sonlandırılırken bir hata oluştu: " + result.Error.Error(),
+		})
+		return
+	}
+
+	fmt.Printf("[INFO] TerminateAllOtherSessions - Tüm diğer oturumlar sonlandırıldı: userID: %v, sonlandırılan oturum sayısı: %v\n", userID, result.RowsAffected)
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: fmt.Sprintf("Diğer tüm oturumlar başarıyla sonlandırıldı (%d oturum)", result.RowsAffected),
 	})
 }

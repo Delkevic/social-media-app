@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -106,6 +108,44 @@ func FollowUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, Response{
 			Success: false,
 			Message: "Takip işlemi başarısız oldu: " + err.Error(),
+		})
+		return
+	}
+
+	// Takip eden kullanıcının bilgilerini al
+	var follower models.User
+	if err := database.DB.Select("id, username, full_name, profile_image").First(&follower, followerID).Error; err != nil {
+		// Kullanıcı bilgileri alınamazsa, bildirim olmadan devam et
+		c.JSON(http.StatusOK, Response{
+			Success: true,
+			Message: "Kullanıcı başarıyla takip edildi fakat bildirim gönderilemedi",
+			Data: gin.H{
+				"status": "following",
+			},
+		})
+		return
+	}
+
+	// Takip bildirimi oluştur
+	notification := models.Notification{
+		UserID:      followingUser.ID,
+		SenderID:    followerID.(uint),
+		Type:        "follow",
+		Content:     fmt.Sprintf("%s sizi takip etmeye başladı", follower.FullName),
+		ReferenceID: newFollow.ID,
+		IsRead:      false,
+		CreatedAt:   time.Now(),
+	}
+
+	// Bildirimi veritabanına kaydet
+	if err := database.DB.Create(&notification).Error; err != nil {
+		// Bildirim kaydedilemezse kullanıcıya hata döndürmeden devam et
+		c.JSON(http.StatusOK, Response{
+			Success: true,
+			Message: "Kullanıcı başarıyla takip edildi fakat bildirim gönderilemedi",
+			Data: gin.H{
+				"status": "following",
+			},
 		})
 		return
 	}

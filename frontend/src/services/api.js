@@ -6,6 +6,56 @@ const getToken = () => {
   return sessionStorage.getItem('token') || localStorage.getItem('token');
 };
 
+// Token yenileme işlemi - api fonksiyonu olarak tanımlandı
+const refreshToken = async () => {
+  try {
+    // Mevcut token'ı al
+    const token = getToken();
+    
+    // Token yoksa hata döndür
+    if (!token) {
+      return {
+        success: false,
+        message: "Oturum bulunamadı"
+      };
+    }
+    
+    const response = await fetch(`${API_URL}/auth/refresh-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ token })
+    });
+    
+    if (!response.ok) {
+      console.error('Token yenileme başarısız:', response.status);
+      return { 
+        success: false, 
+        message: `Token yenileme başarısız (${response.status})` 
+      };
+    }
+    
+    const data = await response.json();
+    
+    // Yeni token varsa sakla
+    if (data.token) {
+      if (localStorage.getItem('token')) {
+        localStorage.setItem('token', data.token);
+      } else {
+        sessionStorage.setItem('token', data.token);
+      }
+      console.log('Token başarıyla yenilendi');
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Token yenileme hatası:', error);
+    return { success: false, message: error.message || 'Token yenileme işlemi başarısız' };
+  }
+};
+
 // Temel fetch işlemi için yardımcı fonksiyon
 const fetchWithAuth = async (endpoint, options = {}) => {
   const token = getToken();
@@ -23,12 +73,9 @@ const fetchWithAuth = async (endpoint, options = {}) => {
     },
   };
   
-  // URL oluşturma mantığı: Endpoint /api/v1 ile mi başlıyor?
-  // Hayır, /v1/ ile başlıyor. Bu yüzden API_URL kullanılmalı.
-  // API_URL'nin 'http://localhost:8080/api' olduğunu varsayıyoruz.
-  const url = `${API_URL}${endpoint}`; // Endpoint zaten /v1/... içeriyor
-  
-  console.log(`API isteği: ${options.method || 'GET'} ${url}`, config.body ? `Body: ${config.body.substring(0, 100)}...` : ''); // Loglamayı iyileştir
+  const url = `${API_URL}${endpoint}`;
+  const method = options.method || 'GET';
+  console.log(`API isteği: ${method} ${url}`, options.body ? `Body: ${JSON.stringify(options.body).substring(0, 100)}...` : '');
   
   try {
     const response = await fetch(url, config);
@@ -36,7 +83,14 @@ const fetchWithAuth = async (endpoint, options = {}) => {
     if (!response.ok) {
       // Token süresi dolmuşsa veya yetkisiz erişim varsa
       if (response.status === 401) {
-        // Oturumu temizle ve login sayfasına yönlendir
+        // Token yenilemeyi dene
+        const refreshed = await refreshToken();
+        if (refreshed.success) {
+          // Token yenilendi, isteği tekrarla
+          return fetchWithAuth(endpoint, options);
+        }
+        
+        // Token yenilenemedi, oturumu temizle
         console.warn('Oturum süresi dolmuş veya geçersiz. Yeniden giriş yapmanız gerekiyor.');
         sessionStorage.removeItem('token');
         sessionStorage.removeItem('user');
@@ -45,47 +99,100 @@ const fetchWithAuth = async (endpoint, options = {}) => {
         
         // Eğer login sayfasında değilsek yönlendirelim
         if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+          window.location.href = '/login';
         }
-        return { success: false, message: 'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.' };
+        return { success: false, message: 'Oturum süresi dolmuş. Lütfen tekrar giriş yapın.', status: 401 };
       }
       
-      const errorData = await response.json();
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+      }
+      
       console.error(`API Hata (${endpoint}):`, errorData);
-      return { success: false, message: errorData.message || 'Bir hata oluştu' };
+      
+      // Hata mesajını errorData'nın çeşitli alanlarından almaya çalış
+      let errorMessage;
+      
+      if (typeof errorData === 'string') {
+        errorMessage = errorData;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else if (errorData.error) {
+        errorMessage = errorData.error;
+      } else if (errorData.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+        // Eğer errors bir dizi ise ilk hatayı al
+        errorMessage = typeof errorData.errors[0] === 'string' 
+          ? errorData.errors[0] 
+          : errorData.errors[0].message || errorData.errors[0].error || JSON.stringify(errorData.errors[0]);
+      } else {
+        errorMessage = `Sunucu hatası (${response.status})`;
+      }
+      
+      return { 
+        success: false, 
+        message: errorMessage, 
+        error: errorData,
+        status: response.status
+      };
     }
     
-    // Yanıtı loglarken daha dikkatli olalım
-    const responseClone = response.clone(); // Yanıtı klonla
+    // Yanıtı parse et
+    const responseClone = response.clone();
     try {
       const jsonResponse = await response.json();
-      console.log(`API Cevap (${url}):`, jsonResponse);
+      console.log(`API Cevap (${endpoint}):`, jsonResponse);
       
-      // Yanıt formatını kontrol et ve standat yanıt yapısına dönüştür
+      // Standart yanıt yapısı oluştur
       if (jsonResponse.success === undefined) {
-        // API success alanı döndürmüyorsa, bir success alanı ekle
-        return { success: true, data: jsonResponse };
+        return { 
+          success: true, 
+          data: jsonResponse, 
+          status: response.status 
+        };
       }
       
-      return jsonResponse;
+      return { 
+        ...jsonResponse, 
+        status: response.status 
+      };
     } catch (jsonError) {
-      // JSON parse edilemezse (örn. 404'te boş yanıt dönerse)
-      const textResponse = await responseClone.text(); // Klonlanmış yanıttan text al
-      console.warn(`API Cevap (${url}) JSON parse edilemedi. Durum: ${response.status}, Text: ${textResponse}`);
-      if (!response.ok) { // Hata durumuysa yine de hata mesajı dön
-          return { success: false, message: textResponse || `Sunucu hatası: ${response.status}` };
+      // JSON parse edilemezse
+      const textResponse = await responseClone.text();
+      console.warn(`API Cevap (${endpoint}) JSON parse edilemedi. Durum: ${response.status}, Text: ${textResponse}`);
+      
+      if (!response.ok) { 
+        return { 
+          success: false, 
+          message: textResponse || `Sunucu hatası: ${response.status}`, 
+          status: response.status 
+        };
       }
-      // Başarılı ama boş yanıt ise (örn. 204 No Content)
-      return { success: true, data: null }; 
+      
+      return { 
+        success: true, 
+        data: null, 
+        status: response.status 
+      };
     }
   } catch (error) {
-    console.error(`API Hatası (${url}):`, error);
-    return { success: false, message: error.message || 'API isteği sırasında beklenmeyen bir hata oluştu' };
+    console.error(`API Hatası (${endpoint}):`, error);
+    return { 
+      success: false, 
+      message: error.message || 'API isteği sırasında beklenmeyen bir hata oluştu',
+      error: error,
+      status: 0 // Ağ hatası durumunda durum kodu 0
+    };
   }
 };
 
 // API metotları
 const api = {
+  // Token yenileme
+  refreshToken,
+  
   // Kullanıcı ile ilgili işlemler
   user: {
     getProfile: () => fetchWithAuth('/user'),
@@ -130,92 +237,41 @@ const api = {
     },
     getFollowing: () => fetchWithAuth('/user/following'),
     getFollowers: () => fetchWithAuth('/user/followers'),
-    getFollowingByUsername: (username) => fetchWithAuth(`/profile/${username}/following`),
     getFollowersByUsername: (username) => fetchWithAuth(`/profile/${username}/followers`),
+    getFollowingByUsername: (username) => fetchWithAuth(`/profile/${username}/following`),
     follow: async (username) => {
       try {
-        const token = getToken();
-        const config = {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        };
-
-        console.log(`Kullanıcı takip ediliyor: username=${username}`);
-        const response = await axios.post(`${API_BASE_URL}/api/user/follow/${username}`, {}, config);
-
-        console.log('Takip cevabı:', response.data);
-        return { 
-          success: true, 
-          message: response.data.message || 'Takip edildi', 
-          data: response.data 
-        };
-      } catch (error) {
-        console.error('Takip etme işlemi sırasında hata:', error);
-        return {
-          success: false,
-          message: error.response?.data?.message || 'Kullanıcı takip edilemedi.'
-        };
-      }
-    },
-    unfollow: async (username) => {
-      try {
-        const token = getToken();
-        const config = {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        };
-
-        console.log(`Kullanıcı takipten çıkarılıyor: username=${username}`);
-        const response = await axios.delete(`${API_BASE_URL}/api/user/follow/${username}`, config);
-
-        console.log('Takibi bırakma cevabı:', response.data);
-        return { 
-          success: true, 
-          message: response.data.message || 'Takip bırakıldı', 
-          data: response.data 
-        };
-      } catch (error) {
-        console.error('Takibi bırakma işlemi sırasında hata:', error);
-        return {
-          success: false,
-          message: error.response?.data?.message || 'Takipten çıkma işlemi başarısız oldu.'
-        };
-      }
-    },
-    cancelFollowRequest: async (username) => {
-      try {
-        const token = getToken();
-        const config = {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
-        };
-
-        console.log(`Takip isteği iptal ediliyor: username=${username}`);
-        const response = await axios.delete(`${API_BASE_URL}/api/user/follow-request/${username}`, config);
-
-        console.log('Takip isteği iptal cevabı:', response.data);
+        const response = await fetchWithAuth(`/user/follow/${username}`, {
+          method: 'POST',
+        });
+        
         return {
           success: true,
-          message: response.data.message || 'Takip isteği iptal edildi',
-          data: response.data
+          data: response,
+          message: response.message,
         };
       } catch (error) {
-        console.error('Takip isteği iptal işlemi sırasında hata:', error);
+        console.error('Follow error:', error);
         return {
           success: false,
-          message: error.response?.data?.message || 'Takip isteği iptal edilemedi.'
+          message: error.message || 'Takip işlemi başarısız oldu',
         };
       }
     },
+    unfollow: (username) => fetchWithAuth(`/user/follow/${username}`, {
+      method: 'DELETE',
+    }),
+    cancelFollowRequest: (username) => fetchWithAuth(`/user/follow-request/${username}`, {
+      method: 'DELETE',
+    }),
   },
   
   // Gönderi ile ilgili işlemler
   posts: {
     getFeeds: (feed = 'general') => fetchWithAuth(`/posts?feed=${feed}`),
     getUserPostsByUsername: (username) => fetchWithAuth(`/profile/${username}/posts`),
+    getUserPosts: () => fetchWithAuth('/posts/user'),
+    getPostById: (postId) => fetchWithAuth(`/posts/${postId}`),
     create: (data) => fetchWithAuth('/posts', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -493,6 +549,22 @@ const api = {
             }
           }
           
+          // Auth başarısız mesajı - token yenileme dene
+          if (data.type === 'auth_error' && data.error && data.error.includes('expired')) {
+            console.log('Token süresi dolmuş, yenileme deneniyor...');
+            
+            refreshToken().then(refreshed => {
+              if (refreshed.success) {
+                console.log('Token yenilendi, auth yeniden gönderiliyor');
+                sendAuthMessage();
+              } else {
+                console.error('Token yenilenemedi, bağlantı kapatılıyor');
+                ws.close();
+              }
+            });
+            return;
+          }
+          
           // Ping mesajlarına otomatik cevap ver
           if (data.type === 'ping') {
             if (ws.readyState === WebSocket.OPEN) {
@@ -692,6 +764,12 @@ const api = {
     updateSettings: (settings) => fetchWithAuth('/security/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
+    }),
+    terminateSession: (sessionId) => fetchWithAuth(`/user/session/${sessionId}`, {
+      method: 'DELETE',
+    }),
+    terminateAllOtherSessions: () => fetchWithAuth('/user/sessions/others', {
+      method: 'DELETE',
     }),
   },
 };

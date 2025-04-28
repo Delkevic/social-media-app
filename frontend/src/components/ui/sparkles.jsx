@@ -52,7 +52,7 @@ export const SparklesCore = (props) => {
     containerRef.current = container;
     
     if (container) {
-      if (isMountedRef.current) {
+        if (isMountedRef.current) {
         try {
           await controls.start({
             opacity: 1,

@@ -92,7 +92,7 @@ func AddComment(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "İçerik gerekli"})
-		return
+			return
 	}
 
 	// Yorumu oluştur
@@ -200,7 +200,7 @@ func ToggleCommentLike(c *gin.Context) {
 		}
 
 		// Yorum beğeni sayısını güncelle
-		database.DB.Model(&comment).Update("like_count", comment.LikeCount-1)
+			database.DB.Model(&comment).Update("like_count", comment.LikeCount-1)
 
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
@@ -209,18 +209,18 @@ func ToggleCommentLike(c *gin.Context) {
 		})
 	} else {
 		// Like yoksa ekle
-		like := models.CommentLike{
-			CommentID: uint(commentID),
+	like := models.CommentLike{
+		CommentID: uint(commentID),
 			UserID:    userID.(uint),
-		}
+	}
 
-		if err := database.DB.Create(&like).Error; err != nil {
+	if err := database.DB.Create(&like).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Beğeni eklenirken hata oluştu"})
-			return
-		}
+		return
+	}
 
 		// Yorum beğeni sayısını güncelle
-		database.DB.Model(&comment).Update("like_count", comment.LikeCount+1)
+	database.DB.Model(&comment).Update("like_count", comment.LikeCount+1)
 
 		// Beğeni yapan kullanıcının bilgilerini getir
 		var user models.User
@@ -243,11 +243,11 @@ func ToggleCommentLike(c *gin.Context) {
 			}
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
 			"message": "Yorum beğenildi",
 			"liked":   true,
-		})
+	})
 	}
 }
 

@@ -4,9 +4,9 @@
   --background-tertiary: #e5e7eb;
   --background-gradient: linear-gradient(
     to right top,
-    #047857,
-    #10b981,
-    #34d399
+    #037c68, /* Koyu turkuaz */
+    #0affd9, /* Açık turkuaz */
+    #99ffee  /* Çok açık turkuaz */
   );
   --background-card: rgba(255, 255, 255, 0.9);
   --background-card-hover: rgba(255, 255, 255, 1);
@@ -25,12 +25,12 @@
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
     0 4px 6px -2px rgba(0, 0, 0, 0.05);
 
-  --accent-green: #10b981; /* Ana yeşil renk (eski --accent-blue) */
-  --accent-green-light: #34d399; /* Açık yeşil (eski --accent-blue-light) */
-  --accent-green-dark: #047857; /* Koyu yeşil (eski --accent-blue-dark) */
+  --accent-primary: #0affd9; /* Ana turkuaz renk */
+  --accent-primary-light: #99ffee; /* Açık turkuaz */
+  --accent-primary-dark: #037c68; /* Koyu turkuaz */
   --accent-red: #ef4444;
   --accent-yellow: #f59e0b;
-  --accent-blue: #3b82f6; /* Eski ana renk, belki başka yerlerde kullanmak istersiniz */
+  --accent-blue: #3b82f6; /* Eski renk */
 
   --nav-bg: rgba(255, 255, 255, 0.9);
   --nav-text: #111827;
@@ -42,72 +42,60 @@
   --input-text: #111827;
   --input-placeholder: #9ca3af;
 
-  --btn-primary-bg: linear-gradient(to right, #047857, #10b981);
-  --btn-primary-text: #ffffff;
+  --btn-primary-bg: linear-gradient(to right, var(--accent-primary-dark), var(--accent-primary));
+  --btn-primary-text: #000000; /* Koyu tema için beyaz */
   --btn-secondary-bg: rgba(255, 255, 255, 0.1);
   --btn-secondary-text: #111827;
 
-  --transition-duration: 0.3s; /* Profilde gönderi takipçi takip statları sayfa ilk açıldığında siyah oluyor. Bu silinirse beyaz olarak başlıyor. */
+  --transition-duration: 0.2s; /* Daha hızlı geçiş */
 }
 
 [data-theme="dark"] {
-  /* Daha koyu arka planlar */
-  --background-primary: #0a0e17; /* Daha koyu gri ton */
-  --background-secondary: #141824; /* Daha derin bir ikincil arka plan */
-  --background-tertiary: #1f2633; /* Daha koyu üçüncül arka plan */
+  --background-primary: #000000; /* Tam siyah */
+  --background-secondary: #111111; /* Çok koyu gri */
+  --background-tertiary: #222222; /* Koyu gri */
   --background-gradient: linear-gradient(
     to right top,
-    #064e3b,
-    #065f46,
-    #047857
-  ); /* Daha koyu yeşil gradyan */
-  --background-card: rgba(20, 24, 36, 0.9); /* Kartlar için daha koyu ton */
-  --background-card-hover: rgba(20, 24, 36, 1);
-  --background-glass: rgba(10, 14, 23, 0.1); /* Daha koyu cam efekti */
+    var(--accent-primary-dark),
+    var(--accent-primary)
+  ); /* Turkuaz gradyan */
+  --background-card: rgba(17, 17, 17, 0.7); /* Hafif şeffaf kart */
+  --background-card-hover: rgba(34, 34, 34, 0.8);
+  --background-glass: rgba(0, 0, 0, 0.2); /* Daha belirgin cam efekti */
 
-  /* Metin renkleri (okunabilirlik için açık bırakıldı) */
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --text-tertiary: #9ca3af;
-  --text-inverted: #0a0e17;
+  --text-primary: #ffffff;
+  --text-secondary: #cccccc;
+  --text-tertiary: #999999;
+  --text-inverted: #000000;
 
-  /* Daha koyu gölgeler ve kenarlıklar */
-  --border-color: rgba(31, 38, 51, 0.8); /* Daha koyu bir kenarlık */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4),
-    0 2px 4px -1px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4),
-    0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --border-color: rgba(10, 255, 217, 0.2); /* Turkuaz kenarlık */
+  --shadow-sm: 0 1px 2px 0 rgba(10, 255, 217, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(10, 255, 217, 0.15),
+    0 2px 4px -1px rgba(10, 255, 217, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(10, 255, 217, 0.2),
+    0 4px 6px -2px rgba(10, 255, 217, 0.15);
 
-  /* Daha koyu accent renkler */
-  --accent-green: #059669; /* Daha koyu yeşil (eski --accent-blue) */
-  --accent-green-light: #10b981; /* Orta yeşil (eski --accent-blue-light) */
-  --accent-green-dark: #064e3b; /* Çok daha koyu yeşil ton (eski --accent-blue-dark) */
-  --accent-red: #dc2626; /* Daha koyu kırmızı */
-  --accent-yellow: #d97706; /* Daha koyu sarı */
-  --accent-blue: #1d4ed8; /* Eski koyu mavi, belki başka yerlerde kullanmak istersiniz */
+  --accent-primary: #0affd9; /* Ana turkuaz renk */
+  --accent-primary-light: #99ffee; /* Açık turkuaz */
+  --accent-primary-dark: #037c68; /* Koyu turkuaz */
+  --accent-red: #dc2626;
+  --accent-yellow: #d97706;
+  --accent-blue: #1d4ed8; /* Eski renk */
 
-  /* Daha koyu navigasyon */
-  --nav-bg: rgba(10, 14, 23, 0.9); /* Daha koyu nav */
-  --nav-text: #f9fafb;
-  --nav-border: rgba(31, 38, 51, 0.8);
-  --nav-glass: rgba(10, 14, 23, 0.1);
+  --nav-bg: rgba(0, 0, 0, 0.7); /* Daha şeffaf nav */
+  --nav-text: #ffffff;
+  --nav-border: rgba(10, 255, 217, 0.2);
+  --nav-glass: rgba(0, 0, 0, 0.2);
 
-  /* Daha koyu input alanları */
-  --input-bg: rgba(20, 24, 36, 0.8); /* Daha koyu input arka plan */
-  --input-border: rgba(55, 65, 81, 0.8); /* Daha koyu kenar */
-  --input-text: #f9fafb;
-  --input-placeholder: #6b7280;
+  --input-bg: rgba(17, 17, 17, 0.7); /* Hafif şeffaf input */
+  --input-border: rgba(10, 255, 217, 0.3); /* Turkuaz input kenarlığı */
+  --input-text: #ffffff;
+  --input-placeholder: #999999;
 
-  /* Daha koyu butonlar */
-  --btn-primary-bg: linear-gradient(
-    to right,
-    #064e3b,
-    #065f46
-  ); /* Daha koyu bir yeşil gradyan */
-  --btn-primary-text: #ffffff;
-  --btn-secondary-bg: rgba(20, 24, 36, 0.3);
-  --btn-secondary-text: #d1d5db;
+  --btn-primary-bg: linear-gradient(to right, var(--accent-primary-dark), var(--accent-primary));
+  --btn-primary-text: #000000;
+  --btn-secondary-bg: rgba(10, 255, 217, 0.1); /* Turkuaz hover/ikincil buton */
+  --btn-secondary-text: #0affd9;
 }
 
 /* Base Styles */
@@ -139,12 +127,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--background-tertiary);
+  background: var(--accent-primary-dark);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-green-dark);
+  background: var(--accent-primary);
 }
 
 /* Form elements */
@@ -157,6 +145,13 @@ select {
   border-radius: 0.5rem;
   padding: 0.5rem 1rem;
   outline: none;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(10, 255, 217, 0.3); /* Odaklandığında turkuaz glow */
 }
 
 input::placeholder,

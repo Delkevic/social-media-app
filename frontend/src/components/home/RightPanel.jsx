@@ -49,19 +49,14 @@ const RightPanel = ({ user, isProfilePage = false }) => {
       {/* Hata mesajı */}
       {error && (
         <div 
-          className="p-3 rounded-lg text-sm border text-center"
-          style={{
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            color: 'var(--accent-red)',
-            borderColor: 'var(--accent-red)',
-          }}
+          className="p-3 rounded-lg text-sm border border-red-600 bg-red-600/10 text-red-400 text-center"
         >
           {error}
         </div>
       )}
       
       {/* Mini Reels Oynatıcı */}
-      <div className="relative rounded-2xl overflow-hidden">
+      <div className="relative rounded-2xl overflow-hidden border border-[#0affd9]/20 bg-black/50 backdrop-blur-lg">
         <GlowingEffect
           spread={40}
           glow={true}
@@ -78,7 +73,7 @@ const RightPanel = ({ user, isProfilePage = false }) => {
       </div>
       
       {/* Reels Bölümü - HoverButton ile güncellendi */}
-      <div className="relative rounded-2xl overflow-hidden">
+      <div className="relative rounded-2xl overflow-hidden border border-[#0affd9]/20 bg-black/50 backdrop-blur-lg">
         <GlowingEffect
           spread={40}
           glow={true}
@@ -87,25 +82,15 @@ const RightPanel = ({ user, isProfilePage = false }) => {
           inactiveZone={0.01}
           borderWidth={2}
         />
-        <div 
-          className="rounded-2xl p-4 backdrop-blur-lg"
-          style={{
-            backgroundColor: "rgba(20, 24, 36, 0.7)",
-            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-            border: "1px solid rgba(255, 255, 255, 0.1)"
-          }}
-        >
+        <div className="p-4">
           <HoverButton
             onClick={() => navigate('/reels')}
             className="w-full flex items-center justify-center"
-            style={{
-              "--circle-start": "#8b5cf6",
-              "--circle-end": "#6366f1"
-            }}
+            color="#0affd9"
           >
-            <span className="flex items-center justify-center">
+            <span className="flex items-center justify-center text-white">
               <svg 
-                className="w-5 h-5 mr-2" 
+                className="w-5 h-5 mr-2 text-[#0affd9]"
                 fill="currentColor" 
                 viewBox="0 0 24 24" 
                 xmlns="http://www.w3.org/2000/svg"

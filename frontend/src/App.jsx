@@ -26,8 +26,8 @@ const ProtectedRoute = ({ children }) => {
   
   // Yükleme devam ediyorsa, henüz yönlendirme yapmayalım
   if (loading) {
-    return <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-      <div className="animate-pulse text-blue-400">Yükleniyor...</div>
+    return <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="animate-pulse text-[#0affd9]">Yükleniyor...</div>
     </div>;
   }
   
@@ -75,87 +75,80 @@ function App() {
   return (
     <AuthProvider>
       <NotificationProvider> { /* NotificationProvider eklendi */ }
-        <Router>
+      <Router>
           <NotificationPanelWrapper /> { /* NotificationPanel wrapper ile render ediliyor */ }
-          <Routes>
-            {/* Ana sayfa için koruma ekledik */}
-            <Route 
-              path="/" 
-              element={
-                <ProtectedRoute>
-                  <Home />
-                </ProtectedRoute>
-              } 
-            />
-            {/* Authentication routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<RegisterPage />} /> {/* Updated to use RegisterPage */}
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/verify-code" element={<VerifyCode />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
+        <Routes>
+          {/* Ana sayfa için koruma ekledik */}
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            } 
+          />
+          {/* Authentication routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<RegisterPage />} /> {/* Updated to use RegisterPage */}
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/verify-code" element={<VerifyCode />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/two-factor-verify" element={<TwoFactorVerify />} /> {/* İki faktörlü doğrulama rotası eklendi */}
-            <Route 
-              path="/profile/:username"
-              element={
-                <ProtectedRoute>
-                  <Profile />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/reels" 
-              element={<Reels />} // Using Reels component without protection to test
-            />
-            {/* Mesajlar sayfası */}
-            <Route 
-              path="/messages"
-              element={
-                <ProtectedRoute>
-                  <Messages />
-                </ProtectedRoute>
-              } 
-            />
-            {/* Belirli bir kullanıcı ile mesajlaşma */}
-            <Route 
-              path="/messages/:userId"
-              element={
-                <ProtectedRoute>
-                  <Messages />
-                </ProtectedRoute>
-              } 
-            />
-            {/* Ayarlar sayfası */}
-            <Route 
-              path="/settings"
-              element={
-                <ProtectedRoute>
-                  <SettingsPage />
-                </ProtectedRoute>
-              } 
-            />
-            {/* Takip İstekleri sayfası */}
-            <Route 
-              path="/follow-requests"
-              element={
-                <ProtectedRoute>
-                  <FollowRequestsPage />
-                </ProtectedRoute>
-              } 
-            />
-            {/* Bildirimler sayfası route'u kaldırıldı */}
-            {/* 
-            <Route 
-              path="/notifications"
-              element={
-                <ProtectedRoute>
-                  <Notifications />
-                </ProtectedRoute>
-              } 
-            /> 
-            */}
-          </Routes>
-          <ChatPanel />
-        </Router>
+          
+          {/* Bildirimler sayfası artık olmadığı için, /notifications rotasını ana sayfaya yönlendir */}
+          <Route path="/notifications" element={<Navigate to="/" replace />} />
+          
+          <Route 
+            path="/profile/:username"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/reels" 
+            element={<Reels />} // Using Reels component without protection to test
+          />
+          {/* Mesajlar sayfası */}
+          <Route 
+            path="/messages"
+            element={
+              <ProtectedRoute>
+                <Messages />
+              </ProtectedRoute>
+            } 
+          />
+          {/* Belirli bir kullanıcı ile mesajlaşma */}
+          <Route 
+            path="/messages/:userId"
+            element={
+              <ProtectedRoute>
+                <Messages />
+              </ProtectedRoute>
+            } 
+          />
+          {/* Ayarlar sayfası */}
+          <Route 
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            } 
+          />
+          {/* Takip İstekleri sayfası */}
+          <Route 
+            path="/follow-requests"
+            element={
+              <ProtectedRoute>
+                <FollowRequestsPage />
+              </ProtectedRoute>
+            } 
+          />
+        </Routes>
+        <ChatPanel />
+      </Router>
       </NotificationProvider>
     </AuthProvider>
   );

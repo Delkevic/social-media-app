@@ -641,118 +641,73 @@ const Messages = () => {
     }
   }, [isTyping]);
 
-  // WebSocket Bağlantısı
+  // WebSocket bağlantısı - useEffect
   useEffect(() => {
     if (!currentUser) return;
     
-    const connectWebSocket = () => {
-      console.log("WebSocket bağlantısı kuruluyor...");
+    const connectWebSocket = async () => {
+      console.log("WebSocket bağlantısı başlatılıyor...");
+      wsConnectedRef.current = false;
       
-      // Önceki WebSocket bağlantısını temizle
-      if (wsRef.current) {
-        console.log("Önceki WebSocket bağlantısı kapatılıyor...");
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      
-      // Yeni WebSocket bağlantısı oluştur
-      const newWs = api.messages.createWebSocketConnection();
-      
-      // WebSocket bağlantısı başarısız olabilir, null kontrolü yap
-      if (!newWs) {
-        console.error("WebSocket bağlantısı oluşturulamadı.");
-        wsConnectedRef.current = false;
-        scheduleReconnect();
-        return;
-      }
-      
-      // WebSocket referansını güncelle
-      wsRef.current = newWs;
-      
-      // Bağlantı açıldığında
-      newWs.onopen = async () => {
-        console.log("WebSocket bağlantısı açıldı.");
-        wsConnectedRef.current = true;
-        
-        // Ping zamanlayıcısını temizle
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
-        }
-      };
-      
-      // Mesaj geldiğinde
-      newWs.onmessage = (event) => {
-        const receptionTime = Date.now(); // Mesajın alınma zamanını kaydet
+      try {
+        // Önce token'ın geçerli olduğundan emin ol
         try {
-          const data = JSON.parse(event.data);
-          console.log(`[${receptionTime}] WebSocket mesajı alındı:`, data);
-
-          // --- Mesaj Türü İşleme --- 
+          const refreshResponse = await api.refreshToken();
+          if (!refreshResponse.success) {
+            console.error("Token yenileme başarısız, WebSocket bağlantısı kurulamayabilir");
+          }
+        } catch (refreshError) {
+          console.warn("Token yenileme sırasında hata:", refreshError);
+        }
+        
+        // WebSocket bağlantısı oluştur
+        const newWs = api.websocket.connect();
+        wsRef.current = newWs;
+        
+        // Token doğrulama işlemini gerçekleştir
+        try {
+          await newWs.ensureAuthSent();
+          console.log("WebSocket auth başarıyla tamamlandı");
+          wsConnectedRef.current = true;
+        } catch (authError) {
+          console.error("WebSocket auth hatası:", authError.message);
+          return; // Auth başarısız olduğunda bağlantıyı yeniden kurmaya çalışma
+        }
+        
+        // Mesaj alma işleyicisi
+        newWs.onmessage = (event) => {
+          const receptionTime = Date.now();
           
-          // Ping/Pong mesajlarını yoksay
-          if (data.type === 'ping' || data.type === 'pong') {
-            return;
+          try {
+            const data = JSON.parse(event.data);
+            
+            // Auth başarı mesajı
+            if (data.type === 'auth_success') {
+              console.log("WebSocket bağlantı başarı mesajı alındı:", data.message);
+              return;
+            }
+
+            // Auth hata mesajı - token yenileme ihtiyacı
+            if (data.type === 'auth_error' && data.error && data.error.includes('expired')) {
+              console.log("Token süresi dolmuş, yenileme deneniyor...");
+              
+              // WebSocket'i kapat ve yeniden bağlan
+              scheduleReconnect(0);
+              return;
+            }
+            
+            // ... Mevcut diğer mesaj işlemleri ...
+          } catch (error) {
+            console.error(`[${receptionTime}] WebSocket mesajı ayrıştırma hatası:`, error, "Ham veri:", event.data);
           }
-
-          // Bağlantı başarı mesajını işle
-          if (data.success === true && data.message === 'WebSocket bağlantısı kuruldu') {
-             console.log("WebSocket bağlantı başarı mesajı alındı:", data.message);
-             return;
-          }
-
-          // Bildirim sayısı mesajını işle
-          if (data.type === 'notification_count') {
-            console.log("Bildirim sayısı alındı:", data);
-            return;
-          }
-
-          // Yazma durumu mesajını işle
-          if (data.type === 'typing') {
-             console.log("Yazma durumu alındı:", data);
-             // Seçili sohbete ait mi kontrol et
-             if (selectedConversation && data.senderId === selectedConversation.sender.id) {
-               setIsTyping(data.isTyping); // Yazma göstergesini güncelle
-             }
-             return;
-          }
-
-          // Sohbet Mesajlarını İşle
-          handleNewWebSocketMessage(data, receptionTime);
-
-        } catch (error) {
-          console.error(`[${receptionTime}] WebSocket mesajı ayrıştırma hatası:`, error, "Ham veri:", event.data);
-        }
-      };
-      
-      // Bağlantı kapandığında
-      newWs.onclose = (event) => {
-        console.log("WebSocket bağlantısı kapandı:", event);
-        wsConnectedRef.current = false;
-        
-        // Bağlantı yeniden kurulmaya çalışılacak
-        scheduleReconnect();
-      };
-      
-      // Bağlantı hatası
-      newWs.onerror = (event) => {
-        console.error("WebSocket hatası:", event);
-        wsConnectedRef.current = false;
-        
-        // Hatalı WebSocket'i kapat
-        try {
-          newWs.close();
-        } catch (e) {
-          console.error("WebSocket kapatma hatası:", e);
-        }
-        
-        // Bağlantı yeniden kurulmaya çalışılacak
-        scheduleReconnect();
-      };
+        };
+      } catch (error) {
+        console.error("WebSocket bağlantısı kurulurken hata:", error);
+      }
     };
     
     // Yeniden bağlanma zamanla
-    const scheduleReconnect = () => {
+    const scheduleReconnect = (delay) => {
       console.log("Yeniden bağlanma planlanıyor...");
       
       // Önceki yeniden bağlanma zamanlayıcısını temizle
@@ -766,7 +721,7 @@ const Messages = () => {
       reconnectTimeoutRef.current = setTimeout(() => {
         console.log("WebSocket yeniden bağlanma girişimi başlatılıyor...");
         connectWebSocket();
-      }, 3000);
+      }, delay * 1000);
     };
     
     // İlk bağlantıyı kur
@@ -785,7 +740,7 @@ const Messages = () => {
         reconnectTimeoutRef.current = null;
       }
     };
-  }, [currentUser, selectedConversation]);
+  }, [currentUser]);
   
   // WebSocket üzerinden gelen yeni mesajı işle
   const handleNewWebSocketMessage = (message, receptionTime) => {

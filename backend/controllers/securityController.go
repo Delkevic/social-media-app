@@ -167,8 +167,8 @@ func UpdateSecuritySettings(c *gin.Context) {
 
 		log.Printf("DEBUG: Yeni güvenlik ayarları başarıyla oluşturuldu - userID: %v", userID)
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": "Güvenlik ayarları başarıyla güncellendi"})
-		return
-	}
+			return
+		}
 
 	// Eğer güncelleme yapılacak alan yoksa hata dön
 	if len(updates) == 0 {

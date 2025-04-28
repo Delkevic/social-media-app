@@ -6,7 +6,6 @@ import RightPanel from '../components/home/RightPanel';
 import { SparklesCore } from '../components/ui/sparkles';
 import { GlowingEffect } from '../components/ui/GlowingEffect';
 import api from '../services/api';
-import { motion } from 'framer-motion';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { API_URL } from '../config/constants';
 import axios from 'axios';
@@ -29,64 +28,18 @@ const Home = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const navigate = useNavigate();
 
-  // Animasyon varyantları
-  const leftPanelVariants = {
-    hidden: { x: -100, opacity: 0 },
-    visible: { 
-      x: 0, 
-      opacity: 1,
-      transition: { 
-        type: "spring", 
-        stiffness: 300, 
-        damping: 24,
-        delay: 0.3
-      } 
+  useEffect(() => {
+    // localStorage'dan openPostForm bayrağını kontrol et
+    const openPostForm = localStorage.getItem('openPostForm');
+    if (openPostForm === 'true') {
+      setShowCreateForm(true);
+      // Bayrağı temizle
+      localStorage.removeItem('openPostForm');
     }
-  };
-
-  const rightPanelVariants = {
-    hidden: { x: 100, opacity: 0 },
-    visible: { 
-      x: 0, 
-      opacity: 1,
-      transition: { 
-        type: "spring", 
-        stiffness: 300, 
-        damping: 24,
-        delay: 0.3
-      } 
-    }
-  };
-
-  const searchVariants = {
-    hidden: { y: -50, opacity: 0 },
-    visible: { 
-      y: 0, 
-      opacity: 1,
-      transition: { 
-        type: "spring", 
-        stiffness: 300, 
-        damping: 24,
-        delay: 0.2
-      } 
-    }
-  };
-
-  const contentVariants = {
-    hidden: { y: 50, opacity: 0 },
-    visible: { 
-      y: 0, 
-      opacity: 1,
-      transition: { 
-        type: "spring", 
-        stiffness: 300, 
-        damping: 24,
-        delay: 0.4
-      } 
-    }
-  };
+  }, []);
 
   useEffect(() => {
     // Kullanıcı oturum bilgilerini kontrol et
@@ -96,34 +49,42 @@ const Home = () => {
         const storedUser = JSON.parse(sessionStorage.getItem('user')) || JSON.parse(localStorage.getItem('user'));
         const token = sessionStorage.getItem('token') || localStorage.getItem('token');
         
-        // Kullanıcı giriş yapmamışsa login sayfasına yönlendir
+        // Kullanıcı giriş yapmamışsa login sayfasına yönlendir
         if (!storedUser || !token) {
           navigate('/login');
           return;
         }
         
-        // Başlangıçta storedUser'ı ata, böylece sayfa hemen render olur
+        // Başlangıçta storedUser'ı ata, böylece sayfa hemen render olur
         setUser(storedUser);
         
-        // API'den güncel kullanıcı bilgilerini çek
+        // API'den güncel kullanıcı bilgilerini çek
         const response = await api.user.getProfile();
         
         if (response.success && response.data && response.data.user) {
-          // Güncel kullanıcı bilgilerini state'e kaydet
+          // Güncel kullanıcı bilgilerini state'e kaydet
           setUser(response.data.user);
           
-          // Güncel kullanıcı bilgilerini storage'a da kaydet
+          // Güncel kullanıcı bilgilerini storage'a da kaydet
           if (localStorage.getItem('token')) {
             localStorage.setItem('user', JSON.stringify(response.data.user));
           } else {
             sessionStorage.setItem('user', JSON.stringify(response.data.user));
           }
+        } else {
+          // Eğer API'den kullanıcı bilgisi alınamazsa ama token varsa, eski bilgiyi kullanmaya devam et
+          // Bu senaryoda bir hata loglayabilir veya kullanıcıya bilgi verebiliriz
+          console.warn("API'den güncel profil alınamadı, local storage verisi kullanılacak.");
+          if (!storedUser) { // Eğer local storage'da da kullanıcı yoksa logout
+             throw new Error("Kullanıcı bilgisi bulunamadı.");
+          }
         }
       } catch (err) {
-        setError('Profil bilgileri yüklenirken bir hata oluştu: ' + err.message);
+        setError('Profil bilgileri yüklenirken bir hata oluştu: ' + err.message);
+        console.error("Auth/Profil Hatası:", err);
         
-        // Kimlik doğrulama hatası varsa, oturumu kapat ve login sayfasına yönlendir
-        if (err.message.includes('401') || err.message.includes('yetkisiz')) {
+        // Kimlik doğrulama hatası varsa veya kullanıcı bilgisi hiç yoksa
+        if (err.message.includes('401') || err.message.includes('yetkisiz') || err.message.includes('bulunamadı')) {
           sessionStorage.removeItem('token');
           sessionStorage.removeItem('user');
           localStorage.removeItem('token');
@@ -140,7 +101,7 @@ const Home = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen relative flex items-center justify-center overflow-hidden">
+      <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-black">
         {/* Sparkles arkaplan */}
         <div className="w-full absolute inset-0 h-screen">
           {convertBooleanProps({
@@ -151,7 +112,7 @@ const Home = () => {
               maxSize={1.4}
               particleDensity={70}
               className="w-full h-full"
-              particleColor="#FFFFFF"
+              particleColor="#0affd9"
               speed={0.8}
               jsx="true"
               global="true"
@@ -161,12 +122,12 @@ const Home = () => {
         
         {/* Radyal gradient maskesi */}
         <div 
-          className="absolute inset-0 w-full h-full bg-slate-950 opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
+          className="absolute inset-0 w-full h-full bg-black opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
           style={{ backdropFilter: "blur(3px)" }}
         ></div>
         
         <div className="relative z-10">
-          <div className="animate-spin h-12 w-12 border-4 rounded-full border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent"></div>
+          <div className="animate-spin h-12 w-12 border-4 rounded-full border-t-[#0affd9] border-r-transparent border-b-transparent border-l-transparent"></div>
         </div>
       </div>
     );
@@ -174,7 +135,7 @@ const Home = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen relative flex items-center justify-center overflow-hidden">
+      <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-black">
         {/* Sparkles arkaplan */}
         <div className="w-full absolute inset-0 h-screen">
           {convertBooleanProps({
@@ -185,7 +146,7 @@ const Home = () => {
               maxSize={1.4}
               particleDensity={70}
               className="w-full h-full"
-              particleColor="#FFFFFF"
+              particleColor="#0affd9"
               speed={0.5}
               jsx="true"
               global="true"
@@ -195,21 +156,20 @@ const Home = () => {
         
         {/* Radyal gradient maskesi */}
         <div 
-          className="absolute inset-0 w-full h-full bg-slate-950 opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
+          className="absolute inset-0 w-full h-full bg-black opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
           style={{ backdropFilter: "blur(3px)" }}
         ></div>
         
-        <div className="relative z-10 max-w-md p-6 rounded-2xl" style={{ backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-          <svg className="w-12 h-12 mx-auto mb-4" style={{ color: '#ef4444' }} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <div className="relative z-10 max-w-md p-6 rounded-2xl bg-black/70 border border-[#0affd9]/20 backdrop-blur-lg">
+          <svg className="w-12 h-12 mx-auto mb-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          <h2 className="text-xl font-semibold text-center mb-2">Hata Oluştu</h2>
-          <p className="text-center mb-4" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>{error}</p>
+          <h2 className="text-xl font-semibold text-center mb-2 text-white">Hata Oluştu</h2>
+          <p className="text-center mb-4 text-gray-300">{error}</p>
           <div className="flex justify-center">
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 rounded-lg font-medium transition-colors"
-              style={{ backgroundColor: '#3b82f6', color: 'white' }}
+              className="px-4 py-2 rounded-lg font-medium transition-colors bg-[#0affd9] text-black hover:bg-[#0affd9]/80"
             >
               Tekrar Dene
             </button>
@@ -220,7 +180,7 @@ const Home = () => {
   }
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen relative bg-black text-white">
       {/* Sparkles arkaplan */}
       <div className="w-full absolute inset-0 h-screen">
         {convertBooleanProps({
@@ -231,7 +191,7 @@ const Home = () => {
             maxSize={1.4}
             particleDensity={50}
             className="w-full h-full"
-            particleColor="#FFFFFF"
+            particleColor="#0affd9"
             speed={0.3}
             jsx="true"
             global="true"
@@ -241,56 +201,27 @@ const Home = () => {
       
       {/* Radyal gradient maskesi */}
       <div 
-        className="absolute inset-0 w-full h-full bg-slate-950 opacity-95 [mask-image:radial-gradient(circle_at_center,transparent_10%,black)]"
+        className="absolute inset-0 w-full h-full bg-black opacity-95 [mask-image:radial-gradient(circle_at_center,transparent_10%,black)]"
         style={{ backdropFilter: "blur(3px)" }}
       ></div>
       
       <div className="container mx-auto relative z-10 p-4">
-        <div className="flex flex-col lg:flex-row gap-4">
-          {/* Sol Panel - Yapışkan sınıfı eklendi */}
-          <motion.div 
-            className="w-full lg:w-1/4 sticky top-4 self-start"
-            variants={leftPanelVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            {/* LeftPanel içindeki NavigationLinks artık düzgün çalışmalı */}
-            <LeftPanel user={user} showMessagesAndNotifications={false} /> 
-          </motion.div>
-          
-          {/* Orta İçerik - Orijinal genişlik */}
-          <div className="w-full lg:w-2/4">
-            <motion.div
-              variants={searchVariants}
-              initial="hidden"
-              animate="visible"
-              className="sticky top-4 z-10"
-            >
-              {/* Arama Çubuğu - sticky yapıldı */}
-              <div className="mb-4">
-                <MainContent user={user} showSearchOnly={true} />
-              </div>
-            </motion.div>
-            
-            <motion.div
-              variants={contentVariants}
-              initial="hidden"
-              animate="visible"
-            >
-              {/* İçerik - aşağıdan gelecek */}
-              <MainContent user={user} hideSearch={true} />
-            </motion.div>
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Sol Panel */}
+          <div className="w-full lg:w-1/4 lg:sticky lg:top-4 self-start">
+            <LeftPanel user={user} showMessagesAndNotifications={true} onPostFormToggle={setShowCreateForm} /> 
           </div>
           
-          {/* Sağ Panel - Burası zaten sticky */}
-          <motion.div 
-            className="w-full lg:w-1/4 sticky top-4 self-start" 
-            variants={rightPanelVariants}
-            initial="hidden"
-            animate="visible"
-          >
+          {/* Orta İçerik */}
+          <div className="w-full lg:w-2/4 space-y-6">
+             {/* MainContent bileşenine hideSearch prop'unu geçirme */}
+            <MainContent user={user} showCreateForm={showCreateForm} setShowCreateForm={setShowCreateForm} /> 
+          </div>
+          
+          {/* Sağ Panel */}
+          <div className="w-full lg:w-1/4 lg:sticky lg:top-4 self-start">
             <RightPanel user={user} /> 
-          </motion.div>
+          </div>
         </div>
       </div>
     </div>

@@ -9,9 +9,8 @@ import {
   ChevronDown, 
   Heart, 
   MessageCircle, 
-  Share2, 
+  Share2,
   Plus, 
-  Music, 
   User,
   ArrowLeft,
   Upload,
@@ -25,7 +24,8 @@ import {
   Send,
   Trash,
   Copy,
-  Link
+  Link,
+  Bookmark
 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -127,7 +127,7 @@ const SAMPLE_COMMENTS = [
 // Mesaj çubuğu bileşeni
 const AuthRequiredBanner = ({ onLogin }) => (
   <motion.div
-    className="fixed top-0 left-0 right-0 p-4 bg-gradient-to-r from-purple-500 to-blue-500 text-white z-50"
+    className="fixed top-0 left-0 right-0 p-4 bg-gradient-to-r from-[#0affd9] to-[#037c68] text-black z-50"
     initial={{ y: -100 }}
     animate={{ y: 0 }}
     transition={{ type: 'spring', stiffness: 500, damping: 25 }}
@@ -137,7 +137,7 @@ const AuthRequiredBanner = ({ onLogin }) => (
         Reels'i tam olarak deneyimlemek için giriş yapın
       </p>
       <motion.button
-        className="px-4 py-2 bg-white text-purple-600 rounded-full text-sm font-medium"
+        className="px-4 py-2 bg-black text-[#0affd9] rounded-full text-sm font-medium"
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={onLogin}
@@ -151,15 +151,15 @@ const AuthRequiredBanner = ({ onLogin }) => (
 // Sol panele eklenecek seçici bileşeni
 const TabSelector = ({ activeTab, setActiveTab }) => {
   return (
-    <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-3 mt-4">
-      <h3 className="text-sm font-medium mb-3 text-white/70">Reels İçerikleri</h3>
+    <div className="bg-black/50 backdrop-blur-sm rounded-xl p-3 mt-4 border border-[#0affd9]/20">
+      <h3 className="text-sm font-medium mb-3 text-[#0affd9]">Reels İçerikleri</h3>
       <div className="flex flex-col space-y-2">
         <button
           onClick={() => setActiveTab('following')}
           className={`flex items-center px-3 py-2 rounded-lg transition-colors ${
             activeTab === 'following'
-              ? 'bg-purple-500/20 text-purple-400 border-l-2 border-purple-500'
-              : 'text-white/70 hover:bg-slate-700/50'
+              ? 'bg-[#0affd9]/20 text-[#0affd9] border-l-2 border-[#0affd9]'
+              : 'text-white/70 hover:bg-black/70'
           }`}
         >
           <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -172,8 +172,8 @@ const TabSelector = ({ activeTab, setActiveTab }) => {
           onClick={() => setActiveTab('explore')}
           className={`flex items-center px-3 py-2 rounded-lg transition-colors ${
             activeTab === 'explore'
-              ? 'bg-purple-500/20 text-purple-400 border-l-2 border-purple-500'
-              : 'text-white/70 hover:bg-slate-700/50'
+              ? 'bg-[#0affd9]/20 text-[#0affd9] border-l-2 border-[#0affd9]'
+              : 'text-white/70 hover:bg-black/70'
           }`}
         >
           <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -272,11 +272,22 @@ const Reels = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [likedReels, setLikedReels] = useState({});
+  const [savedReels, setSavedReels] = useState({});
   const lastTouchY = useRef(null);
   const touchStartTime = useRef(null);
   const isScrolling = useRef(false);
   const lastScrollTime = useRef(0);
   
+  // localStorage'dan openReelUploader bayrağını kontrol et
+  useEffect(() => {
+    const openReelUploader = localStorage.getItem('openReelUploader');
+    if (openReelUploader === 'true') {
+      setShowUploadModal(true); // Reel yükleme modalını aç
+      // Bayrağı temizle
+      localStorage.removeItem('openReelUploader');
+    }
+  }, []);
+
   // API isteği öncesi token kontrolü yapmak için yardımcı fonksiyon
   const secureApiRequest = useCallback(async (requestFn, fallbackValue = null) => {
     if (!token) {
@@ -544,6 +555,42 @@ const Reels = () => {
     }
   };
 
+  // Kaydetme işlevi
+  const handleSave = async (reelId) => {
+    if (!token) {
+      toast.error('Kaydetmek için giriş yapmanız gerekiyor');
+      return;
+    }
+
+    // Optimistik UI güncelleme
+    const wasSaved = savedReels[reelId];
+    setSavedReels(prev => ({
+      ...prev,
+      [reelId]: !wasSaved
+    }));
+
+    try {
+      // API ile kaydetme/kaydı geri alma işlemi
+      // TODO: Backend endpoint'i hazır olduğunda burayı güncelle
+      // await secureApiRequest(() => 
+      //   axios.post(`${API_URL}/reels/${reelId}/save`, {}, {
+      //     headers: { Authorization: `Bearer ${token}` }
+      //   })
+      // );
+      toast.success(wasSaved ? 'Kaydedilenlerden çıkarıldı!' : 'Kaydedildi!'); // Geçici bildirim
+    } catch (err) {
+      console.error('Kaydetme işlemi hatası:', err);
+
+      // Hata durumunda UI'ı geri al
+      setSavedReels(prev => ({
+        ...prev,
+        [reelId]: wasSaved // Önceki duruma döndür
+      }));
+
+      toast.error('Kaydetme işlemi sırasında bir hata oluştu');
+    }
+  };
+
   // Yorum panelini aç
   const handleComment = (reelId) => {
     setActiveReelId(reelId);
@@ -612,7 +659,7 @@ const Reels = () => {
 
   return (
     <div 
-      className="relative h-screen w-full overflow-hidden bg-slate-950"
+      className="relative h-screen w-full overflow-hidden bg-black"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       id="reels-container" 
@@ -621,7 +668,7 @@ const Reels = () => {
       {/* Toast bildirimleri */}
       <Toaster position="top-center" />
       
-      {/* Sparkles Arkaplanı */}
+      {/* Sparkles Arkaplanı - neon yeşil/turkuaz renge dönüştürülüyor */}
       <div className="w-full absolute inset-0 h-screen">
         {convertBooleanProps({
           component: <SparklesCore
@@ -629,9 +676,9 @@ const Reels = () => {
             background="transparent"
             minSize={0.6}
             maxSize={1.4}
-            particleDensity={50}
+            particleDensity={70}
             className="w-full h-full"
-            particleColor="#FFFFFF"
+            particleColor="#0affd9"
             speed={0.3}
             jsx="true"
             global="true"
@@ -639,36 +686,57 @@ const Reels = () => {
         }).component}
       </div>
       
-      {/* Radyal gradient maskesi */}
+      {/* Radyal gradient maskesi - rengi değiştiriliyor */}
       <div 
-        className="absolute inset-0 w-full h-full bg-black opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_5%,black)]"
-        style={{ backdropFilter: "blur(4px)" }}
+        className="absolute inset-0 w-full h-full bg-black opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
+        style={{ backdropFilter: "blur(3px)" }}
       ></div>
 
-      {/* Giriş gerektiren mesaj */}
-      {!user && <AuthRequiredBanner onLogin={navigateToLogin} />}
+      {/* Giriş gerektiren mesaj - rengi güncelleniyor */}
+      {!user && (
+        <motion.div
+          className="fixed top-0 left-0 right-0 p-4 bg-gradient-to-r from-[#0affd9] to-[#037c68] text-black z-50"
+          initial={{ y: -100 }}
+          animate={{ y: 0 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+        >
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            <p className="text-sm md:text-base">
+              Reels'i tam olarak deneyimlemek için giriş yapın
+            </p>
+            <motion.button
+              className="px-4 py-2 bg-black text-[#0affd9] rounded-full text-sm font-medium"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={navigateToLogin}
+            >
+              Giriş Yap
+            </motion.button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Ana içerik */}
       <div className="relative flex h-screen z-20">
-        {/* Sol Panel */}
-        <div className={`hidden md:block w-64 lg:w-72 h-full border-r border-slate-800/30 p-4 ${showCommentsPanel ? 'animate-slide-left' : ''}`}>
+        {/* Sol Panel - sınır rengi değiştiriliyor */}
+        <div className={`hidden md:block w-64 lg:w-72 h-full border-r border-[#0affd9]/20 p-4 ${showCommentsPanel ? 'animate-slide-left' : ''}`}>
           <LeftPanel showMessagesAndNotifications={false} />
           
-          {/* Tab Seçici */}
+          {/* Tab Seçici - zaten yukarıda güncellendi */}
           <TabSelector activeTab={activeTab} setActiveTab={setActiveTab} />
           
           {/* Reels İstatistikleri */}
           <ReelsStats />
           
-          {/* Popüler Hesaplar */}
+          {/* Popüler Hesaplar - zaten yukarıda güncellendi */}
           <PopularAccounts />
           
-          {/* Video Yükleme Butonu */}
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-3 mt-4">
-            <h3 className="text-sm font-medium mb-3 text-white/70">Yeni İçerik</h3>
+          {/* Video Yükleme Butonu - rengi değiştiriliyor */}
+          <div className="bg-black/50 backdrop-blur-sm rounded-xl p-3 mt-4 border border-[#0affd9]/20">
+            <h3 className="text-sm font-medium mb-3 text-[#0affd9]">Yeni İçerik</h3>
             <button
               onClick={() => setShowUploadModal(true)}
-              className="flex items-center justify-center w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 text-white rounded-lg transition-colors"
+              className="flex items-center justify-center w-full px-4 py-3 bg-gradient-to-r from-[#0affd9] to-[#037c68] hover:from-[#0affd9]/90 hover:to-[#037c68]/90 text-black rounded-lg transition-colors"
             >
               <Plus className="h-5 w-5 mr-2" />
               <span>Reel Oluştur</span>
@@ -676,20 +744,13 @@ const Reels = () => {
           </div>
         </div>
         
-        {/* Ana içerik alanı */}
+        {/* Ana içerik alanı - navbar kaldırıldı ve içerik tam ekran yapıldı */}
         <div className={`flex-1 h-full ${showCommentsPanel ? 'animate-slide-left-main' : ''}`}>
-          {/* Header */}
-          <ReelsHeader 
-            onOpenCamera={() => setShowUploadModal(true)}
-            onSearchToggle={() => setShowSearchInput(!showSearchInput)}
-            showSearchInput={showSearchInput}
-          />
-          
-          {/* Reels içeriği */}
-          <div className="flex items-center justify-center h-[calc(100vh-56px)]">
+          {/* Reels içeriği - h-screen ile tam ekran yapıldı ve py-4 ile dikey boşluk eklendi */}
+          <div className="flex items-center justify-center h-screen py-4">
             {loading ? (
               <div className="flex flex-col items-center justify-center text-white">
-                <div className="w-16 h-16 border-t-2 border-b-2 border-purple-500 rounded-full animate-spin mb-4"></div>
+                <div className="w-16 h-16 border-t-2 border-b-2 border-[#0affd9] rounded-full animate-spin mb-4"></div>
                 <p className="text-lg">Reels yükleniyor...</p>
               </div>
             ) : error ? (
@@ -699,13 +760,13 @@ const Reels = () => {
                 <p className="text-gray-400 mb-4">{error}</p>
                 <div className="flex gap-4">
                   <button 
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
+                    className="px-4 py-2 bg-black/70 hover:bg-black text-white rounded-lg transition-colors border border-[#0affd9]/30"
                     onClick={() => navigate('/')}
                   >
                     Ana sayfaya dön
                   </button>
                   <button 
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                    className="px-4 py-2 bg-[#0affd9] hover:bg-[#0affd9]/80 text-black rounded-lg transition-colors"
                     onClick={() => fetchReels()}
                   >
                     Tekrar dene
@@ -728,14 +789,14 @@ const Reels = () => {
                 <div className="flex gap-4">
                   {activeTab === 'following' ? (
                     <button 
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                      className="px-4 py-2 bg-[#0affd9] hover:bg-[#0affd9]/80 text-black rounded-lg transition-colors"
                       onClick={() => setActiveTab('explore')}
                     >
                       Keşfete git
                     </button>
                   ) : (
                     <button 
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                      className="px-4 py-2 bg-[#0affd9] hover:bg-[#0affd9]/80 text-black rounded-lg transition-colors"
                       onClick={() => setShowUploadModal(true)}
                     >
                       Reel oluştur
@@ -745,26 +806,26 @@ const Reels = () => {
               </div>
             ) : (
               <div className="flex items-center justify-center">
-                {/* Reels alanı - 9:16 oranında container */}
+                {/* Reels alanı - Tam ekranı kaplayan bir container */}
                 <div className="relative flex flex-row gap-8">
-                  {/* Video container - TikTok tarzı, daha büyük boyutlar */}
+                  {/* Video container - daha büyük boyutta ve tam ekran - yüksekliği biraz azaltıldı (100vh - padding) */}
                   <div 
-                    className="relative w-full max-w-[400px] aspect-[9/16] rounded-xl overflow-hidden bg-black md:w-[400px] md:h-[calc(90vh)] shadow-2xl"
+                    className="relative w-full max-w-[500px] aspect-[9/16] rounded-xl overflow-hidden bg-black md:h-[calc(100vh-32px)] shadow-2xl"
                     style={{ 
-                      boxShadow: "0 0 25px rgba(123, 31, 162, 0.5)",
-                      border: "1px solid rgba(255, 255, 255, 0.1)"
+                      boxShadow: "0 0 25px rgba(10, 255, 217, 0.5)",
+                      border: "1px solid rgba(10, 255, 217, 0.2)"
                     }}
                   >
-                    {/* Yukarı kaydırma indikatörü */}
+                    {/* Yukarı kaydırma indikatörü - renkleri güncelleniyor */}
                     {currentReelIndex > 0 && (
                       <motion.div 
-                        className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30 bg-slate-900/70 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center"
+                        className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center border border-[#0affd9]/30"
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                       >
-                        <ChevronUp className="h-4 w-4 text-white mr-1.5" />
-                        <span className="text-white text-xs">Yukarı kaydır</span>
+                        <ChevronUp className="h-4 w-4 text-[#0affd9] mr-1.5" />
+                        <span className="text-[#0affd9] text-xs">Yukarı kaydır</span>
                       </motion.div>
                     )}
                     
@@ -786,11 +847,11 @@ const Reels = () => {
                           isActive={index === currentReelIndex}
                         />
                         
-                        {/* Video bilgileri (caption, username, vb.) */}
+                        {/* Video bilgileri (caption, username, vb.) - takip et butonu rengi değiştiriliyor */}
                         <div className="absolute bottom-24 left-4 right-16 z-30 bg-gradient-to-t from-black/70 to-transparent pt-16 pb-3 px-2 -mx-2 rounded-b-xl">
                           <h4 className="text-white font-bold flex items-center text-lg">
                             {reel.user.username}
-                            <span className="ml-2 text-sm bg-blue-500 text-white px-1.5 py-0.5 rounded-full text-[10px] font-medium">Takip Et</span>
+                            <span className="ml-2 text-sm bg-[#0affd9] text-black px-1.5 py-0.5 rounded-full text-[10px] font-medium">Takip Et</span>
                           </h4>
                           <p className="text-white text-sm mt-1.5">{reel.caption}</p>
                           <div className="flex items-center mt-2 text-white/80 text-xs">
@@ -804,29 +865,31 @@ const Reels = () => {
                         </div>
                         
                         {/* Mobil ekranlarda (md breakpoint altında) içerideki kontrol butonları */}
-                        <div className="absolute bottom-16 right-3 z-30 md:hidden">
+                        <div className="absolute bottom-4 right-3 z-30 md:hidden">
                           <VideoControls 
                             reel={reel} 
                             onLikeClick={handleLike}
                             onCommentClick={handleComment}
                             onShareClick={handleShare}
+                            onSaveClick={handleSave}
                             isLiked={likedReels[reel.id] || reel.isLiked}
+                            isSaved={savedReels[reel.id]}
                             formatNumber={formatNumber}
                           />
                         </div>
                       </div>
                     ))}
                     
-                    {/* Aşağı kaydırma indikatörü */}
+                    {/* Aşağı kaydırma indikatörü - renkleri güncelleniyor */}
                     {currentReelIndex < reels.length - 1 && (
                       <motion.div 
-                        className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-30 bg-slate-900/60 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center"
+                        className="absolute bottom-2 left-1/2 transform -translate-x-1/2 z-30 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center border border-[#0affd9]/30"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 10 }}
                       >
-                        <ChevronDown className="h-4 w-4 text-white mr-1.5" />
-                        <span className="text-white text-xs">Aşağı kaydır</span>
+                        <ChevronDown className="h-4 w-4 text-[#0affd9] mr-1.5" />
+                        <span className="text-[#0affd9] text-xs">Aşağı kaydır</span>
                       </motion.div>
                     )}
                   </div>
@@ -839,7 +902,9 @@ const Reels = () => {
                         onLikeClick={handleLike}
                         onCommentClick={handleComment}
                         onShareClick={handleShare}
+                        onSaveClick={handleSave}
                         isLiked={likedReels[reels[currentReelIndex].id] || reels[currentReelIndex].isLiked}
+                        isSaved={savedReels[reels[currentReelIndex].id]}
                         formatNumber={formatNumber}
                       />
                     </div>
@@ -864,6 +929,13 @@ const Reels = () => {
         onClose={() => setShowUploadModal(false)}
         onSuccess={handleUploadSuccess}
         secureApiRequest={secureApiRequest}
+      />
+      
+      {/* Gizli upload butonu - LeftPanel'den erişilebilir */}
+      <button 
+        id="reels-upload-button" 
+        className="hidden"
+        onClick={() => setShowUploadModal(true)}
       />
     </div>
   );

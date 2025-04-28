@@ -37,14 +37,53 @@ const saveLastReadTimestamp = (timestamp) => {
 
 /**
  * Tüm bildirimleri getir
+ * @param {number} limit - İstenilen bildirim sayısı sınırı
  * @returns {Promise<Array>} - Bildirimler dizisi
  */
-export const getNotifications = async () => {
+export const getNotifications = async (limit) => {
   try {
-    const response = await api.notifications.getAll();
+    let response;
+    
+    if (limit) {
+      response = await api.notifications.getLimit(limit);
+    } else {
+      response = await api.notifications.getAll();
+    }
+    
+    console.log("API Bildirimleri ham yanıt:", response);
+    
     if (response && response.success) {
-      // Backend response.data.notifications içinde bildirimleri dönüyor
-      return response.data?.notifications || [];
+      // Backend'in yanıt yapısını kontrol et ve bildirim dizisini çıkart
+      let notifications = [];
+      
+      // Olası yanıt yapıları:
+      // 1. response.data.notifications - Array
+      // 2. response.data - Array
+      // 3. response.data - Object with notifications property
+      
+      if (response.data && response.data.notifications && Array.isArray(response.data.notifications)) {
+        console.log("notifications dizisi yapısı bulundu: response.data.notifications");
+        notifications = response.data.notifications;
+      } else if (response.data && Array.isArray(response.data)) {
+        console.log("notifications dizisi yapısı bulundu: response.data (array)");
+        notifications = response.data;
+      } else if (response.data && typeof response.data === 'object') {
+        // Nesne içinde alanları kontrol et
+        const possibleArrays = Object.values(response.data).filter(value => Array.isArray(value));
+        if (possibleArrays.length > 0) {
+          console.log("notifications dizisi yapısı bulundu: response.data içindeki ilk dizi");
+          notifications = possibleArrays[0];
+        }
+      }
+      
+      // Final kontrol
+      if (!Array.isArray(notifications)) {
+        console.warn("Bildirimler bir dizi değil:", notifications);
+        return [];
+      }
+      
+      console.log("İşlenmiş bildirimler (toplam " + notifications.length + "):", notifications);
+      return notifications;
     }
     
     console.warn('Bildirim yanıtı başarısız:', response);
@@ -103,9 +142,24 @@ export const markAsRead = async (notificationId) => {
 
 /**
  * Tüm bildirimleri okundu olarak işaretle
+ * @returns {Promise<boolean>} - İşlem başarılı mı?
  */
-export const markAllAsRead = () => {
-  saveLastReadTimestamp(Date.now());
+export const markAllAsRead = async () => {
+  try {
+    // Backend API'si ile bildirimleri okundu olarak işaretle
+    const response = await api.notifications.markAllAsRead();
+    
+    if (response && response.success) {
+      // Yerel olarak son okuma zamanını güncelle
+      saveLastReadTimestamp(Date.now());
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Bildirimleri okundu olarak işaretlerken hata:', error);
+    return false;
+  }
 };
 
 /**

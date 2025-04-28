@@ -263,10 +263,14 @@ func (s *NotificationService) CreateFollowAcceptNotification(ctx context.Context
 
 // WebSocket üzerinden bildirim gönder
 func (s *NotificationService) sendWebSocketNotification(notification Notification) {
+	// Detaylı loglama ekleyerek bildirim gönderme sürecini izle
+	log.Printf("Bildirim gönderiliyor. UserID: %s, Type: %s", notification.UserID, notification.Type)
+
 	// Alıcı kullanıcının bağlantılarını al
 	connections := s.clients[notification.UserID]
 	if len(connections) == 0 {
 		// Kullanıcı bağlı değil, bildirim veritabanında saklanacak
+		log.Printf("Kullanıcı %s için aktif WebSocket bağlantısı bulunamadı. Bildirim yalnızca DB'ye kaydedilecek.", notification.UserID)
 		return
 	}
 
@@ -283,13 +287,23 @@ func (s *NotificationService) sendWebSocketNotification(notification Notificatio
 		return
 	}
 
+	log.Printf("Bildirim JSON formatında hazırlandı: %s", string(jsonData))
+
 	// Tüm bağlantılara gönder
+	gönderildiMi := false
 	for _, conn := range connections {
 		err := conn.WriteMessage(websocket.TextMessage, jsonData)
 		if err != nil {
 			log.Printf("WebSocket mesaj gönderme hatası: %v", err)
 			// Hata durumunda bağlantıyı kapatmak için UnregisterClient çağrılabilir
 			// Bu örnekte, bir sonraki mesaj denemesinde bağlantı hala sorunluysa kaldırılacak
+		} else {
+			gönderildiMi = true
+			log.Printf("Bildirim başarıyla gönderildi. UserID: %s", notification.UserID)
 		}
+	}
+
+	if !gönderildiMi {
+		log.Printf("DİKKAT: Hiçbir bağlantıya bildirim gönderilemedi! UserID: %s", notification.UserID)
 	}
 }

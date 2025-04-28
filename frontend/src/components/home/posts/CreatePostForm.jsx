@@ -106,14 +106,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div 
-          className="p-3 rounded-lg text-sm border text-center"
-          style={{
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            color: 'var(--accent-red)',
-            borderColor: 'var(--accent-red)',
-          }}
-        >
+        <div className="p-3 rounded-lg text-sm border border-red-600 bg-red-600/10 text-red-400 text-center">
           {error}
         </div>
       )}
@@ -122,12 +115,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         placeholder="Ne düşünüyorsun?"
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        className="w-full h-24 p-3 rounded-lg resize-none"
-        style={{
-          backgroundColor: 'var(--background-secondary)',
-          color: 'var(--text-primary)',
-          border: 'none',
-        }}
+        className="w-full h-24 p-3 rounded-lg resize-none bg-black/60 border border-[#0affd9]/30 text-white focus:border-[#0affd9] focus:ring-1 focus:ring-[#0affd9]/50 outline-none"
       />
       
       {/* Görsel önizleme */}
@@ -146,11 +134,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
               />
               <button
                 type="button"
-                className="absolute top-1 right-1 p-1 rounded-full"
-                style={{
-                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                  color: 'white',
-                }}
+                className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white"
                 onClick={() => removeImage(image.id)}
               >
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -169,13 +153,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       {/* Alt işlem butonları */}
       <div className="flex justify-between items-center">
         <div className="flex space-x-2">
-          <label 
-            className="p-2 rounded-full cursor-pointer"
-            style={{
-              backgroundColor: 'var(--background-tertiary)',
-              color: 'var(--text-primary)',
-            }}
-          >
+          <label className="p-2 rounded-full cursor-pointer bg-black/70 text-[#0affd9] hover:bg-[#0affd9]/10 transition-all">
             <input 
               type="file" 
               multiple 
@@ -196,11 +174,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         <div className="flex space-x-2">
           <button 
             type="button"
-            className="px-3 py-1.5 rounded-lg font-medium"
-            style={{
-              backgroundColor: 'var(--background-tertiary)',
-              color: 'var(--text-primary)',
-            }}
+            className="px-3 py-1.5 rounded-lg font-medium bg-black/60 border border-[#0affd9]/30 text-[#0affd9] hover:bg-[#0affd9]/10 transition-colors"
             onClick={onCancel}
           >
             İptal
@@ -208,12 +182,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
           
           <button 
             type="submit"
-            className="px-3 py-1.5 rounded-lg font-medium transition-colors"
-            style={{
-              backgroundColor: 'var(--accent-blue)',
-              color: 'white',
-              opacity: (!content.trim() && images.length === 0) || isSubmitting ? 0.7 : 1,
-            }}
+            className="px-3 py-1.5 rounded-lg font-medium bg-[#0affd9] text-black hover:bg-[#0affd9]/80 transition-colors disabled:opacity-50"
             disabled={(!content.trim() && images.length === 0) || isSubmitting}
           >
             {isSubmitting ? 'Paylaşılıyor...' : 'Paylaş'}

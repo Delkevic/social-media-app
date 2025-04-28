@@ -31,3 +31,4 @@ func SetupCommentRoutes(router *gin.Engine) {
 	postCommentRoutes := router.Group("/api/v1/posts/:postID/comments")
 	postCommentRoutes.GET("", controllers.GetComments)
 }
+ 

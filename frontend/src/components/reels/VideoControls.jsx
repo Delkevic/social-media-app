@@ -7,7 +7,7 @@ import {
   MoreVertical, 
   Trash,
   Link,
-  Music,
+  Bookmark,
   BadgeInfo,
   ShieldCheck,
   Flag,
@@ -21,8 +21,9 @@ const VideoControls = ({
   reel, 
   onCommentClick, 
   onLikeClick,
-  onShareClick,
+  onSaveClick,
   isLiked = false,
+  isSaved = false,
   formatNumber
 }) => {
   const { user } = useAuth();
@@ -123,37 +124,17 @@ const VideoControls = ({
         <span className="text-white text-xs mt-1">{formatNumber(reel.commentCount || 0)}</span>
       </div>
       
-      {/* Paylaş butonu */}
+      {/* Kaydet butonu (Eski Paylaş) */}
       <div className="flex flex-col items-center">
         <button 
           className="bg-transparent"
-          onClick={() => onShareClick && onShareClick(reel.id)}
+          onClick={() => onSaveClick && onSaveClick(reel.id)}
         >
-          <Share2 className="h-8 w-8 text-white" />
-        </button>
-        <span className="text-white text-xs mt-1">{formatNumber(reel.shareCount || 0)}</span>
-      </div>
-      
-      {/* Müzik bilgisi butonu */}
-      <div className="flex flex-col items-center">
-        <button 
-          className="bg-transparent relative overflow-hidden rounded-full border-2 border-white p-1"
-          onClick={() => toast.success('Müzik bilgisi kopyalandı!')}
-        >
-          <Music className="h-6 w-6 text-white" />
-          <motion.div 
-            className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 opacity-30"
-            animate={{ 
-              rotate: [0, 360],
-            }}
-            transition={{ 
-              duration: 3, 
-              repeat: Infinity,
-              ease: "linear"
-            }}
+          <Bookmark 
+            className={`h-8 w-8 transition-colors duration-300 ${isSaved ? 'text-yellow-400 fill-yellow-400' : 'text-white'}`} 
           />
         </button>
-        <span className="text-white text-xs mt-1">Müzik</span>
+        <span className="text-white text-xs mt-1">Kaydet</span>
       </div>
       
       {/* Daha fazla seçenek butonu */}

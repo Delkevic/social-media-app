@@ -39,6 +39,7 @@ class WebSocketService {
     try {
       this.token = token;
       const wsUrl = API_URL.replace('http', 'ws').replace('https', 'wss');
+      console.log('WebSocket bağlantısı URL:', wsUrl + '/ws'); // Debug için URL'yi göster
       this.ws = new WebSocket(`${wsUrl}/ws`);
       
       this.ws.onopen = this.handleOpen.bind(this);
@@ -154,6 +155,9 @@ class WebSocketService {
     try {
       const message = JSON.parse(event.data);
       
+      // Debug için mesajı göster (geliştirme sürecinde)
+      console.log("[WebSocket] Mesaj alındı:", message);
+      
       // Mesaj tipine göre işlem yap
       switch (message.type) {
         case 'auth_success':
@@ -196,10 +200,35 @@ class WebSocketService {
           break;
 
         case 'notification':
+          // Bildirimleri göster 
+          console.log("[WebSocket] Bildirim alındı:", message.notification);
+          
+          if (!message.notification) {
+            console.error('Bildirim içeriği bulunamadı:', message);
+            return;
+          }
+          
+          // Frontend formatını düzenle
+          const frontendNotification = {
+            id: message.notification.id || Date.now().toString(),
+            type: message.notification.type || 'system',
+            content: message.notification.content || message.notification.message || 'Yeni bildirim', 
+            created_at: message.notification.createdAt || new Date().toISOString(),
+            is_read: message.notification.isRead || false,
+            reference_id: message.notification.entityId || null,
+            user_id: message.notification.userID || null,
+            actor_id: message.notification.actorID || null,
+            actor_name: message.notification.actorName || 'Sistem',
+            actor_username: message.notification.actorUsername || 'sistem',
+            actor_profile_image: message.notification.actorProfileImage || null
+          };
+          
+          console.log("[WebSocket] İşlenmiş bildirim:", frontendNotification);
+          
           // Bildirim dinleyicilerini çağır
           this.notificationListeners.forEach(callback => {
             try {
-              callback(message.notification);
+              callback(frontendNotification);
             } catch (error) {
               console.error('Notification listener hatası:', error);
             }
@@ -235,6 +264,7 @@ class WebSocketService {
   sendAuthMessage() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
+        console.log('Kimlik doğrulama için kullanılan token:', this.token ? this.token.substring(0, 15) + '...' : 'Token yok'); // Token'ın ilk 15 karakterini göster
         this.ws.send(JSON.stringify({
           type: 'authentication',
           token: this.token

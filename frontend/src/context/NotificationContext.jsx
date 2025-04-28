@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import notificationService from '../services/notification-service';
+import { toast } from 'react-hot-toast';
 
 // 1. Context Oluşturma
 const NotificationContext = createContext();
@@ -11,6 +12,7 @@ export const NotificationProvider = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [lastNotification, setLastNotification] = useState(null); // Son bildirimi izlemek için
 
   const openPanel = useCallback(() => {
     setIsPanelOpen(true);
@@ -37,7 +39,10 @@ export const NotificationProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
+      console.log("Bildirimler alınıyor...");
       const fetchedNotifications = await notificationService.getNotifications(); // Servis fonksiyonunu çağır
+      console.log("Alınan bildirimler:", fetchedNotifications);
+      
       setNotifications(fetchedNotifications);
       
       // Okunmamış sayısını hesapla (backend bunu ayrıca dönmüyorsa)
@@ -83,24 +88,95 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
+  // WebSocket'ten yeni bildirim geldiğinde gösterilecek toast bildirimi
+  const showNotificationToast = useCallback((notification) => {
+    if (!notification) return;
+    
+    // Toast bildirimi göster
+    toast.custom((t) => (
+      <div 
+        className={`${
+          t.visible ? 'animate-enter' : 'animate-leave'
+        } max-w-md w-full bg-black shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}
+      >
+        <div className="flex-1 w-0 p-4">
+          <div className="flex items-start">
+            <div className="flex-shrink-0 pt-0.5">
+              {notification.actor_profile_image ? (
+                <img 
+                  className="h-10 w-10 rounded-full" 
+                  src={notification.actor_profile_image} 
+                  alt={notification.actor_name || "Profil"} 
+                />
+              ) : (
+                <div className="h-10 w-10 rounded-full bg-[#0affd9] flex items-center justify-center">
+                  <span className="text-black font-bold">
+                    {(notification.actor_name || 'U').charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="ml-3 flex-1">
+              <p className="text-sm font-medium text-white">
+                {notification.content}
+              </p>
+              <p className="mt-1 text-sm text-gray-400">
+                Şimdi
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex border-l border-gray-700">
+          <button
+            onClick={() => {
+              toast.dismiss(t.id);
+              setIsPanelOpen(true);
+            }}
+            className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-[#0affd9] hover:text-[#0affd9]/70 focus:outline-none"
+          >
+            Göster
+          </button>
+        </div>
+      </div>
+    ), {
+      duration: 5000, // 5 saniye göster
+      position: 'top-right',
+    });
+  }, []);
+
   // Component mount olduğunda ve WebSocket bağlantısı kurulduğunda bildirimleri çek
   useEffect(() => {
+    console.log("NotificationContext yükleniyor, bildirimleri çekiyor...");
     fetchNotifications();
 
     // WebSocket'ten gelen yeni bildirimleri dinle
     const removeListener = notificationService.listenForNotifications((newNotification) => {
-      console.log('Yeni bildirim alındı (WebSocket):', newNotification);
+      console.log('YENİ BİLDİRİM ALINDI (WebSocket):', newNotification);
+      
+      // Son bildirimi kaydet
+      setLastNotification(newNotification);
+      
       // Yeni bildirimi listenin başına ekle ve okunmamış sayısını artır
-      setNotifications(prev => [newNotification, ...prev]);
+      setNotifications(prev => {
+        // Eğer bildirim zaten varsa ekleme (id kontrolü)
+        if (prev.some(n => n.id === newNotification.id)) {
+          console.log("Bu bildirim zaten listede var, tekrar eklenmedi:", newNotification.id);
+          return prev;
+        }
+        return [newNotification, ...prev];
+      });
       setUnreadCount(prev => prev + 1);
-      // İsteğe bağlı: Yeni bildirim geldiğinde bir toast mesajı gösterilebilir
+      
+      // Toast bildirimi göster
+      showNotificationToast(newNotification);
     });
 
     // Cleanup: Component unmount olduğunda listener'ı kaldır
     return () => {
+      console.log("NotificationContext temizleniyor, dinleyiciler kaldırılıyor...");
       removeListener();
     };
-  }, [fetchNotifications]); // fetchNotifications'ı dependency array'e ekle
+  }, [fetchNotifications, showNotificationToast]); // fetchNotifications'ı ve showNotificationToast'ı dependency array'e ekle
 
   const value = {
     isPanelOpen,
@@ -114,6 +190,7 @@ export const NotificationProvider = ({ children }) => {
     fetchNotifications, // Dışarıdan tetiklemek için export et
     markNotificationRead,
     markAllNotificationsRead,
+    lastNotification, // Son bildirimi de paylaş
   };
 
   return (

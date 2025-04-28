@@ -2,7 +2,9 @@ package routes
 
 import (
 	"fmt"
+	"log"
 	"social-media-app/backend/controllers"
+	"social-media-app/backend/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,9 +23,17 @@ func logRequestInfo(c *gin.Context) {
 func SetupRoutes() *gin.Engine {
 	router := gin.Default()
 
+	// Notification servisini başlat
+	notificationService := services.NewNotificationService()
+	controllers.SetNotificationService(notificationService)
+	log.Println("Notification servisi başlatıldı ve WebSocket handler'a bağlandı")
+
+	// Not: Run metodu private olduğundan kendisi dahili olarak çalışır
+	log.Println("Notification servisi aktif")
+
 	// Dosya boyutu sınırlamasını artır (100MB)
 	router.MaxMultipartMemory = 100 << 20
-	fmt.Println("Router yükleniyor, max multipart memory:", router.MaxMultipartMemory, "bytes")
+	fmt.Println("Router yükleniyor, max multipart memory:", router.MaxMultipartMemory, "bytes")
 
 	// CORS ayarları - tüm isteklere izin ver
 	router.Use(func(c *gin.Context) {
@@ -58,6 +68,9 @@ func SetupRoutes() *gin.Engine {
 		api.POST("/verify-2fa", controllers.VerifyTwoFactorCode)
 		api.POST("/resend-2fa-code", controllers.Resend2FACode)
 
+		// Token Yenileme - public
+		api.POST("/auth/refresh-token", controllers.RefreshToken)
+
 		// Password reset routes - public
 		api.POST("/forgot-password", controllers.RequestPasswordReset)
 		api.POST("/verify-reset-code", controllers.VerifyResetCode)
@@ -67,9 +80,6 @@ func SetupRoutes() *gin.Engine {
 		api.GET("/images/:name", controllers.ServeUploadedImage)
 		api.GET("/thumbnails/:name", controllers.ServeUploadedThumbnail)
 		api.GET("/videos/:name", controllers.ServeUploadedVideo)
-
-		// Static dosya sunucusu - yüklenen dosyalara erişim için
-		router.Static("/uploads", "./uploads")
 
 		// Bu endpointi özellikle izole edelim ve her seferinde log çıktısı alalım
 		video := api.Group("/upload")
@@ -91,6 +101,8 @@ func SetupRoutes() *gin.Engine {
 			auth.PUT("/user/password", controllers.UpdatePassword)
 			auth.DELETE("/user", controllers.DeleteAccount)
 			auth.GET("/user/login-activity", controllers.GetLoginActivities)
+			auth.DELETE("/user/session/:sessionId", controllers.TerminateSession)
+			auth.DELETE("/user/sessions/others", controllers.TerminateAllOtherSessions)
 
 			// Kullanıcı takip etme/çıkarma (Kullanıcı adına göre güncellendi)
 			auth.POST("/user/follow/:username", controllers.SendFollowRequestToUser)
@@ -131,6 +143,7 @@ func SetupRoutes() *gin.Engine {
 			auth.GET("/notifications", controllers.GetNotifications)
 			auth.POST("/notifications/:id/read", controllers.MarkNotificationAsRead)
 			auth.POST("/notifications/read-all", controllers.MarkAllNotificationsAsRead)
+			auth.POST("/notifications/test", controllers.TestCreateNotification)
 
 			// Mesaj rotaları
 			auth.GET("/messages", controllers.GetConversations)
@@ -192,6 +205,9 @@ func SetupRoutes() *gin.Engine {
 		// WebSocket bağlantı noktası - auth dışında
 		api.GET("/ws", controllers.WebSocketHandler)
 	}
+
+	// Static dosya sunucusunu /api grubu DIŞINDA tanımla
+	router.Static("/uploads", "./uploads")
 
 	fmt.Println("=====================================")
 	fmt.Println("Tüm API routeları yüklendi")

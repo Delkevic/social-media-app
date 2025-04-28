@@ -4,6 +4,45 @@ import { User, Mail, Phone, Lock, AlertTriangle, Clock, Loader2 } from 'lucide-r
 import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 
+// Genel Ayar Bileşeni Stili
+const SettingsSection = ({ title, icon: Icon, children }) => (
+  <div className="mb-8 p-6 rounded-xl bg-black/50 border border-[#0affd9]/10 backdrop-blur-sm">
+    <h3 className="text-lg font-semibold mb-4 flex items-center text-[#0affd9]">
+      {Icon && <Icon size={20} className="mr-2 opacity-80" />} 
+      {title}
+    </h3>
+    <div className="space-y-4">
+      {children}
+    </div>
+  </div>
+);
+
+// Input Stili (global stillerden alınabilir ama burada da tanımlanabilir)
+const StyledInput = (props) => (
+  <input 
+    {...props}
+    className={`w-full px-3 py-2 rounded-lg bg-black/60 border border-[#0affd9]/30 text-white focus:border-[#0affd9] focus:ring-1 focus:ring-[#0affd9]/50 outline-none ${props.className || ''}`}
+  />
+);
+
+// Buton Stili
+const StyledButton = ({ children, onClick, disabled, variant = 'primary' }) => {
+  const baseStyle = "px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50";
+  const primaryStyle = "bg-[#0affd9] text-black hover:bg-[#0affd9]/80";
+  const secondaryStyle = "bg-black/60 border border-[#0affd9]/30 text-[#0affd9] hover:bg-[#0affd9]/10";
+  const dangerStyle = "bg-red-800/30 border border-red-600/50 text-red-400 hover:bg-red-700/40";
+  
+  let variantStyle = primaryStyle;
+  if (variant === 'secondary') variantStyle = secondaryStyle;
+  if (variant === 'danger') variantStyle = dangerStyle;
+
+  return (
+    <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variantStyle}`}>
+      {children}
+    </button>
+  );
+};
+
 const AccountSettings = () => {
   const navigate = useNavigate();
   const { user, updateUser, logout } = useAuth();
@@ -262,6 +301,21 @@ const AccountSettings = () => {
       }
   };
 
+  const getTimeAgo = (date) => {
+    const now = new Date();
+    const diffSeconds = Math.floor((now - date) / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSeconds < 60) return `${diffSeconds} saniye önce`;
+    if (diffMinutes < 60) return `${diffMinutes} dakika önce`;
+    if (diffHours < 24) return `${diffHours} saat önce`;
+    if (diffDays === 1) return `Dün`;
+    if (diffDays < 7) return `${diffDays} gün önce`;
+    return date.toLocaleDateString('tr-TR');
+  };
+
   if (loading && !userData) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -286,253 +340,122 @@ const AccountSettings = () => {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-200 flex items-center">
-          <User className="mr-2 text-blue-400" />
-          Hesap Ayarları
-        </h2>
-      </div>
-
+    <div className="space-y-6">
       {statusMessage.message && (
-        <div className={`p-3 mb-4 rounded-lg ${statusMessage.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+        <div className={`p-3 rounded-lg text-sm border text-center ${statusMessage.type === 'success' ? 'bg-green-900/30 text-green-400 border-green-700/50' : 'bg-red-900/30 text-red-400 border-red-700/50'}`}>
           {statusMessage.message}
         </div>
       )}
 
-      <section className="space-y-6">
-        {/* Kullanıcı Adı Değiştirme */}
-        <div className="p-4 bg-gray-800/80 rounded-lg border border-gray-700">
-          <h3 className="font-medium text-gray-200 mb-4 flex items-center">
-            <User className="mr-2 h-4 w-4 text-blue-400" /> 
-            Kullanıcı Adı Değiştirme
-          </h3>
-          <form onSubmit={handleUsernameSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-400 mb-1">
-                Yeni Kullanıcı Adı
-              </label>
-              <input
+      <SettingsSection title="Kullanıcı Adı" icon={User}>
+        <form onSubmit={handleUsernameSubmit} className="flex items-center gap-3">
+          <StyledInput 
                 type="text"
-                id="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full p-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-sm text-white focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Yeni kullanıcı adınızı girin"
-                disabled={loading}
+            placeholder="Yeni kullanıcı adı"
+            className="flex-grow"
               />
-            </div>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center"
-              disabled={loading}
-            >
-              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Değiştir
-            </button>
+          <StyledButton type="submit" disabled={loading || username === userData?.username} variant="secondary">
+            {loading ? 'Kaydediliyor...' : 'Kaydet'}
+          </StyledButton>
           </form>
-        </div>
+      </SettingsSection>
 
-        {/* E-posta Adresi Güncelleme */}
-        <div className="p-4 bg-gray-800/80 rounded-lg border border-gray-700">
-          <h3 className="font-medium text-gray-200 mb-4 flex items-center">
-            <Mail className="mr-2 h-4 w-4 text-blue-400" /> 
-            E-posta Adresi Güncelleme
-          </h3>
-          <form onSubmit={handleEmailSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-400 mb-1">
-                Yeni E-posta Adresi
-              </label>
-              <input
+      <SettingsSection title="E-posta Adresi" icon={Mail}>
+        <form onSubmit={handleEmailSubmit} className="flex items-center gap-3">
+           <StyledInput 
                 type="email"
-                id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-sm text-white focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Yeni e-posta adresinizi girin"
-                disabled={loading}
+            placeholder="yeni@email.com"
+             className="flex-grow"
               />
-            </div>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center"
-              disabled={loading}
-            >
-              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Güncelle
-            </button>
+          <StyledButton type="submit" disabled={loading || email === userData?.email} variant="secondary">
+            {loading ? 'Kaydediliyor...' : 'Kaydet'}
+          </StyledButton>
           </form>
-        </div>
+        {/* E-posta doğrulama durumu eklenebilir */}
+      </SettingsSection>
 
-        {/* Telefon Numarası Güncelleme */}
-        <div className="p-4 bg-gray-800/80 rounded-lg border border-gray-700">
-          <h3 className="font-medium text-gray-200 mb-4 flex items-center">
-            <Phone className="mr-2 h-4 w-4 text-blue-400" /> 
-            Telefon Numarası Güncelleme
-          </h3>
-          <form onSubmit={handlePhoneSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-400 mb-1">
-                Yeni Telefon Numarası
-              </label>
-              <input
+      <SettingsSection title="Telefon Numarası" icon={Phone}>
+         <form onSubmit={handlePhoneSubmit} className="flex items-center gap-3">
+           <StyledInput 
                 type="tel"
-                id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full p-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-sm text-white focus:ring-blue-500 focus:border-blue-500"
-                placeholder="+90 5XX XXX XX XX"
-                disabled={loading}
+            placeholder="+90 5xx xxx xx xx"
+             className="flex-grow"
               />
-            </div>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center"
-              disabled={loading}
-            >
-              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Güncelle
-            </button>
+          <StyledButton type="submit" disabled={loading || phone === userData?.phone} variant="secondary">
+            {loading ? 'Kaydediliyor...' : 'Kaydet'}
+          </StyledButton>
           </form>
-        </div>
+      </SettingsSection>
 
-        {/* Şifre Değiştirme */}
-        <div className="p-4 bg-gray-800/80 rounded-lg border border-gray-700">
-          <h3 className="font-medium text-gray-200 mb-4 flex items-center">
-            <Lock className="mr-2 h-4 w-4 text-blue-400" /> 
-            Şifre Değiştirme
-          </h3>
+      <SettingsSection title="Şifre Değiştir" icon={Lock}>
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-400 mb-1">
-                Mevcut Şifre
-              </label>
-              <input
+          <StyledInput 
                 type="password"
-                id="currentPassword"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full p-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-sm text-white focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Mevcut şifrenizi girin"
-                disabled={loading}
+            placeholder="Mevcut Şifre"
               />
-            </div>
-            <div>
-              <label htmlFor="newPassword" className="block text-sm font-medium text-gray-400 mb-1">
-                Yeni Şifre
-              </label>
-              <input
+          <StyledInput 
                 type="password"
-                id="newPassword"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full p-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-sm text-white focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Yeni şifrenizi girin"
-                disabled={loading}
+            placeholder="Yeni Şifre"
               />
-            </div>
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-400 mb-1">
-                Yeni Şifre (Tekrar)
-              </label>
-              <input
+          <StyledInput 
                 type="password"
-                id="confirmPassword"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full p-2.5 bg-gray-700/50 border border-gray-600 rounded-lg text-sm text-white focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Yeni şifrenizi tekrar girin"
-                disabled={loading}
+            placeholder="Yeni Şifreyi Doğrula"
               />
-            </div>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center"
-              disabled={loading}
-            >
-              {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Şifreyi Değiştir
-            </button>
+          <StyledButton type="submit" disabled={loading} variant="secondary">
+            {loading ? 'Kaydediliyor...' : 'Şifreyi Güncelle'}
+          </StyledButton>
           </form>
-        </div>
-
-        {/* Hesap Silme veya Dondurma */}
-        <div className="p-4 bg-gray-800/80 rounded-lg border border-gray-700">
-          <h3 className="font-medium text-gray-200 mb-4 flex items-center">
-            <AlertTriangle className="mr-2 h-4 w-4 text-orange-500" /> 
-            Hesap Silme veya Dondurma
-          </h3>
-          <div className="space-y-4">
-            <p className="text-sm text-gray-400">
-              Hesabınızı geçici olarak dondurabilir veya kalıcı olarak silebilirsiniz. Hesabınızı dondurduğunuzda, içerikleriniz ve profil bilgileriniz gizlenecek, ancak istediğiniz zaman hesabınıza geri dönebileceksiniz.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <button
-                onClick={handleAccountDeactivate}
-                className="px-4 py-2 bg-orange-600/70 hover:bg-orange-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center"
-                disabled={loading}
-              >
-                {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Hesabımı Dondur
-              </button>
-              <button
-                onClick={handleAccountDelete}
-                className="px-4 py-2 bg-red-600/70 hover:bg-red-600 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center"
-                disabled={loading}
-              >
-                {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Hesabımı Sil
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Giriş Aktivitesi */}
-        <div className="p-4 bg-gray-800/80 rounded-lg border border-gray-700">
-          <h3 className="font-medium text-gray-200 mb-4 flex items-center">
-            <Clock className="mr-2 h-4 w-4 text-blue-400" /> 
-            Giriş Aktivitesi
-          </h3>
-          <div className="space-y-2">
-            <p className="text-sm text-gray-400 mb-4">
-              Hesabınıza yapılan son girişler aşağıda listelenmiştir.
-            </p>
+      </SettingsSection>
+      
+      <SettingsSection title="Giriş Aktiviteleri" icon={Clock}>
             {loginActivityLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-6 h-6 text-blue-500 animate-spin mr-2" />
-                <span className="text-gray-400">Aktiviteler yükleniyor...</span>
-              </div>
+            <div className="text-center p-4"><Loader2 className="animate-spin mx-auto text-[#0affd9]" /></div>
             ) : loginActivityError ? (
-              <div className="text-center py-4 text-red-400 bg-red-500/10 rounded">
-                {loginActivityError}
-              </div>
-            ) : loginActivities.length === 0 ? (
-               <div className="text-center py-4 text-gray-500">
-                  Henüz kayıtlı giriş aktivitesi bulunamadı.
-               </div>
-            ) : (
-              <ul className="divide-y divide-gray-700/50">
-                {loginActivities.map((activity) => (
-                  <li key={activity.id} className="py-3 flex justify-between items-center">
+            <div className="text-red-500 text-sm">{loginActivityError}</div>
+         ) : loginActivities.length > 0 ? (
+            <ul className="space-y-3 max-h-60 overflow-y-auto pr-2">
+              {loginActivities.map((activity, index) => (
+                <li key={index} className="flex justify-between items-center text-sm border-b border-[#0affd9]/10 pb-2 last:border-b-0">
                     <div>
-                      <p className="text-sm font-medium text-gray-300">
-                        {formatUserAgent(activity.userAgent)} 
-                        {activity.location && <span className="text-gray-500 text-xs"> - {activity.location}</span>}
-                      </p>
-                      <p className="text-xs text-gray-400">IP: {activity.ipAddress}</p>
+                    <span className="font-medium text-gray-300 block">{formatUserAgent(activity.user_agent)}</span>
+                    <span className="text-gray-400 text-xs">IP: {activity.ip_address}</span>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-400">{formatTimestamp(activity.timestamp)}</p>
-                      {/* 'Şu anki oturum' bilgisi IP ve UserAgent karşılaştırması ile yapılabilir ama karmaşık olabilir */}
-                    </div>
+                  <span className="text-xs text-gray-500 whitespace-nowrap">{getTimeAgo(new Date(activity.login_time))}</span>
                   </li>
                 ))}
               </ul>
-            )}
+         ) : (
+           <p className="text-gray-400 text-sm">Giriş aktivitesi bulunamadı.</p>
+         )}
+       </SettingsSection>
+
+      <SettingsSection title="Hesap Yönetimi" icon={AlertTriangle}>
+        <div className="space-y-3">
+           <p className="text-sm text-gray-400">
+            Hesabınızı geçici olarak dondurabilir veya kalıcı olarak silebilirsiniz. Bu işlemler dikkatli yapılmalıdır.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <StyledButton onClick={handleAccountDeactivate} disabled={loading} variant="secondary">
+              Hesabı Dondur
+            </StyledButton>
+            <StyledButton onClick={handleAccountDelete} disabled={loading} variant="danger">
+              Hesabı Kalıcı Olarak Sil
+            </StyledButton>
           </div>
         </div>
-      </section>
+      </SettingsSection>
     </div>
   );
 };

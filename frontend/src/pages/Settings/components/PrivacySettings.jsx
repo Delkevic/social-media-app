@@ -4,6 +4,71 @@ import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
+// Yeni tema için yardımcı bileşenler (AccountSettings'ten alınabilir veya burada tanımlanabilir)
+const SettingsSection = ({ title, icon: Icon, children }) => (
+  <div className="mb-8 p-6 rounded-xl bg-black/50 border border-[#0affd9]/10 backdrop-blur-sm">
+    <h3 className="text-lg font-semibold mb-4 flex items-center text-[#0affd9]">
+      {Icon && <Icon size={20} className="mr-2 opacity-80" />} 
+      {title}
+    </h3>
+    <div className="space-y-4">
+      {children}
+    </div>
+  </div>
+);
+
+const StyledButton = ({ children, onClick, disabled, variant = 'primary', loading = false }) => {
+  const baseStyle = "px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center";
+  const primaryStyle = "bg-[#0affd9] text-black hover:bg-[#0affd9]/80";
+  const secondaryStyle = "bg-black/60 border border-[#0affd9]/30 text-[#0affd9] hover:bg-[#0affd9]/10";
+  const dangerStyle = "bg-red-800/30 border border-red-600/50 text-red-400 hover:bg-red-700/40";
+  
+  let variantStyle = primaryStyle;
+  if (variant === 'secondary') variantStyle = secondaryStyle;
+  if (variant === 'danger') variantStyle = dangerStyle;
+
+  return (
+    <button onClick={onClick} disabled={disabled || loading} className={`${baseStyle} ${variantStyle}`}>
+      {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
+      {children}
+    </button>
+  );
+};
+
+// Toggle Switch Stili
+const ToggleSwitch = ({ checked, onChange, disabled }) => (
+  <label className="relative inline-flex items-center cursor-pointer">
+    <input
+      type="checkbox"
+      className="sr-only peer"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      disabled={disabled}
+    />
+    <div className={`w-11 h-6 bg-black/60 border border-[#0affd9]/30 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#0affd9]/50 rounded-full peer 
+                    peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full 
+                    peer-checked:after:border-[#000] after:content-[''] after:absolute after:top-[2px] 
+                    after:start-[2px] after:bg-[#0affd9] after:border-black after:border after:rounded-full 
+                    after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0affd9]/30`}></div>
+  </label>
+);
+
+// Radio Buton Stili
+const StyledRadio = ({ name, value, checked, onChange, disabled, label }) => (
+  <label className="flex items-center cursor-pointer">
+    <input
+      type="radio"
+      name={name}
+      value={value}
+      checked={checked}
+      onChange={onChange}
+      disabled={disabled}
+      className="w-4 h-4 text-[#0affd9] bg-black/60 border-[#0affd9]/30 focus:ring-[#0affd9]/50 focus:ring-2"
+    />
+    <span className="ms-2 text-sm text-gray-300">{label}</span>
+  </label>
+);
+
 const PrivacySettings = () => {
   const { user, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -26,27 +91,19 @@ const PrivacySettings = () => {
   // Mevcut ayarları API'den çek
   useEffect(() => {
     const fetchPrivacySettings = () => {
-      console.log("PrivacySettings useEffect: fetchPrivacySettings başlıyor...");
       setLoading(true);
       setError(null);
 
       if (user) {
-        console.log("PrivacySettings useEffect: AuthContext'ten user alındı:", JSON.stringify(user));
-        console.log("PrivacySettings useEffect: Alınan user.isPrivate değeri:", user.isPrivate);
-        
         const initialIsPrivate = user.isPrivate === true;
         setIsPrivateAccount(initialIsPrivate);
         setCommentPermission(user.commentPermission || 'all');
         setTagPermission(user.tagPermission || 'all');
-        
-        console.log(`PrivacySettings useEffect: State başlatıldı, isPrivateAccount=${initialIsPrivate}`);
       } else {
-        console.error("PrivacySettings useEffect: AuthContext'ten user alınamadı! (user null veya undefined)");
         setError("Kullanıcı bilgileri yüklenemedi. Lütfen tekrar giriş yapın.");
       }
       
       setLoading(false);
-      console.log("PrivacySettings useEffect: fetchPrivacySettings bitti, setLoading(false).");
     };
 
     fetchPrivacySettings();
@@ -54,19 +111,12 @@ const PrivacySettings = () => {
 
   // Ayarları kaydetme fonksiyonu
   const handleSaveChanges = async () => {
-    console.log("handleSaveChanges fonksiyonu başladı!");
-    console.log("Gönderilecek ayarlar:", {
-      isPrivate: isPrivateAccount,
-      commentPermission: commentPermission,
-      tagPermission: tagPermission,
-    });
     setSaving(true);
     setError(null);
     
     try {
       // Sadece gizlilik ayarını updatePrivacy ile güncelleyin
       const privacyResponse = await api.user.updatePrivacy(isPrivateAccount);
-      console.log("Privacy API yanıtı:", JSON.stringify(privacyResponse));
       
       if (privacyResponse.success) {
         // Diğer ayarları updateProfile ile güncelleyin
@@ -76,15 +126,12 @@ const PrivacySettings = () => {
         };
         
         const profileResponse = await api.user.updateProfile(settingsData);
-        console.log("Profile API yanıtı:", JSON.stringify(profileResponse));
         
         if (profileResponse.success) {
           toast.success('Gizlilik ayarları başarıyla kaydedildi!');
           
           if (profileResponse.data?.user) {
             const updatedUser = profileResponse.data.user;
-            console.log("Güncellenmiş kullanıcı verisi:", JSON.stringify(updatedUser));
-            console.log("Güncellenmiş gizlilik ayarı:", updatedUser.isPrivate);
             
             // State'i güncelleyelim
             setIsPrivateAccount(updatedUser.isPrivate === true); 
@@ -115,26 +162,27 @@ const PrivacySettings = () => {
 
   // Gizli hesap değiştirme işleyicisi
   const handlePrivateAccountChange = (checked) => {
-    console.log(`Gizli hesap değişti: ${isPrivateAccount} -> ${checked}`);
     setIsPrivateAccount(checked);
   };
 
   const handleUnblockUser = (userId) => {
     // Backend'e engellenmeyi kaldırma isteği
     console.log('Engel kaldırıldı, kullanıcı ID:', userId);
+    // Gerekirse API çağrısı ve state güncellemesi burada yapılacak
+    toast.info('Engelleme kaldırma işlemi henüz uygulanmadı.');
   };
 
   const handleUnmuteUser = (userId) => {
     // Backend'e sessize almayı kaldırma isteği
     console.log('Sessize alma kaldırıldı, kullanıcı ID:', userId);
+    // Gerekirse API çağrısı ve state güncellemesi burada yapılacak
+    toast.info('Sessize alma kaldırma işlemi henüz uygulanmadı.');
   };
-
-  console.log(`Render: loading=${loading}, saving=${saving}, isPrivate=${isPrivateAccount}`);
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-40">
-        <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+        <Loader2 className="w-6 h-6 text-[#0affd9] animate-spin" />
       </div>
     );
   }
@@ -143,7 +191,7 @@ const PrivacySettings = () => {
     <div className="space-y-8">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-gray-200 flex items-center">
-          <Lock className="mr-2 text-blue-400" />
+          <Lock className="mr-2 text-[#0affd9]" />
           Gizlilik Ayarları
         </h2>
       </div>
@@ -155,14 +203,8 @@ const PrivacySettings = () => {
         </div>
       )}
 
-      <section className="space-y-6">
         {/* Hesap Gizliliği */}
-        <div className="p-4 bg-gray-800/80 rounded-lg border border-gray-700">
-          <h3 className="font-medium text-gray-200 mb-4 flex items-center">
-            <EyeOff className="mr-2 h-4 w-4 text-blue-400" /> 
-            Hesap Gizliliği
-          </h3>
-          <div className="space-y-4">
+      <SettingsSection title="Hesap Gizliliği" icon={EyeOff}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-300">Gizli Hesap</p>
@@ -170,128 +212,125 @@ const PrivacySettings = () => {
                   Hesabınız gizli olduğunda, yalnızca onayladığınız takipçiler gönderilerinizi görebilir.
                 </p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="sr-only peer"
+          <ToggleSwitch 
                   checked={isPrivateAccount}
-                  onChange={(e) => handlePrivateAccountChange(e.target.checked)}
+            onChange={handlePrivateAccountChange}
                   disabled={saving}
                 />
-                <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
-            </div>
-          </div>
         </div>
+      </SettingsSection>
 
-        {/* Engellenen Kullanıcılar (Artık boş liste gösterilecek) */}
-        <div className="p-4 bg-gray-800/80 rounded-lg border border-gray-700">
-          <h3 className="font-medium text-gray-200 mb-4 flex items-center">
-            <UserX className="mr-2 h-4 w-4 text-blue-400" /> 
-            Engellenen Kullanıcılar
-          </h3>
-          <div className="space-y-4">
+      {/* Engellenen Kullanıcılar */}
+      <SettingsSection title="Engellenen Kullanıcılar" icon={UserX}>
             <p className="text-xs text-gray-400">
               Engellediğiniz kullanıcılar profilinizi, gönderilerinizi veya hikayelerinizi göremez, size mesaj gönderemez.
             </p>
-            
             {blockedUsers.length > 0 ? (
-              <ul className="divide-y divide-gray-700">
-                {/* ... (map kısmı aynı, ama liste boş olduğu için render edilmeyecek) ... */}
+          <ul className="divide-y divide-[#0affd9]/10">
+            {blockedUsers.map(user => (
+              <li key={user.id} className="py-2 flex items-center justify-between">
+                <span className="text-sm text-gray-300">{user.username}</span>
+                <StyledButton variant="secondary" onClick={() => handleUnblockUser(user.id)}>Engeli Kaldır</StyledButton>
+              </li>
+            ))}
               </ul>
             ) : (
               <p className="text-sm text-gray-400 py-2">Henüz kimseyi engellemediniz.</p>
             )}
-          </div>
-        </div>
+      </SettingsSection>
 
-        {/* Sessize Alınan Hesaplar (Artık boş liste gösterilecek) */}
-        <div className="p-4 bg-gray-800/80 rounded-lg border border-gray-700">
-          <h3 className="font-medium text-gray-200 mb-4 flex items-center">
-            <MicOff className="mr-2 h-4 w-4 text-blue-400" /> 
-            Sessize Alınan Hesaplar
-          </h3>
-          <div className="space-y-4">
+      {/* Sessize Alınan Hesaplar */}
+      <SettingsSection title="Sessize Alınan Hesaplar" icon={MicOff}>
             <p className="text-xs text-gray-400">
               Sessize aldığınız kullanıcıların gönderileri ve hikayeleri akışınızda görünmez, ancak onlar sizinkini görebilir.
             </p>
-            
             {mutedUsers.length > 0 ? (
-              <ul className="divide-y divide-gray-700">
-                {/* ... (map kısmı aynı, ama liste boş olduğu için render edilmeyecek) ... */}
+          <ul className="divide-y divide-[#0affd9]/10">
+            {mutedUsers.map(user => (
+              <li key={user.id} className="py-2 flex items-center justify-between">
+                <span className="text-sm text-gray-300">{user.username}</span>
+                <StyledButton variant="secondary" onClick={() => handleUnmuteUser(user.id)}>Sesi Aç</StyledButton>
+              </li>
+            ))}
               </ul>
             ) : (
               <p className="text-sm text-gray-400 py-2">Henüz kimseyi sessize almadınız.</p>
             )}
-          </div>
-        </div>
+      </SettingsSection>
 
         {/* Yorum ve Etiket Kontrolü */}
-        <div className="p-4 bg-gray-800/80 rounded-lg border border-gray-700">
-          <h3 className="font-medium text-gray-200 mb-4 flex items-center">
-            <MessageCircle className="mr-2 h-4 w-4 text-blue-400" /> 
-            Yorum ve Etiket Kontrolü
-          </h3>
+      <SettingsSection title="Yorum ve Etiket Kontrolü" icon={MessageCircle}>
           <div className="space-y-6">
+          {/* Yorum İzinleri */}
             <div>
               <p className="text-sm font-medium text-gray-300 mb-3">Kimler yorum yapabilir?</p>
               <div className="space-y-2">
-                {['all', 'followers', 'none'].map((option) => (
-                  <label key={option} className="flex items-center">
-                    <input
-                      type="radio"
+              <StyledRadio 
+                name="commentPermission"
+                value="all"
+                checked={commentPermission === 'all'}
+                onChange={(e) => setCommentPermission(e.target.value)}
+                disabled={saving}
+                label="Herkes"
+              />
+              <StyledRadio 
+                name="commentPermission"
+                value="followers"
+                checked={commentPermission === 'followers'}
+                onChange={(e) => setCommentPermission(e.target.value)}
+                disabled={saving}
+                label="Takipçiler"
+              />
+              <StyledRadio 
                       name="commentPermission"
-                      value={option}
-                      checked={commentPermission === option}
+                value="none"
+                checked={commentPermission === 'none'}
                       onChange={(e) => setCommentPermission(e.target.value)}
                       disabled={saving}
-                      className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500 focus:ring-offset-gray-800"
-                    />
-                    <span className="ms-2 text-sm text-gray-300">
-                      {option === 'all' ? 'Herkes' : option === 'followers' ? 'Sadece takipçilerim' : 'Kimse'}
-                    </span>
-                  </label>
-                ))}
+                label="Kimse"
+              />
               </div>
             </div>
 
+          {/* Etiket İzinleri */}
             <div>
               <p className="text-sm font-medium text-gray-300 mb-3">Kimler sizi etiketleyebilir?</p>
               <div className="space-y-2">
-                {['all', 'followers', 'none'].map((option) => (
-                  <label key={option} className="flex items-center">
-                    <input
-                      type="radio"
+              <StyledRadio 
+                name="tagPermission"
+                value="all"
+                checked={tagPermission === 'all'}
+                onChange={(e) => setTagPermission(e.target.value)}
+                disabled={saving}
+                label="Herkes"
+              />
+              <StyledRadio 
+                name="tagPermission"
+                value="followers"
+                checked={tagPermission === 'followers'}
+                onChange={(e) => setTagPermission(e.target.value)}
+                disabled={saving}
+                label="Takipçiler"
+              />
+              <StyledRadio 
                       name="tagPermission"
-                      value={option}
-                      checked={tagPermission === option}
+                value="none"
+                checked={tagPermission === 'none'}
                       onChange={(e) => setTagPermission(e.target.value)}
                       disabled={saving}
-                      className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 focus:ring-blue-500 focus:ring-offset-gray-800"
-                    />
-                    <span className="ms-2 text-sm text-gray-300">
-                      {option === 'all' ? 'Herkes' : option === 'followers' ? 'Sadece takipçilerim' : 'Kimse'}
-                    </span>
-                  </label>
-                ))}
-              </div>
+                label="Kimse"
+              />
             </div>
           </div>
         </div>
+      </SettingsSection>
 
         {/* Kaydet Butonu */}
-        <div className="flex justify-end mt-8">
-          {console.log(`Buton Render: disabled=${saving || loading}`)}
-          <button
-            onClick={handleSaveChanges}
-            disabled={saving || loading}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:pointer-events-none flex items-center"
-          >
-            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {saving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
-          </button>
+      <div className="pt-6 border-t border-[#0affd9]/10 flex justify-end">
+        <StyledButton onClick={handleSaveChanges} disabled={saving} loading={saving}>
+          Değişiklikleri Kaydet
+        </StyledButton>
         </div>
-      </section>
     </div>
   );
 };
