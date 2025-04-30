@@ -44,12 +44,17 @@ const getNotificationIcon = (type) => {
 const NotificationItem = ({ notification, onMarkAsRead }) => {
   return (
     <motion.div
-      initial={{ opacity: 0, y: -5 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -5 }}
-      transition={{ duration: 0.2 }}
+      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+      transition={{ 
+        duration: 0.3, 
+        type: "spring", 
+        stiffness: 400, 
+        damping: 15 
+      }}
       className={`relative p-4 mb-3 rounded-xl transition-all duration-200 group hover:scale-[1.01] hover:bg-[#0affd9]/5 dark:hover:bg-[#0affd9]/10 border border-transparent hover:border-[#0affd9]/20 ${
-        notification.is_read 
+        notification.isRead 
           ? 'bg-black/30 dark:bg-black/50' // Okunmuş arka plan
           : 'bg-black/60 dark:bg-black/70 shadow-sm dark:shadow-gray-900/20 border-l-4 border-[#0affd9]' // Okunmamış arka plan ve vurgu
       }`}
@@ -64,13 +69,13 @@ const NotificationItem = ({ notification, onMarkAsRead }) => {
             {notification.content}
           </p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center">
-            {format(notification.created_at)}
-            {notification.reference_id && (
+            {format(notification.createdAt || notification.created_at)}
+            {notification.referenceId && (
               <ChevronRight className="h-3 w-3 ml-1 inline text-[#0affd9]/70" />
             )}
           </p>
         </div>
-        {!notification.is_read && (
+        {!notification.isRead && (
           <button
             onClick={() => onMarkAsRead(notification.id)}
             // Okundu işaretle butonu stili
@@ -109,7 +114,7 @@ const NotificationPanel = ({ isOpen, onClose }) => {
   // Okunmamış bildirimlerin sayısı
   const unreadCount = useMemo(() => {
     if (!notifications) return 0;
-    return notifications.filter(n => !n.is_read).length;
+    return notifications.filter(n => !n.isRead).length;
   }, [notifications]);
 
   // Dışarı tıklama kontrolü
@@ -274,6 +279,9 @@ const NotificationPanel = ({ isOpen, onClose }) => {
                 <div className="flex flex-col items-center justify-center h-32 text-center">
                   <BellOff className="h-10 w-10 text-gray-600 dark:text-gray-700 mb-3" />
                   <p className="text-gray-500 dark:text-gray-600 text-sm">Henüz bildirim yok.</p>
+                  <p className="text-gray-500 dark:text-gray-600 text-xs mt-2">
+                    Birinin sizi takip etmesi veya gönderilerinizi beğenmesi durumunda burada görünecektir.
+                  </p>
                 </div>
               )}
             </div>

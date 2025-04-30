@@ -16,9 +16,11 @@ import FollowRequestsPage from './pages/FollowRequestsPage'; // Takip istekleri 
 import { ChatPanel } from './components/chat/ChatPanel';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider, useNotification } from './context/NotificationContext'; // useNotification hook'unu da import ediyoruz
-import NotificationPanel from './components/notifications/NotificationPanel'; // NotificationPanel import edildi
+import NotificationPanel from './components/Notifications/NotificationPanel'; // NotificationPanel import edildi (yolunu düzelttim)
 import { TOKEN_NAME } from './config/constants';
 import RegisterPage from './pages/auth/RegisterPage'; // Import the RegisterPage
+import notificationService from './services/notification-service'; // Bildirim servisini import ettik
+import websocketService from './services/websocket-service'; // WebSocket servisini import ettik
 
 // Korumalı Route bileşeni oluşturuyoruz
 const ProtectedRoute = ({ children }) => {
@@ -46,12 +48,12 @@ const NotificationPanelWrapper = () => {
 };
 
 function App() {
-  // Sistem tercihine göre temayı başlatıyoruz
+  // Sistem tercihine göre temayı başlatıyoruz
   const [theme, setTheme] = useState(
     window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   );
   
-  // Sistem tema değişikliklerini dinliyoruz
+  // Sistem tema değişikliklerini dinliyoruz
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     
@@ -61,16 +63,31 @@ function App() {
     
     mediaQuery.addEventListener('change', handleThemeChange);
     
-    // Bileşen kaldırıldığında dinleyiciyi temizliyoruz
+    // Bileşen kaldırıldığında dinleyiciyi temizliyoruz
     return () => {
       mediaQuery.removeEventListener('change', handleThemeChange);
     };
   }, []);
   
-  // Temayı HTML kök elemanına uyguluyoruz
+  // Temayı HTML kök elemanına uyguluyoruz
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+  
+  // WebSocket bağlantısı için token kontrolü
+  useEffect(() => {
+    // localStorage'dan token'i al
+    const token = localStorage.getItem(TOKEN_NAME);
+    if (token) {
+      console.log("WebSocket bağlantısı kuruluyor...");
+      websocketService.connect(token);
+    }
+    
+    // Component unmount olduğunda WebSocket bağlantısını kapat
+    return () => {
+      websocketService.disconnect();
+    };
+  }, []); // Sadece bir kez çalış
   
   return (
     <AuthProvider>

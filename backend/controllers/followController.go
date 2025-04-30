@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
+	"social-media-app/backend/services"
 	"strconv"
 	"time"
 
@@ -89,6 +90,49 @@ func HandleFollowUser(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Takip oluşturulurken hata: " + err.Error()})
 			return
 		}
+
+		// Bildirim oluştur - Takip edilen kullanıcıya bildirim gönder
+		// Takip eden kullanıcı bilgilerini al
+		var follower models.User
+		if err := database.DB.Select("id, username, full_name").First(&follower, followerID).Error; err == nil {
+			notification := models.Notification{
+				UserID:      followingUser.ID,  // Takip edilen kullanıcıya bildirim gönder
+				SenderID:    followerID.(uint), // Takip eden kullanıcı
+				Type:        "follow",
+				Content:     fmt.Sprintf("%s seni takip etmeye başladı", follower.FullName),
+				ReferenceID: followerID.(uint),
+				IsRead:      false,
+				CreatedAt:   time.Now(),
+			}
+
+			if err := database.DB.Create(&notification).Error; err != nil {
+				fmt.Printf("Takip bildirimi oluşturulurken hata: %v\n", err)
+				// Bildirimin oluşturulamaması takip işlemini engellememelidir
+			} else {
+				fmt.Printf("Takip bildirimi oluşturuldu. Kullanıcı %d -> %d\n", followerID, followingUser.ID)
+				// WebSocket üzerinden bildirim gönder (opsiyonel)
+				if notifService != nil {
+					wsNotification := services.Notification{
+						ID:            fmt.Sprintf("%d", notification.ID),
+						UserID:        fmt.Sprintf("%d", notification.UserID),
+						ActorID:       fmt.Sprintf("%d", notification.SenderID),
+						ActorName:     follower.FullName,
+						ActorUsername: follower.Username,
+						Type:          services.NotificationTypeFollow,
+						Content:       notification.Content,
+						EntityID:      fmt.Sprintf("%d", notification.ReferenceID),
+						EntityType:    "user",
+						IsRead:        notification.IsRead,
+						CreatedAt:     notification.CreatedAt,
+					}
+
+					if err := notifService.SendNotification(c.Request.Context(), wsNotification); err != nil {
+						fmt.Printf("WebSocket bildirimi gönderilemedi: %v\n", err)
+					}
+				}
+			}
+		}
+
 		// İsteği gönderen kullanıcının Takip Edilen sayısını ve
 		// takip edilen kullanıcının Takipçi sayısını artırmak için bir mekanizma eklenebilir (örn. trigger, ayrı bir güncelleme vs.)
 		c.JSON(http.StatusOK, Response{Success: true, Message: "Kullanıcı takip edildi", Data: gin.H{"status": "following"}})

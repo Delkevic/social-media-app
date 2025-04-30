@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
+	"social-media-app/backend/services"
 	"strconv"
 	"time"
 
@@ -175,6 +176,61 @@ func CreatePost(c *gin.Context) {
 	// Kullanıcı bilgisini al
 	var user models.User
 	database.DB.First(&user, userID)
+
+	// Gönderi oluşturulduğunda takipçilere bildirim gönder
+	type Follower struct {
+		ID uint
+	}
+	var followers []Follower
+
+	// Kullanıcının takipçilerini bul
+	if err := database.DB.Table("follows").
+		Select("follower_id as id").
+		Where("following_id = ? AND status = ?", userID, "active").
+		Find(&followers).Error; err != nil {
+		fmt.Printf("Takipçiler aranırken hata: %v\n", err)
+		// Hata olsa bile gönderi oluşturma işlemi tamamlanmalı
+	} else {
+		// Bildirimleri oluştur
+		for _, follower := range followers {
+			notification := models.Notification{
+				UserID:      follower.ID,   // Takipçiye bildirim gönder
+				SenderID:    userID.(uint), // Gönderiyi oluşturan kullanıcı
+				Type:        "post",
+				Content:     fmt.Sprintf("%s yeni bir gönderi paylaştı", user.FullName),
+				ReferenceID: post.ID,
+				IsRead:      false,
+				CreatedAt:   time.Now(),
+			}
+
+			if err := database.DB.Create(&notification).Error; err != nil {
+				fmt.Printf("Gönderi bildirimi oluşturulurken hata: %v\n", err)
+				// Bildirimin oluşturulamaması gönderi işlemini engellememelidir
+			} else {
+				fmt.Printf("Gönderi bildirimi oluşturuldu. Gönderi %d -> Kullanıcı %d\n", post.ID, follower.ID)
+				// WebSocket üzerinden bildirim gönder (opsiyonel)
+				if notifService != nil {
+					wsNotification := services.Notification{
+						ID:            fmt.Sprintf("%d", notification.ID),
+						UserID:        fmt.Sprintf("%d", notification.UserID),
+						ActorID:       fmt.Sprintf("%d", notification.SenderID),
+						ActorName:     user.FullName,
+						ActorUsername: user.Username,
+						Type:          services.NotificationTypePost,
+						Content:       notification.Content,
+						EntityID:      fmt.Sprintf("%d", notification.ReferenceID),
+						EntityType:    "post",
+						IsRead:        notification.IsRead,
+						CreatedAt:     notification.CreatedAt,
+					}
+
+					if err := notifService.SendNotification(c.Request.Context(), wsNotification); err != nil {
+						fmt.Printf("WebSocket bildirimi gönderilemedi: %v\n", err)
+					}
+				}
+			}
+		}
+	}
 
 	// Yanıt oluştur
 	c.JSON(http.StatusCreated, Response{

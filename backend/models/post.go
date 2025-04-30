@@ -72,3 +72,11 @@ type SavedReel struct {
 	ReelID    uint `gorm:"primaryKey"`
 	CreatedAt time.Time
 }
+
+// PostImage - Gönderi resim modeli
+type PostImage struct {
+	ID        uint   `gorm:"primaryKey"`
+	PostID    uint   `gorm:"not null"`
+	URL       string `gorm:"not null"`
+	CreatedAt time.Time
+}

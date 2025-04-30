@@ -88,7 +88,7 @@ export const NotificationProvider = ({ children }) => {
     }
   }, []);
 
-  // WebSocket'ten yeni bildirim geldiğinde gösterilecek toast bildirimi
+  // WebSocket'ten gelen yeni bildirim geldiğinde gösterilecek toast bildirimi
   const showNotificationToast = useCallback((notification) => {
     if (!notification) return;
     
@@ -102,16 +102,16 @@ export const NotificationProvider = ({ children }) => {
         <div className="flex-1 w-0 p-4">
           <div className="flex items-start">
             <div className="flex-shrink-0 pt-0.5">
-              {notification.actor_profile_image ? (
+              {notification.actorProfileImage ? (
                 <img 
                   className="h-10 w-10 rounded-full" 
-                  src={notification.actor_profile_image} 
-                  alt={notification.actor_name || "Profil"} 
+                  src={notification.actorProfileImage} 
+                  alt={notification.actorName || "Profil"} 
                 />
               ) : (
                 <div className="h-10 w-10 rounded-full bg-[#0affd9] flex items-center justify-center">
                   <span className="text-black font-bold">
-                    {(notification.actor_name || 'U').charAt(0).toUpperCase()}
+                    {(notification.actorName || 'U').charAt(0).toUpperCase()}
                   </span>
                 </div>
               )}
@@ -144,6 +144,26 @@ export const NotificationProvider = ({ children }) => {
     });
   }, []);
 
+  // Bildirimleri normalleştirme fonksiyonu
+  const normalizeNotification = useCallback((notification) => {
+    return {
+      id: notification.id,
+      type: notification.type || 'system',
+      content: notification.content,
+      createdAt: notification.createdAt || notification.created_at || new Date().toISOString(),
+      isRead: notification.isRead || notification.is_read || false,
+      referenceId: notification.referenceId || notification.reference_id || 0,
+      time: notification.time || 'Şimdi',
+      // Ekstra alanlar
+      userId: notification.userId || notification.user_id,
+      senderId: notification.senderId || notification.sender_id,
+      actorId: notification.actorId || notification.actor_id,
+      actorName: notification.actorName || notification.actor_name,
+      actorUsername: notification.actorUsername || notification.actor_username,
+      actorProfileImage: notification.actorProfileImage || notification.actor_profile_image,
+    };
+  }, []);
+
   // Component mount olduğunda ve WebSocket bağlantısı kurulduğunda bildirimleri çek
   useEffect(() => {
     console.log("NotificationContext yükleniyor, bildirimleri çekiyor...");
@@ -153,22 +173,25 @@ export const NotificationProvider = ({ children }) => {
     const removeListener = notificationService.listenForNotifications((newNotification) => {
       console.log('YENİ BİLDİRİM ALINDI (WebSocket):', newNotification);
       
+      // Bildirimi normalleştir
+      const normalizedNotification = normalizeNotification(newNotification);
+      
       // Son bildirimi kaydet
-      setLastNotification(newNotification);
+      setLastNotification(normalizedNotification);
       
       // Yeni bildirimi listenin başına ekle ve okunmamış sayısını artır
       setNotifications(prev => {
         // Eğer bildirim zaten varsa ekleme (id kontrolü)
-        if (prev.some(n => n.id === newNotification.id)) {
-          console.log("Bu bildirim zaten listede var, tekrar eklenmedi:", newNotification.id);
+        if (prev.some(n => n.id === normalizedNotification.id)) {
+          console.log("Bu bildirim zaten listede var, tekrar eklenmedi:", normalizedNotification.id);
           return prev;
         }
-        return [newNotification, ...prev];
+        return [normalizedNotification, ...prev];
       });
       setUnreadCount(prev => prev + 1);
       
       // Toast bildirimi göster
-      showNotificationToast(newNotification);
+      showNotificationToast(normalizedNotification);
     });
 
     // Cleanup: Component unmount olduğunda listener'ı kaldır
@@ -176,7 +199,7 @@ export const NotificationProvider = ({ children }) => {
       console.log("NotificationContext temizleniyor, dinleyiciler kaldırılıyor...");
       removeListener();
     };
-  }, [fetchNotifications, showNotificationToast]); // fetchNotifications'ı ve showNotificationToast'ı dependency array'e ekle
+  }, [fetchNotifications, showNotificationToast, normalizeNotification]); // dependency array'e normalizeNotification'ı da ekle
 
   const value = {
     isPanelOpen,

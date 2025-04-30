@@ -22,6 +22,7 @@ const (
 	NotificationTypeFollowRequest NotificationType = "follow_request"
 	NotificationTypeFollowAccept  NotificationType = "follow_accept"
 	NotificationTypeMessage       NotificationType = "message"
+	NotificationTypePost          NotificationType = "post"
 	NotificationTypeSystem        NotificationType = "system"
 )
 
@@ -254,6 +255,25 @@ func (s *NotificationService) CreateFollowAcceptNotification(ctx context.Context
 		ActorUsername:     acceptorUsername,
 		ActorProfileImage: acceptorImage,
 		Type:              NotificationTypeFollowAccept,
+		IsRead:            false,
+		CreatedAt:         time.Now(),
+	}
+
+	return s.SendNotification(ctx, notification)
+}
+
+// CreatePostNotification, yeni gönderi bildirimi oluşturur
+func (s *NotificationService) CreatePostNotification(ctx context.Context, userID, posterID, posterName, posterUsername, posterImage, postID string) error {
+	notification := Notification{
+		UserID:            userID,
+		ActorID:           posterID,
+		ActorName:         posterName,
+		ActorUsername:     posterUsername,
+		ActorProfileImage: posterImage,
+		Type:              NotificationTypePost,
+		EntityID:          postID,
+		EntityType:        "post",
+		Content:           posterName + " yeni bir gönderi paylaştı",
 		IsRead:            false,
 		CreatedAt:         time.Now(),
 	}

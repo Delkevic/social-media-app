@@ -213,14 +213,14 @@ class WebSocketService {
             id: message.notification.id || Date.now().toString(),
             type: message.notification.type || 'system',
             content: message.notification.content || message.notification.message || 'Yeni bildirim', 
-            created_at: message.notification.createdAt || new Date().toISOString(),
-            is_read: message.notification.isRead || false,
-            reference_id: message.notification.entityId || null,
-            user_id: message.notification.userID || null,
-            actor_id: message.notification.actorID || null,
-            actor_name: message.notification.actorName || 'Sistem',
-            actor_username: message.notification.actorUsername || 'sistem',
-            actor_profile_image: message.notification.actorProfileImage || null
+            createdAt: message.notification.createdAt || new Date().toISOString(),
+            isRead: message.notification.isRead || false,
+            referenceId: message.notification.entityId || null,
+            userId: message.notification.userID || null,
+            actorId: message.notification.actorID || null,
+            actorName: message.notification.actorName || 'Sistem',
+            actorUsername: message.notification.actorUsername || 'sistem',
+            actorProfileImage: message.notification.actorProfileImage || null
           };
           
           console.log("[WebSocket] İşlenmiş bildirim:", frontendNotification);

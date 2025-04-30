@@ -82,8 +82,29 @@ export const getNotifications = async (limit) => {
         return [];
       }
       
-      console.log("İşlenmiş bildirimler (toplam " + notifications.length + "):", notifications);
-      return notifications;
+      // API yanıtındaki alan adlarını frontend'in beklediği alan adlarına dönüştür
+      const normalizedNotifications = notifications.map(notification => {
+        // Alanlar için null korumalı dönüşüm yap
+        return {
+          id: notification.id,
+          type: notification.type || 'system',
+          content: notification.content,
+          createdAt: notification.createdAt || notification.created_at,
+          isRead: notification.isRead || notification.is_read || false,
+          referenceId: notification.referenceId || notification.reference_id || 0,
+          time: notification.time || formatTimeAgo(notification.createdAt || notification.created_at),
+          // Ekstra alanlar
+          userId: notification.userId || notification.user_id,
+          senderId: notification.senderId || notification.sender_id,
+          actorId: notification.actorId || notification.actor_id,
+          actorName: notification.actorName || notification.actor_name,
+          actorUsername: notification.actorUsername || notification.actor_username,
+          actorProfileImage: notification.actorProfileImage || notification.actor_profile_image,
+        };
+      });
+      
+      console.log("İşlenmiş bildirimler (toplam " + normalizedNotifications.length + "):", normalizedNotifications);
+      return normalizedNotifications;
     }
     
     console.warn('Bildirim yanıtı başarısız:', response);
@@ -92,6 +113,24 @@ export const getNotifications = async (limit) => {
     console.error('Bildirimler alınırken hata:', error);
     return []; // Hata durumunda boş dizi dön
   }
+};
+
+// Zaman farkını formatla
+const formatTimeAgo = (dateString) => {
+  if (!dateString) return '';
+  
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffMs = now - date;
+  const diffSec = Math.floor(diffMs / 1000);
+  
+  if (diffSec < 60) return 'Az önce';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} dakika önce`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} saat önce`;
+  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)} gün önce`;
+  
+  // Tarih formatı: DD.MM.YYYY
+  return `${date.getDate().toString().padStart(2, '0')}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getFullYear()}`;
 };
 
 /**

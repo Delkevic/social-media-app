@@ -108,3 +108,17 @@ func (u *User) HasFollowRequest(db *gorm.DB, userID uint) bool {
 		u.ID, userID, "pending").Count(&count)
 	return count > 0
 }
+
+// FollowRequest represents a request from one user to follow another (private) user.
+type FollowRequest struct {
+	ID          uint      `gorm:"primarykey"`
+	FollowerID  uint      `gorm:"index;not null"`                  // İstek gönderen kullanıcı ID'si
+	FollowingID uint      `gorm:"index;not null"`                  // İstek alan (gizli hesap) kullanıcı ID'si
+	Status      string    `gorm:"size:20;default:'pending';index"` // pending, accepted, rejected
+	CreatedAt   time.Time `gorm:"index"`
+	UpdatedAt   time.Time
+
+	// İlişkiler (Opsiyonel, ancak sorgularda yardımcı olabilir)
+	Follower  User `gorm:"foreignKey:FollowerID"`
+	Following User `gorm:"foreignKey:FollowingID"`
+}
