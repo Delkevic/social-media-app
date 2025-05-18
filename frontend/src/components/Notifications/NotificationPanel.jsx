@@ -66,11 +66,11 @@ const NotificationItem = ({ notification, onMarkAsRead }) => {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-100 dark:text-white">
-            {notification.content}
+            {notification.message || notification.content}
           </p>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center">
             {format(notification.createdAt || notification.created_at)}
-            {notification.referenceId && (
+            {(notification.referenceId || notification.fromUserId) && (
               <ChevronRight className="h-3 w-3 ml-1 inline text-[#0affd9]/70" />
             )}
           </p>

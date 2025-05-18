@@ -42,12 +42,14 @@ const FollowButton = ({ userId, username, initialFollowStatus, onStatusChange })
   const handleFollow = async () => {
     setLoading(true);
     try {
+      console.log('Takip isteği gönderiliyor:', targetUsername || username || userId);
       const response = await api.user.follow(targetUsername || username || userId);
       console.log('Takip yanıtı:', response);
       
       if (response.success) {
         // API yanıtında status bilgisini kullan
-        const newStatus = response.data?.status || 'following';
+        const newStatus = response.data?.status || response.status || 'following';
+        console.log('Yeni takip durumu:', newStatus);
         setFollowStatus(newStatus);
         onStatusChange?.(newStatus);
         
@@ -58,6 +60,7 @@ const FollowButton = ({ userId, username, initialFollowStatus, onStatusChange })
             : response.message || 'Kullanıcıyı takip ediyorsunuz'
         );
       } else {
+        console.error('Takip işlemi başarısız:', response.message);
         message.error(response.message || 'Takip işlemi başarısız oldu');
       }
     } catch (error) {

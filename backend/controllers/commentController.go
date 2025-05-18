@@ -73,10 +73,10 @@ func AddComment(c *gin.Context) {
 		return
 	}
 
-	postIDStr := c.Param("postID")
+	postIDStr := c.Param("id")
 	postID, err := strconv.Atoi(postIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz gönderi ID'si"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz gönderi ID'si formatı"})
 		return
 	}
 
@@ -92,7 +92,7 @@ func AddComment(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "İçerik gerekli"})
-			return
+		return
 	}
 
 	// Yorumu oluştur
@@ -117,12 +117,11 @@ func AddComment(c *gin.Context) {
 	// Post sahibine bildirim oluştur (kendi postuna yorum yapıyorsa bildirim oluşturma)
 	if post.UserID != userID.(uint) {
 		notification := models.Notification{
-			UserID:      post.UserID,
-			SenderID:    userID.(uint),
-			Type:        "comment",
-			ReferenceID: uint(postID),
-			Content:     user.Username + " gönderinize yorum yaptı",
-			IsRead:      false,
+			ToUserID:   post.UserID,
+			FromUserID: userID.(uint),
+			Type:       "comment",
+			Message:    user.Username + " gönderinize yorum yaptı",
+			IsRead:     false,
 		}
 
 		if err := database.DB.Create(&notification).Error; err != nil {
@@ -171,20 +170,20 @@ func AddComment(c *gin.Context) {
 func ToggleCommentLike(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Kullanıcı oturumu bulunamadı"})
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Kullanıcı oturumu bulunamadı"})
 		return
 	}
 
-	commentIDStr := c.Param("commentID")
+	commentIDStr := c.Param("id")
 	commentID, err := strconv.Atoi(commentIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz yorum ID'si"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Geçersiz yorum ID'si"})
 		return
 	}
 
 	var comment models.Comment
 	if err := database.DB.First(&comment, commentID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Yorum bulunamadı"})
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Yorum bulunamadı"})
 		return
 	}
 
@@ -195,12 +194,12 @@ func ToggleCommentLike(c *gin.Context) {
 	if likeExists {
 		// Like varsa kaldır
 		if err := database.DB.Delete(&existingLike).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Beğeni kaldırılırken hata oluştu"})
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Beğeni kaldırılırken hata oluştu"})
 			return
 		}
 
 		// Yorum beğeni sayısını güncelle
-			database.DB.Model(&comment).Update("like_count", comment.LikeCount-1)
+		database.DB.Model(&comment).Update("like_count", comment.LikeCount-1)
 
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
@@ -209,18 +208,18 @@ func ToggleCommentLike(c *gin.Context) {
 		})
 	} else {
 		// Like yoksa ekle
-	like := models.CommentLike{
-		CommentID: uint(commentID),
+		like := models.CommentLike{
+			CommentID: uint(commentID),
 			UserID:    userID.(uint),
-	}
+		}
 
-	if err := database.DB.Create(&like).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Beğeni eklenirken hata oluştu"})
-		return
-	}
+		if err := database.DB.Create(&like).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Beğeni eklenirken hata oluştu"})
+			return
+		}
 
 		// Yorum beğeni sayısını güncelle
-	database.DB.Model(&comment).Update("like_count", comment.LikeCount+1)
+		database.DB.Model(&comment).Update("like_count", comment.LikeCount+1)
 
 		// Beğeni yapan kullanıcının bilgilerini getir
 		var user models.User
@@ -229,12 +228,11 @@ func ToggleCommentLike(c *gin.Context) {
 		// Yorum sahibine bildirim oluştur (kendi yorumunu beğeniyorsa bildirim oluşturma)
 		if comment.UserID != userID.(uint) {
 			notification := models.Notification{
-				UserID:      comment.UserID,
-				SenderID:    userID.(uint),
-				Type:        "comment_like",
-				ReferenceID: uint(commentID),
-				Content:     user.Username + " yorumunuzu beğendi",
-				IsRead:      false,
+				ToUserID:   comment.UserID,
+				FromUserID: userID.(uint),
+				Type:       "comment_like",
+				Message:    user.Username + " yorumunuzu beğendi",
+				IsRead:     false,
 			}
 
 			if err := database.DB.Create(&notification).Error; err != nil {
@@ -243,11 +241,11 @@ func ToggleCommentLike(c *gin.Context) {
 			}
 		}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
 			"message": "Yorum beğenildi",
 			"liked":   true,
-	})
+		})
 	}
 }
 
@@ -422,12 +420,11 @@ func ReplyToComment(c *gin.Context) {
 	// Ana yorum sahibine bildirim oluştur (kendi yorumuna yanıt veriyorsa bildirim oluşturma)
 	if parentComment.UserID != userID.(uint) {
 		notification := models.Notification{
-			UserID:      parentComment.UserID,
-			SenderID:    userID.(uint),
-			Type:        "reply",
-			ReferenceID: reply.ID,
-			Content:     user.Username + " yorumunuza yanıt verdi",
-			IsRead:      false,
+			ToUserID:   parentComment.UserID,
+			FromUserID: userID.(uint),
+			Type:       "reply",
+			Message:    user.Username + " yorumunuza yanıt verdi",
+			IsRead:     false,
 		}
 
 		if err := database.DB.Create(&notification).Error; err != nil {

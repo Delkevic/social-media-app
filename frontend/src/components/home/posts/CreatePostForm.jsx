@@ -3,15 +3,21 @@ import api from '../../../services/api';
 
 const CreatePostForm = ({ onSubmit, onCancel }) => {
   const [content, setContent] = useState('');
+  const [caption, setCaption] = useState('');
+  const [tags, setTags] = useState('');
   const [images, setImages] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
 
+  // Cloudinary bilgileri
+  const CLOUD_NAME = 'dol4b1lig';
+  const UPLOAD_PRESET = 'unsigned_preset';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!content.trim()) {
-      setError("Gönderi içeriği boş olamaz");
+    if (!content.trim() && images.length === 0) {
+      setError("Gönderi içeriği veya görsel eklemelisiniz");
       return;
     }
     
@@ -19,19 +25,28 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       setIsSubmitting(true);
       setError('');
       
-      // Görsel URL'lerini al (eğer varsa)
+      // Görsel URL'lerini al
       const imageUrls = images.map(img => img.url);
       
-      console.log('Post gönderiliyor:', { content: content.trim(), images: imageUrls });
+      console.log('Post gönderiliyor:', { 
+        content: content.trim(), 
+        caption: caption.trim(),
+        tags: tags.trim(),
+        images: imageUrls 
+      });
       
       // Gönderiyi oluştur
       await onSubmit({
         content: content.trim(),
+        caption: caption.trim(),
+        tags: tags.trim(),
         images: imageUrls
       });
       
       // Formu sıfırla
       setContent('');
+      setCaption('');
+      setTags('');
       setImages([]);
       setUploadProgress(0);
     } catch (err) {
@@ -39,6 +54,44 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       setError('Gönderi oluşturulurken bir hata oluştu: ' + (err.message || err));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Cloudinary'ye resim yükleme fonksiyonu
+  const uploadToCloudinary = async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', UPLOAD_PRESET);
+      
+      // Dönüşüm parametrelerini ekle - otomatik genişliği 800px ve kaliteyi %80 yap
+      formData.append('transformation', 'c_scale,w_800,q_80');
+      
+      // Yükleme sırasında dönüşüm yapılmasını sağla
+      formData.append('eager', 'c_scale,w_800,q_80');
+      
+      // Ayrıca mobil için bir versiyonu hazırla - küçük ekranlar için
+      formData.append('eager_async', 'true');
+      formData.append('eager_transformation', 'c_scale,w_500,q_70');
+      
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Yükleme hatası: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Cloudinary yanıtı:', data);
+      
+      // Optimize edilmiş URL'yi veya eager URL'yi kullan
+      const optimizedUrl = data.eager && data.eager[0] ? data.eager[0].secure_url : data.secure_url;
+      return optimizedUrl;
+    } catch (error) {
+      console.error('Cloudinary yükleme hatası:', error);
+      throw error;
     }
   };
 
@@ -64,33 +117,36 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
           continue;
         }
         
-        // Görsel yükleme işlemi için API çağrısı
-        console.log('Görsel yükleme başlıyor:', file.name);
-        const response = await api.uploadImage(file);
-        console.log('Görsel yükleme tamamlandı:', response);
+        // Görsel önizlemesi için
+        const preview = URL.createObjectURL(file);
         
-        if (response.success) {
-          // Yüklenen görseli listeye ekle
-          const imageUrl = response.data.url;
-          console.log('Görsel URL:', imageUrl);
+        // Yükleme başladı bildirimi
+        const tempImageId = Date.now() + Math.random().toString(36);
+        setImages(prev => [
+          ...prev, 
+          { 
+            id: tempImageId, 
+            preview, 
+            url: null,
+            isUploading: true 
+          }
+        ]);
+        
+        // Cloudinary'ye yükle
+        try {
+          const cloudinaryUrl = await uploadToCloudinary(file);
           
-          // Eğer URL http:// ile başlamıyorsa, tam URL'ye dönüştür
-          const fullImageUrl = imageUrl.startsWith('http') 
-            ? imageUrl 
-            : `http://127.0.0.1:8080${imageUrl}`;
+          // Başarılı yüklemeyi güncelle
+          setImages(prev => prev.map(img => 
+            img.id === tempImageId 
+              ? { ...img, url: cloudinaryUrl, isUploading: false } 
+              : img
+          ));
           
-          setImages(prevImages => [
-            ...prevImages,
-            {
-              id: Date.now() + Math.random().toString(36),
-              url: imageUrl, // API'ye gönderilecek orijinal URL
-              fullUrl: fullImageUrl, // Görüntülemek için tam URL
-              preview: URL.createObjectURL(file)
-            }
-          ]);
-        } else {
-          console.error('Görsel yükleme başarısız:', response);
-          setError('Görsel yüklenemedi: ' + (response.message || 'Bilinmeyen hata'));
+        } catch (uploadError) {
+          // Hata durumunda resmi kaldır
+          setImages(prev => prev.filter(img => img.id !== tempImageId));
+          setError('Görsel yüklenemedi: ' + uploadError.message);
         }
       }
     } catch (err) {
@@ -111,6 +167,22 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         </div>
       )}
       
+      <input
+        type="text"
+        placeholder="Gönderi başlığı"
+        value={caption}
+        onChange={(e) => setCaption(e.target.value)}
+        className="w-full p-3 rounded-lg bg-black/60 border border-[#0affd9]/30 text-white focus:border-[#0affd9] focus:ring-1 focus:ring-[#0affd9]/50 outline-none"
+      />
+      
+      <input
+        type="text"
+        placeholder="Etiketler (virgülle ayırın, örn: manzara,tatil,deniz)"
+        value={tags}
+        onChange={(e) => setTags(e.target.value)}
+        className="w-full p-3 rounded-lg bg-black/60 border border-[#0affd9]/30 text-white focus:border-[#0affd9] focus:ring-1 focus:ring-[#0affd9]/50 outline-none"
+      />
+      
       <textarea
         placeholder="Ne düşünüyorsun?"
         value={content}
@@ -126,12 +198,17 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
               <img 
                 src={image.preview} 
                 alt="Gönderi görseli" 
-                className="rounded-md w-full h-32 object-cover"
+                className={`rounded-md w-full h-32 object-cover ${image.isUploading ? 'opacity-60' : ''}`}
                 onError={(e) => {
                   console.error('Görsel yüklenemedi:', image);
                   e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Crect width='150' height='150' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='14' fill='%23fff' text-anchor='middle' dominant-baseline='middle'%3EGörsel Yüklenemedi%3C/text%3E%3C/svg%3E";
                 }}
               />
+              {image.isUploading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-md">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#0affd9]"></div>
+                </div>
+              )}
               <button
                 type="button"
                 className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white"
@@ -183,7 +260,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
           <button 
             type="submit"
             className="px-3 py-1.5 rounded-lg font-medium bg-[#0affd9] text-black hover:bg-[#0affd9]/80 transition-colors disabled:opacity-50"
-            disabled={(!content.trim() && images.length === 0) || isSubmitting}
+            disabled={(!content.trim() && images.length === 0) || isSubmitting || images.some(img => img.isUploading)}
           >
             {isSubmitting ? 'Paylaşılıyor...' : 'Paylaş'}
           </button>

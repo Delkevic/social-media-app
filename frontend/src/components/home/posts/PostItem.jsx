@@ -4,7 +4,8 @@ import api from '../../../services/api';
 import { API_BASE_URL } from '../../../config/constants';
 import { formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, X, Trash2, AlertCircle } from 'lucide-react';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, X, Trash2, AlertCircle, Bug } from 'lucide-react';
+import { createTestPost } from '../../../services/api';
 
 const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
   // Prop kontrolleri
@@ -28,6 +29,45 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isLiking, setIsLiking] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+
+  // Debug mod için Shift tuş basımı dinleyicisi
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Shift') {
+        setShowDebug(true);
+      }
+    };
+    
+    const handleKeyUp = (e) => {
+      if (e.key === 'Shift') {
+        setShowDebug(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Test post oluşturma fonksiyonu
+  const handleCreateTestPost = async () => {
+    try {
+      const result = await createTestPost();
+      if (result.success) {
+        alert(`Test gönderi oluşturuldu! ID: ${result.data.id || result.data.ID}`);
+        window.location.reload(); // Sayfayı yenile
+      } else {
+        alert(`Hata: ${result.message}`);
+      }
+    } catch (error) {
+      alert(`İşlem hatası: ${error.message}`);
+    }
+  };
 
   // Sayfa yüklendiğinde ve post değiştiğinde yorumları otomatik yükle
   useEffect(() => {
@@ -60,8 +100,20 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       
       console.log('Yorumlar API isteği başlatılıyor, post ID:', post.id);
       
+      // Post ID'yi güvenli şekilde işle
+      let safePostId;
+      if (typeof post.id === 'string') {
+        if (/^\d+$/.test(post.id)) {
+          safePostId = parseInt(post.id, 10);
+        } else {
+          safePostId = post.id;
+        }
+      } else {
+        safePostId = post.id;
+      }
+      
       // API'den yorumları getir
-      const response = await api.posts.getComments(post.id);
+      const response = await api.posts.getComments(safePostId);
       
       console.log('Yorumlar API yanıtı:', response);
       
@@ -205,18 +257,72 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
     }
   };
 
+  // Yorum eklemeden önce post nesnesini kontrol etmek için yardımcı fonksiyon
+  const debugPostObject = () => {
+    // Post nesnesinin bir kopyasını oluştur (referans yerine)
+    const postCopy = {...post};
+    
+    // Hassas veri içerebilecek büyük alanları temizle
+    if (postCopy.content && postCopy.content.length > 100) {
+      postCopy.content = postCopy.content.substring(0, 100) + '...';
+    }
+    
+    // Döngüsel referansları ve büyük nesneleri temizle
+    delete postCopy.user;
+    delete postCopy.likes;
+    delete postCopy.comments;
+    
+    console.log('Post nesnesi detayları:', {
+      id: post.id,
+      idType: typeof post.id,
+      postKeys: Object.keys(post),
+      postValues: postCopy
+    });
+    
+    // ID'nin numerik olup olmadığını kontrol et
+    const numericId = Number(post.id);
+    console.log('ID Numerik mi?', {
+      original: post.id,
+      converted: numericId,
+      isNaN: isNaN(numericId),
+      isFinite: isFinite(numericId),
+      isInteger: Number.isInteger(numericId)
+    });
+  };
+
   const handleSubmitComment = async (e, parentId = null) => {
     e.preventDefault();
     if (!comment.trim()) return;
+    
+    // Debug bilgisi
+    debugPostObject();
     
     try {
       setError(null);
       setLoadingComments(true);
       
+      // Postun ID formatını kontrol et ve düzelt
+      let safePostId;
+      if (typeof post.id === 'string') {
+        // Eğer ID bir string ise ve sayısal görünüyorsa sayıya çevir
+        if (/^\d+$/.test(post.id)) {
+          safePostId = parseInt(post.id, 10);
+        } else {
+          // Sayı değilse string olarak bırak
+          safePostId = post.id;
+        }
+      } else {
+        // Zaten sayı ise aynen kullan
+        safePostId = post.id;
+      }
+      
       console.log("Yorum gönderiliyor:", {
         content: comment.trim(),
         parentId: parentId,
-        postId: post.id
+        postId: post.id,
+        postIdType: typeof post.id,
+        safePostId: safePostId,
+        safePostIdType: typeof safePostId
       });
       
       // Yorum içeriğini saklayıp formu temizle
@@ -224,7 +330,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       setComment('');
       
       // API'ye yorumu gönder
-      const response = await api.posts.addComment(post.id, commentText, parentId);
+      const response = await api.posts.addComment(safePostId, commentText, parentId);
       
       console.log('Yorum gönderme yanıtı:', response);
       
@@ -488,7 +594,30 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       setReplyError(null);
       
       try {
-        const response = await api.posts.addComment(post.id, replyText, comment.id); // parentId olarak yorumun ID'sini ver
+        // Post ve Comment ID'lerini güvenli şekilde işle
+        let safePostId;
+        if (typeof post.id === 'string') {
+          if (/^\d+$/.test(post.id)) {
+            safePostId = parseInt(post.id, 10);
+          } else {
+            safePostId = post.id;
+          }
+        } else {
+          safePostId = post.id;
+        }
+        
+        let safeCommentId = comment.id;
+        
+        console.log("Yanıt gönderiliyor:", {
+          postId: post.id, 
+          postIdType: typeof post.id,
+          safePostId: safePostId,
+          commentId: comment.id,
+          commentIdType: typeof comment.id,
+          safeCommentId: safeCommentId
+        });
+        
+        const response = await api.posts.addComment(safePostId, replyText, safeCommentId); // parentId olarak yorumun ID'sini ver
         if (response.success) {
           setReplyText('');
           setShowReplyInput(false);
@@ -526,9 +655,12 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       setComments(prevComments => updateCommentLikeStatus(prevComments));
       
       try {
+        // Comment ID'sini güvenli şekilde işle
+        let safeCommentId = comment.id;
+        
         const response = currentLikedState
-          ? await api.posts.unlikeComment(comment.id)
-          : await api.posts.likeComment(comment.id);
+          ? await api.posts.unlikeComment(safeCommentId)
+          : await api.posts.likeComment(safeCommentId);
         
         if (!response.success) {
           throw new Error(response.message || 'Yorum beğenme işlemi başarısız oldu');
@@ -575,7 +707,10 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       if (isDeletingComment) return;
       setIsDeletingComment(true);
       try {
-        const response = await api.posts.deleteComment(comment.id);
+        // Comment ID'sini güvenli şekilde işle
+        let safeCommentId = comment.id;
+        
+        const response = await api.posts.deleteComment(safeCommentId);
           if (response.success) {
            fetchComments(); // Yorumları yeniden çek
         } else {
@@ -592,7 +727,10 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
 
      const handleReportComment = async () => {
       try {
-          const response = await api.posts.reportComment(comment.id);
+          // Comment ID'sini güvenli şekilde işle
+          let safeCommentId = comment.id;
+          
+          const response = await api.posts.reportComment(safeCommentId);
         if (response.success) {
             alert('Yorum bildirildi.');
           } else {
@@ -744,48 +882,88 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
             </p>
             <p className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">
               {formatDate(post.createdAt || post.CreatedAt)}
-          </p>
-        </div>
+            </p>
+          </div>
         </Link>
         
-        {/* Seçenekler Menüsü */} 
-        {(currentUser?.id === post.user?.id || currentUser?.isAdmin) && (
-          <div className="relative" ref={menuRef}>
-          <button 
-            onClick={() => setShowMenu(!showMenu)}
-              className="text-gray-500 hover:text-[#0affd9] p-1 rounded-full transition-colors"
-          >
-              <MoreHorizontal size={20} />
-          </button>
-          {showMenu && (
-              <div className="absolute right-0 mt-2 w-40 bg-gray-900 border border-[#0affd9]/20 rounded-lg shadow-lg z-10 py-1">
-                {currentUser?.id === post.user?.id && (
+        <div className="flex items-center space-x-2">
+          {/* Debug Butonu - Shift tuşuna basıldığında görünür */}
+          {showDebug && (
+            <button
+              onClick={handleCreateTestPost}
+              className="text-yellow-500 hover:text-yellow-400 p-1 rounded-full transition-colors"
+              title="Yeni test gönderisi oluştur"
+            >
+              <Bug size={18} />
+            </button>
+          )}
+          
+          {/* Seçenekler Menüsü */} 
+          {(currentUser?.id === post.user?.id || currentUser?.isAdmin) && (
+            <div className="relative" ref={menuRef}>
+            <button 
+              onClick={() => setShowMenu(!showMenu)}
+                className="text-gray-500 hover:text-[#0affd9] p-1 rounded-full transition-colors"
+            >
+                <MoreHorizontal size={20} />
+            </button>
+            {showMenu && (
+                <div className="absolute right-0 mt-2 w-40 bg-gray-900 border border-[#0affd9]/20 rounded-lg shadow-lg z-10 py-1">
+                  {currentUser?.id === post.user?.id && (
+                  <button
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                      className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-red-600/20 disabled:opacity-50 transition-colors flex items-center"
+                  >
+                      <Trash2 size={14} className="mr-2" /> Sil {isDeleting && '...'}
+                  </button>
+                )}
                 <button
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                    className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-red-600/20 disabled:opacity-50 transition-colors flex items-center"
+                  onClick={handleReport}
+                    className="w-full text-left px-3 py-1.5 text-sm text-yellow-400 hover:bg-yellow-600/20 transition-colors flex items-center"
                 >
-                    <Trash2 size={14} className="mr-2" /> Sil {isDeleting && '...'}
+                   <AlertCircle size={14} className="mr-2"/> Bildir
                 </button>
-              )}
-              <button
-                onClick={handleReport}
-                  className="w-full text-left px-3 py-1.5 text-sm text-yellow-400 hover:bg-yellow-600/20 transition-colors flex items-center"
-              >
-                 <AlertCircle size={14} className="mr-2"/> Bildir
-              </button>
-            </div>
+              </div>
+            )}
+          </div>
           )}
         </div>
-        )}
       </div>
       
-      {/* Gönderi İçeriği (Metin) */} 
-      {post.content && (
-        <p className="p-3 text-sm text-gray-300 whitespace-pre-wrap break-words">
-          {post.content}
-        </p>
+      {/* Debug Bilgisi Alanı - Shift tuşu basılıyken görünür */}
+      {showDebug && (
+        <div className="p-2 text-xs bg-yellow-500/20 border-t border-b border-yellow-500/30 text-yellow-300">
+          <p>
+            <strong>DEBUG:</strong> Post ID: {post.id} ({typeof post.id}), 
+            Keys: {Object.keys(post).join(', ')}
+          </p>
+        </div>
       )}
+      
+      {/* Post içeriği */}
+      <div className="px-3 py-2 text-white">
+        {post.caption && (
+          <h3 className="text-lg font-semibold mb-2">{post.caption}</h3>
+        )}
+        <p className="text-sm">{post.content}</p>
+        
+        {/* Etiketler */}
+        {post.tags && post.tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {post.tags.map((tag, index) => (
+              tag.trim() && (
+                <span 
+                  key={index} 
+                  className="inline-block px-2 py-1 rounded-md text-xs bg-[#0affd9]/10 text-[#0affd9]"
+                >
+                  #{tag.trim()}
+                </span>
+              )
+            ))}
+          </div>
+        )}
+      </div>
       
       {/* Gönderi Medyası (Resim veya Video) */} 
       {(() => {

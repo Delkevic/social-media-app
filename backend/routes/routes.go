@@ -141,6 +141,7 @@ func SetupRoutes() *gin.Engine {
 
 			// Bildirim rotaları
 			auth.GET("/notifications", controllers.GetNotifications)
+			auth.POST("/notifications", controllers.CreateNotification)
 			auth.POST("/notifications/:id/read", controllers.MarkNotificationAsRead)
 			auth.POST("/notifications/read-all", controllers.MarkAllNotificationsAsRead)
 			auth.POST("/notifications/test", controllers.TestCreateNotification)

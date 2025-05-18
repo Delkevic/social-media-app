@@ -30,15 +30,16 @@ type User struct {
 	Followers []Follow `gorm:"foreignKey:FollowingID"` // Beni takip edenler
 	Following []Follow `gorm:"foreignKey:FollowerID"`  // Benim takip ettiklerim
 
-	Posts         []Post         `gorm:"foreignKey:UserID"`
-	LikedPosts    []Post         `gorm:"many2many:likes;"`
-	SavedPosts    []Post         `gorm:"many2many:saved_posts;"`
-	Comments      []Comment      `gorm:"foreignKey:UserID"`
-	Notifications []Notification `gorm:"foreignKey:UserID"` // Bildirimler
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	LastLogin     time.Time
-	DeletedAt     gorm.DeletedAt `gorm:"index"` // Soft delete için
+	Posts                 []Post         `gorm:"foreignKey:UserID"`
+	LikedPosts            []Post         `gorm:"many2many:likes;"`
+	SavedPosts            []Post         `gorm:"many2many:saved_posts;"`
+	Comments              []Comment      `gorm:"foreignKey:UserID"`
+	ReceivedNotifications []Notification `gorm:"foreignKey:ToUserID"`   // Gelen bildirimler
+	SentNotifications     []Notification `gorm:"foreignKey:FromUserID"` // Gönderilen bildirimler
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	LastLogin             time.Time
+	DeletedAt             gorm.DeletedAt `gorm:"index"` // Soft delete için
 }
 
 // Follow - Gelişmiş takip ilişkisi modeli

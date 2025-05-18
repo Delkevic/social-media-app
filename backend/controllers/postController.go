@@ -10,6 +10,7 @@ import (
 	"social-media-app/backend/models"
 	"social-media-app/backend/services"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -75,6 +76,8 @@ func GetPosts(c *gin.Context) {
 		responsePost := map[string]interface{}{
 			"id":        post.ID,
 			"content":   post.Content,
+			"caption":   post.Caption,
+			"tags":      strings.Split(post.TagsString, ","),
 			"likes":     post.LikeCount,
 			"comments":  post.CommentCount,
 			"createdAt": formatTimeAgo(post.CreatedAt),
@@ -86,6 +89,11 @@ func GetPosts(c *gin.Context) {
 				"username":     post.User.Username,
 				"profileImage": post.User.ProfileImage,
 			},
+		}
+
+		// Eğer TagsString boşsa boş dizi döndür
+		if post.TagsString == "" {
+			responsePost["tags"] = []string{}
 		}
 
 		responsePosts = append(responsePosts, responsePost)
@@ -110,27 +118,50 @@ func CreatePost(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
 	var request struct {
-		Content string   `json:"content" binding:"required"`
-		Images  []string `json:"images"`
+		Content  string   `json:"content"`
+		Caption  string   `json:"caption"` // Başlık alanı
+		Tags     string   `json:"tags"`    // Virgülle ayrılmış etiketler
+		Images   []string `json:"images"`
+		ImageUrl string   `json:"imageUrl"` // Cloudinary'den gelen tek URL için
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, Response{
 			Success: false,
-			Message: "Geçersiz gönderi verisi: " + err.Error(),
+			Message: "Geçersiz gönderi verisi: " + err.Error(),
 		})
 		return
 	}
 
-	// Yeni gönderi oluştur
-	post := models.Post{
-		UserID:    userID.(uint),
-		Content:   request.Content,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	// En az bir içerik veya görsel olmalı
+	if request.Content == "" && len(request.Images) == 0 && request.ImageUrl == "" {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Gönderi içeriği veya en az bir görsel gereklidir",
+		})
+		return
 	}
 
-	// İşlem için transaction başlat
+	// Yeni gönderi oluştur
+	post := models.Post{
+		UserID:     userID.(uint),
+		Content:    request.Content,
+		Caption:    request.Caption,
+		TagsString: request.Tags, // Veritabanında string olarak saklıyoruz
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	// Tags alanını doldur - view'da kullanmak için
+	if request.Tags != "" {
+		post.Tags = strings.Split(request.Tags, ",")
+		// Boşlukları temizle
+		for i, tag := range post.Tags {
+			post.Tags[i] = strings.TrimSpace(tag)
+		}
+	}
+
+	// İşlem için transaction başlat
 	tx := database.DB.Begin()
 
 	// Veritabanına kaydet
@@ -138,14 +169,42 @@ func CreatePost(c *gin.Context) {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, Response{
 			Success: false,
-			Message: "Gönderi oluşturulurken bir hata oluştu: " + err.Error(),
+			Message: "Gönderi oluşturulurken bir hata oluştu: " + err.Error(),
 		})
 		return
 	}
 
-	// Görselleri işle (eğer varsa)
+	// Görselleri işle
 	var imageURLs []string
+
+	// Tek ImageUrl varsa, Images dizisine ekle
+	if request.ImageUrl != "" {
+		// Cloudinary URL'ini işle
+		postImage := models.PostImage{
+			PostID:    post.ID,
+			URL:       request.ImageUrl,
+			CreatedAt: time.Now(),
+		}
+
+		if err := tx.Create(&postImage).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, Response{
+				Success: false,
+				Message: "Cloudinary görseli kaydedilirken bir hata oluştu: " + err.Error(),
+			})
+			return
+		}
+
+		imageURLs = append(imageURLs, request.ImageUrl)
+	}
+
+	// Images dizisindeki URL'leri işle (eğer varsa)
 	for _, imageURL := range request.Images {
+		// Boş URL'leri atla
+		if imageURL == "" {
+			continue
+		}
+
 		postImage := models.PostImage{
 			PostID:    post.ID,
 			URL:       imageURL,
@@ -156,7 +215,7 @@ func CreatePost(c *gin.Context) {
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, Response{
 				Success: false,
-				Message: "Görsel kaydedilirken bir hata oluştu: " + err.Error(),
+				Message: "Görsel kaydedilirken bir hata oluştu: " + err.Error(),
 			})
 			return
 		}
@@ -168,7 +227,7 @@ func CreatePost(c *gin.Context) {
 	if err := tx.Commit().Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{
 			Success: false,
-			Message: "İşlem tamamlanırken bir hata oluştu: " + err.Error(),
+			Message: "İşlem tamamlanırken bir hata oluştu: " + err.Error(),
 		})
 		return
 	}
@@ -194,13 +253,12 @@ func CreatePost(c *gin.Context) {
 		// Bildirimleri oluştur
 		for _, follower := range followers {
 			notification := models.Notification{
-				UserID:      follower.ID,   // Takipçiye bildirim gönder
-				SenderID:    userID.(uint), // Gönderiyi oluşturan kullanıcı
-				Type:        "post",
-				Content:     fmt.Sprintf("%s yeni bir gönderi paylaştı", user.FullName),
-				ReferenceID: post.ID,
-				IsRead:      false,
-				CreatedAt:   time.Now(),
+				ToUserID:   follower.ID,   // Takipçiye bildirim gönder
+				FromUserID: userID.(uint), // Gönderiyi oluşturan kullanıcı
+				Type:       "post",
+				Message:    fmt.Sprintf("%s yeni bir gönderi paylaştı", user.FullName),
+				IsRead:     false,
+				CreatedAt:  time.Now(),
 			}
 
 			if err := database.DB.Create(&notification).Error; err != nil {
@@ -212,13 +270,13 @@ func CreatePost(c *gin.Context) {
 				if notifService != nil {
 					wsNotification := services.Notification{
 						ID:            fmt.Sprintf("%d", notification.ID),
-						UserID:        fmt.Sprintf("%d", notification.UserID),
-						ActorID:       fmt.Sprintf("%d", notification.SenderID),
+						UserID:        fmt.Sprintf("%d", notification.ToUserID),
+						ActorID:       fmt.Sprintf("%d", notification.FromUserID),
 						ActorName:     user.FullName,
 						ActorUsername: user.Username,
 						Type:          services.NotificationTypePost,
-						Content:       notification.Content,
-						EntityID:      fmt.Sprintf("%d", notification.ReferenceID),
+						Content:       notification.Message,
+						EntityID:      fmt.Sprintf("%d", post.ID),
 						EntityType:    "post",
 						IsRead:        notification.IsRead,
 						CreatedAt:     notification.CreatedAt,
@@ -235,14 +293,16 @@ func CreatePost(c *gin.Context) {
 	// Yanıt oluştur
 	c.JSON(http.StatusCreated, Response{
 		Success: true,
-		Message: "Gönderi başarıyla oluşturuldu",
+		Message: "Gönderi başarıyla oluşturuldu",
 		Data: map[string]interface{}{
 			"post": map[string]interface{}{
 				"id":        post.ID,
 				"content":   post.Content,
+				"caption":   post.Caption,
+				"tags":      post.Tags, // Burada Tags dizisini doğrudan kullanabiliriz
 				"likes":     0,
 				"comments":  0,
-				"createdAt": "Şimdi",
+				"createdAt": "Şimdi",
 				"liked":     false,
 				"saved":     false,
 				"images":    imageURLs,
@@ -294,6 +354,8 @@ func GetPostById(c *gin.Context) {
 			"post": map[string]interface{}{
 				"id":        post.ID,
 				"content":   post.Content,
+				"caption":   post.Caption,
+				"tags":      strings.Split(post.TagsString, ","),
 				"likes":     post.LikeCount,
 				"comments":  post.CommentCount,
 				"createdAt": formatTimeAgo(post.CreatedAt),
@@ -362,12 +424,11 @@ func ToggleLike(c *gin.Context) {
 
 			// Bildirim oluştur
 			notification := models.Notification{
-				UserID:      post.UserID,
-				SenderID:    userID.(uint),
-				Type:        "like",
-				ReferenceID: uint(postID),
-				Content:     user.Username + " gönderinizi beğendi",
-				IsRead:      false,
+				ToUserID:   post.UserID,
+				FromUserID: userID.(uint),
+				Type:       "like",
+				Message:    user.Username + " gönderinizi beğendi",
+				IsRead:     false,
 			}
 
 			if err := database.DB.Create(&notification).Error; err != nil {
@@ -560,17 +621,24 @@ func GetSavedPosts(c *gin.Context) {
 		responsePost := map[string]interface{}{
 			"id":        post.ID,
 			"content":   post.Content,
+			"caption":   post.Caption,
+			"tags":      strings.Split(post.TagsString, ","),
 			"likes":     post.LikeCount,
 			"comments":  post.CommentCount,
 			"createdAt": formatTimeAgo(post.CreatedAt),
 			"liked":     likedCount > 0,
-			"saved":     true, // Zaten kaydedilmiş olduğunu biliyoruz
+			"saved":     true, // Zaten kaydedilmiş olduğunu biliyoruz
 			"images":    imageURLs,
 			"user": map[string]interface{}{
 				"id":           post.User.ID,
 				"username":     post.User.Username,
 				"profileImage": post.User.ProfileImage,
 			},
+		}
+
+		// Eğer TagsString boşsa boş dizi döndür
+		if post.TagsString == "" {
+			responsePost["tags"] = []string{}
 		}
 
 		responsePosts = append(responsePosts, responsePost)

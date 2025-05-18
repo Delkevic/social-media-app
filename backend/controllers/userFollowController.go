@@ -128,13 +128,12 @@ func FollowUser(c *gin.Context) {
 
 	// Takip bildirimi oluştur
 	notification := models.Notification{
-		UserID:      followingUser.ID,
-		SenderID:    followerID.(uint),
-		Type:        "follow",
-		Content:     fmt.Sprintf("%s sizi takip etmeye başladı", follower.FullName),
-		ReferenceID: newFollow.ID,
-		IsRead:      false,
-		CreatedAt:   time.Now(),
+		ToUserID:   followingUser.ID,
+		FromUserID: followerID.(uint),
+		Type:       "follow",
+		Message:    fmt.Sprintf("sizi takip etmeye başladı"),
+		IsRead:     false,
+		CreatedAt:  time.Now(),
 	}
 
 	// Bildirimi veritabanına kaydet

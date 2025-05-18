@@ -468,13 +468,12 @@ func WebSocketHandler(c *gin.Context) {
 
 			// Bildirim oluştur (Bu zaten REST API üzerinden de yapılıyor olabilir, kontrol et)
 			notification := models.Notification{
-				UserID:      message.ReceiverID,
-				SenderID:    message.SenderID,
-				Type:        "message",
-				Content:     message.Content,
-				IsRead:      false,
-				ReferenceID: newMessage.ID,
-				CreatedAt:   time.Now(),
+				ToUserID:   message.ReceiverID,
+				FromUserID: message.SenderID,
+				Type:       "message",
+				Message:    message.Content,
+				IsRead:     false,
+				CreatedAt:  time.Now(),
 			}
 			database.DB.Create(&notification)
 
@@ -499,7 +498,7 @@ func sendPendingNotifications(userID uint, conn *websocket.Conn) {
 
 	// Okunmamış bildirim sayısını getir
 	var unreadNotificationCount int64
-	if err := database.DB.Model(&models.Notification{}).Where("user_id = ? AND is_read = ?", userID, false).Count(&unreadNotificationCount).Error; err != nil {
+	if err := database.DB.Model(&models.Notification{}).Where("to_user_id = ? AND is_read = ?", userID, false).Count(&unreadNotificationCount).Error; err != nil {
 		fmt.Printf("Okunmamış bildirim sayısı getirilirken hata: %v\n", err)
 		return
 	}
@@ -743,13 +742,12 @@ func SendMessage(c *gin.Context) {
 
 	// Bildirim oluştur
 	notification := models.Notification{
-		UserID:      uint(targetID),
-		SenderID:    userID.(uint),
-		Type:        "message",
-		Content:     input.Content,
-		IsRead:      false,
-		ReferenceID: message.ID,
-		CreatedAt:   time.Now(),
+		ToUserID:   message.ReceiverID,
+		FromUserID: message.SenderID,
+		Type:       "message",
+		Message:    message.Content,
+		IsRead:     false,
+		CreatedAt:  time.Now(),
 	}
 	database.DB.Create(&notification)
 

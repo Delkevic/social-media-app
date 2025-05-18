@@ -6,12 +6,15 @@ import (
 	"gorm.io/gorm"
 )
 
-// Post - Gönderi modeli
+// Post - Gönderi modeli
 type Post struct {
 	ID           uint `gorm:"primaryKey"`
 	UserID       uint `gorm:"not null"`
 	User         User `gorm:"foreignKey:UserID"`
 	Content      string
+	Caption      string      // Gönderi başlığı/açıklaması
+	Tags         []string    `gorm:"-"` // Tags verisi geçici olarak tutulacak
+	TagsString   string      // Virgülle ayrılmış etiketler veritabanında saklanacak
 	LikeCount    int         `gorm:"default:0"`
 	CommentCount int         `gorm:"default:0"`
 	Images       []PostImage `gorm:"foreignKey:PostID"`

@@ -1,65 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import SearchBar from './common/SearchBar';
-import PostList from './posts/PostList';
+import Feed from './posts/Feed';
 import CreatePostForm from './posts/CreatePostForm';
 import api from '../../services/api';
 
 const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShowCreateForm }) => {
-  const [activeTab, setActiveTab] = useState('general');
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [localShowCreateForm, localSetShowCreateForm] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const actualShowCreateForm = showCreateForm !== undefined ? showCreateForm : localShowCreateForm;
   const actualSetShowCreateForm = setShowCreateForm || localSetShowCreateForm;
-
-  useEffect(() => {
-    // Gönderi verilerini çek
-    const fetchPosts = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        console.log('Gönderiler çekiliyor. Feed tipi:', activeTab);
-        const response = await api.posts.getFeeds(activeTab);
-        console.log('Tam API Yanıtı (getFeeds):', response);
-        console.log('API Yanıtı Data kısmı (getFeeds):', response ? response.data : 'Yanıt yok');
-        
-        if (response && response.data) {
-          // API yanıtının yapısını kontrol et
-          if (Array.isArray(response.data)) {
-            // Doğrudan dizi döndüyse
-            setPosts(response.data);
-            console.log('Post sayısı (dizi):', response.data.length);
-          } else if (response.data.posts && Array.isArray(response.data.posts)) {
-            // {success: true, data: { posts: [] }} formatında
-            setPosts(response.data.posts);
-            console.log('Post sayısı (posts array):', response.data.posts.length);
-          } else {
-            // Diğer format, boş array varsayalım
-            console.warn('Beklenmeyen API yanıt formatı:', response.data);
-            setPosts([]);
-          }
-        } else {
-          console.warn('API yanıtında data yok:', response);
-          setPosts([]);
-        }
-      } catch (err) {
-        console.error('Gönderiler yüklenirken hata:', err);
-        setError('Gönderiler yüklenirken bir hata oluştu: ' + err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    // Sadece arama çubuğunu göstereceksek, gönderileri yükleme
-    if (!showSearchOnly) {
-      fetchPosts();
-    }
-  }, [activeTab, showSearchOnly]);
 
   const handleSearch = async (searchTerm) => {
     if (!searchTerm.trim()) {
@@ -118,23 +71,6 @@ const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShow
         
         // Başarı mesajı göster
         alert('Gönderi başarıyla oluşturuldu!');
-        
-        // Gönderi listesini güncelle
-        console.log('Güncel gönderileri çekiyorum...');
-        const updatedPosts = await api.posts.getFeeds(activeTab);
-        console.log('Güncel gönderiler API yanıtı:', updatedPosts);
-        
-        if (updatedPosts && updatedPosts.data) {
-          if (Array.isArray(updatedPosts.data)) {
-            setPosts(updatedPosts.data);
-          } else if (updatedPosts.data.posts && Array.isArray(updatedPosts.data.posts)) {
-            setPosts(updatedPosts.data.posts);
-          } else {
-            console.warn('Beklenmeyen API yanıt formatı:', updatedPosts.data);
-          }
-        } else {
-          console.warn('API yanıtında data yok:', updatedPosts);
-        }
       } else {
         setError('Gönderi oluşturulamadı: ' + (response.message || 'Bilinmeyen hata'));
       }
@@ -144,10 +80,6 @@ const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShow
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
   };
 
   return (
@@ -198,88 +130,46 @@ const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShow
                     {user.fullName && (
                       <p className="text-gray-300 text-sm">{user.fullName}</p>
                     )}
-                    {user.bio && (
-                      <p className="text-gray-400 text-xs truncate">{user.bio}</p>
-                    )}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-center py-4 text-gray-400">Sonuç bulunamadı.</p>
+            <p className="text-center text-gray-400 py-2">Sonuç bulunamadı.</p>
           )}
         </div>
       )}
       
-      {/* Sadece arama gösterilecekse, geri kalan içerik i gösterme */}
-      {!showSearchOnly && !isSearching && (
-        <>
-          {/* Hata mesajı */}
+      {actualShowCreateForm ? (
+        <div className="rounded-2xl p-4 backdrop-blur-lg bg-black/50 border border-[#0affd9]/20">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-[#0affd9] text-lg font-medium">Yeni Gönderi Oluştur</h3>
+            <button 
+              onClick={() => actualSetShowCreateForm(false)}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
           {error && (
-            <div className="p-3 rounded-lg text-sm border border-red-600 bg-red-600/10 text-red-400 text-center">
+            <div className="mb-4 p-3 rounded-lg border border-red-600/30 bg-red-600/10 text-red-400 text-sm">
               {error}
             </div>
           )}
           
-          {/* Gönderi Oluşturma Kutusu - güncellenmiş state kullanımı */}
-          <div className="rounded-2xl p-4 backdrop-blur-lg bg-black/50 border border-[#0affd9]/20">
-            {actualShowCreateForm ? (
-              <CreatePostForm 
-                onSubmit={handleCreatePost} 
-                onCancel={() => actualSetShowCreateForm(false)} 
-              />
-            ) : (
-              <div 
-                className="flex items-center cursor-pointer"
-                onClick={() => actualSetShowCreateForm(true)}
-              >
-                {/* Kullanıcı avatarı (varsa) */}
-                {user && (
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3 bg-black/50">
-                    {user.profileImage ? (
-                      <img 
-                        src={user.profileImage} 
-                        alt={user.username} 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold">
-                        {user.username[0].toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <span className="flex-1 text-gray-400 hover:text-gray-200 transition-colors">Bir şeyler paylaş...</span>
-                <button 
-                  className="px-3 py-1.5 rounded-lg font-medium bg-[#0affd9] text-black hover:bg-[#0affd9]/80 transition-colors"
-                >
-                  Paylaş
-                </button>
-              </div>
-            )}
-          </div>
-          
-          {/* Sekmeler */}
-          <div className="border-b border-[#0affd9]/20 mb-4">
-            <nav className="flex space-x-4">
-              <button
-                onClick={() => handleTabChange('general')}
-                className={`py-2 px-3 text-sm font-medium transition-colors ${activeTab === 'general' ? 'text-[#0affd9] border-b-2 border-[#0affd9]' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                Genel
-              </button>
-              <button
-                onClick={() => handleTabChange('following')}
-                className={`py-2 px-3 text-sm font-medium transition-colors ${activeTab === 'following' ? 'text-[#0affd9] border-b-2 border-[#0affd9]' : 'text-gray-400 hover:text-gray-200'}`}
-              >
-                Takip Edilenler
-              </button>
-            </nav>
-          </div>
-
-          {/* Gönderi Listesi */}
-          <PostList posts={posts} loading={loading} error={error} currentUser={user} />
-        </>
+          <CreatePostForm 
+            onSubmit={handleCreatePost}
+            onCancel={() => actualSetShowCreateForm(false)} 
+          />
+        </div>
+      ) : null}
+      
+      {/* Gönderi Listesi - showSearchOnly durumunda gösterme */}
+      {!showSearchOnly && !isSearching && !actualShowCreateForm && (
+        <Feed user={user} />
       )}
     </div>
   );

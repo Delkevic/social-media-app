@@ -71,13 +71,12 @@ func LikePost(c *gin.Context) {
 	// Kendi gönderisini beğenmedi ise bildirim oluştur
 	if post.UserID != userID.(uint) {
 		notification := models.Notification{
-			UserID:      post.UserID,
-			SenderID:    userID.(uint),
-			Type:        "like",
-			Content:     fmt.Sprintf("%s gönderinizi beğendi", currentUser.FullName),
-			ReferenceID: post.ID,
-			IsRead:      false,
-			CreatedAt:   time.Now(),
+			ToUserID:   post.UserID,
+			FromUserID: userID.(uint),
+			Type:       "like",
+			Message:    fmt.Sprintf("%s gönderinizi beğendi", currentUser.FullName),
+			IsRead:     false,
+			CreatedAt:  time.Now(),
 		}
 
 		if err := database.DB.Create(&notification).Error; err != nil {
@@ -95,4 +94,3 @@ func LikePost(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Gönderi beğenildi", "like": like})
 }
- 

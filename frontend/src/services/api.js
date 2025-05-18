@@ -245,10 +245,12 @@ const api = {
           method: 'POST',
         });
         
+        // Response'tan gelen success değerini kullan
         return {
-          success: true,
-          data: response,
+          success: response.success !== false, // Başarısız değilse başarılı
+          data: response.data || response,
           message: response.message,
+          status: response.status || 'following' // Varsayılan olarak following
         };
       } catch (error) {
         console.error('Follow error:', error);
@@ -300,6 +302,19 @@ const api = {
       });
     },
     getComments: (postId) => fetchWithAuth(`/posts/${postId}/comments`),
+    // Yeni eklenen yorum işlevleri
+    likeComment: (commentId) => fetchWithAuth(`/api/comments/${commentId}/like`, {
+      method: 'POST',
+    }),
+    unlikeComment: (commentId) => fetchWithAuth(`/api/comments/${commentId}/like`, {
+      method: 'DELETE',
+    }),
+    deleteComment: (commentId) => fetchWithAuth(`/comments/${commentId}`, {
+      method: 'DELETE',
+    }),
+    reportComment: (commentId) => fetchWithAuth(`/comments/${commentId}/report`, {
+      method: 'POST',
+    }),
     report: (postId) => fetchWithAuth(`/posts/${postId}/report`, {
       method: 'POST',
     }),
@@ -316,6 +331,10 @@ const api = {
     }),
     markAllAsRead: () => fetchWithAuth('/notifications/read-all', {
       method: 'POST',
+    }),
+    create: (notification) => fetchWithAuth('/notifications', {
+      method: 'POST',
+      body: JSON.stringify(notification),
     }),
     // Bildirim ayarları (varsa)
     getSettings: () => fetchWithAuth('/notifications/settings'),
@@ -799,6 +818,27 @@ export const searchUsers = async (query) => {
     return response;
   } catch (error) {
     console.error('Kullanıcı arama hatası:', error);
+    throw error;
+  }
+};
+
+// Debug amaçlı test gönderisi oluşturma
+export const createTestPost = async () => {
+  try {
+    const testPostData = {
+      content: "Bu bir test gönderisidir - " + new Date().toISOString(),
+      isPublic: true
+    };
+    
+    console.log("Test gönderisi oluşturuluyor:", testPostData);
+    
+    const response = await api.posts.create(testPostData);
+    
+    console.log("Test gönderisi yanıtı:", response);
+    
+    return response;
+  } catch (error) {
+    console.error("Test gönderisi oluşturma hatası:", error);
     throw error;
   }
 };

@@ -88,18 +88,20 @@ export const getNotifications = async (limit) => {
         return {
           id: notification.id,
           type: notification.type || 'system',
-          content: notification.content,
+          content: notification.content || notification.message || '',
+          message: notification.message || notification.content || '',
           createdAt: notification.createdAt || notification.created_at,
           isRead: notification.isRead || notification.is_read || false,
           referenceId: notification.referenceId || notification.reference_id || 0,
           time: notification.time || formatTimeAgo(notification.createdAt || notification.created_at),
           // Ekstra alanlar
           userId: notification.userId || notification.user_id,
-          senderId: notification.senderId || notification.sender_id,
-          actorId: notification.actorId || notification.actor_id,
-          actorName: notification.actorName || notification.actor_name,
-          actorUsername: notification.actorUsername || notification.actor_username,
-          actorProfileImage: notification.actorProfileImage || notification.actor_profile_image,
+          toUserId: notification.toUserId || notification.to_user_id,
+          fromUserId: notification.fromUserId || notification.from_user_id || notification.senderId || notification.sender_id,
+          actorId: notification.actorId || notification.actor_id || notification.fromUserId || notification.from_user_id,
+          actorName: notification.actorName || notification.actor_name || notification.fromUserName,
+          actorUsername: notification.actorUsername || notification.actor_username || notification.fromUserUsername,
+          actorProfileImage: notification.actorProfileImage || notification.actor_profile_image || notification.fromUserProfileImage,
         };
       });
       

@@ -79,13 +79,12 @@ func SendFollowRequestToUser(c *gin.Context) {
 
 		// Bildirim oluştur
 		notification := models.Notification{
-			UserID:      targetUser.ID,
-			SenderID:    followerID.(uint),
-			Type:        "follow",
-			Content:     fmt.Sprintf("%s sizi takip etmeye başladı", currentUser.FullName),
-			ReferenceID: newFollow.ID,
-			IsRead:      false,
-			CreatedAt:   time.Now(),
+			ToUserID:   targetUser.ID,
+			FromUserID: followerID.(uint),
+			Type:       "follow",
+			Message:    fmt.Sprintf("%s sizi takip etmeye başladı", currentUser.FullName),
+			IsRead:     false,
+			CreatedAt:  time.Now(),
 		}
 
 		if err := database.DB.Create(&notification).Error; err != nil {
@@ -119,13 +118,12 @@ func SendFollowRequestToUser(c *gin.Context) {
 
 	// Takip isteği bildirimi oluştur
 	notification := models.Notification{
-		UserID:      targetUser.ID,
-		SenderID:    followerID.(uint),
-		Type:        "follow_request",
-		Content:     fmt.Sprintf("%s size takip isteği gönderdi", currentUser.FullName),
-		ReferenceID: followRequest.ID,
-		IsRead:      false,
-		CreatedAt:   time.Now(),
+		ToUserID:   targetUser.ID,
+		FromUserID: followerID.(uint),
+		Type:       "follow_request",
+		Message:    fmt.Sprintf("%s size takip isteği gönderdi", currentUser.FullName),
+		IsRead:     false,
+		CreatedAt:  time.Now(),
 	}
 
 	if err := database.DB.Create(&notification).Error; err != nil {

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
-	"social-media-app/backend/services"
 	"strconv"
 	"time"
 
@@ -61,6 +60,13 @@ func HandleFollowUser(c *gin.Context) {
 		return
 	}
 
+	// Takip eden kullanıcı bilgilerini al
+	var follower models.User
+	if err := database.DB.Select("id, username, full_name, profile_image").First(&follower, followerID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Takip eden kullanıcı bilgileri alınamadı: " + err.Error()})
+		return
+	}
+
 	// Takip edilecek kullanıcı gizli mi?
 	if followingUser.IsPrivate {
 		// Gizli hesap ise takip isteği oluştur
@@ -75,6 +81,24 @@ func HandleFollowUser(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Takip isteği oluşturulurken hata: " + err.Error()})
 			return
 		}
+
+		// Takip isteği bildirimi gönder
+		if notifService != nil {
+			err := notifService.CreateFollowRequestNotification(
+				c.Request.Context(),
+				fmt.Sprintf("%d", followingUser.ID),
+				fmt.Sprintf("%d", follower.ID),
+				follower.FullName,
+				follower.Username,
+				follower.ProfileImage,
+			)
+			if err != nil {
+				fmt.Printf("Takip isteği bildirimi gönderilemedi: %v\n", err)
+			} else {
+				fmt.Printf("Takip isteği bildirimi başarıyla gönderildi. Kullanıcı %d -> %d\n", followerID, followingUser.ID)
+			}
+		}
+
 		c.JSON(http.StatusOK, Response{Success: true, Message: "Takip isteği gönderildi", Data: gin.H{"status": "pending"}})
 
 	} else {
@@ -92,44 +116,36 @@ func HandleFollowUser(c *gin.Context) {
 		}
 
 		// Bildirim oluştur - Takip edilen kullanıcıya bildirim gönder
-		// Takip eden kullanıcı bilgilerini al
-		var follower models.User
-		if err := database.DB.Select("id, username, full_name").First(&follower, followerID).Error; err == nil {
-			notification := models.Notification{
-				UserID:      followingUser.ID,  // Takip edilen kullanıcıya bildirim gönder
-				SenderID:    followerID.(uint), // Takip eden kullanıcı
-				Type:        "follow",
-				Content:     fmt.Sprintf("%s seni takip etmeye başladı", follower.FullName),
-				ReferenceID: followerID.(uint),
-				IsRead:      false,
-				CreatedAt:   time.Now(),
-			}
+		notification := models.Notification{
+			ToUserID:   followingUser.ID,  // Takip edilen kullanıcıya bildirim gönder
+			FromUserID: followerID.(uint), // Takip eden kullanıcı
+			Type:       "follow",
+			Message:    fmt.Sprintf("%s seni takip etmeye başladı", follower.FullName),
+			IsRead:     false,
+			CreatedAt:  time.Now(),
+		}
 
-			if err := database.DB.Create(&notification).Error; err != nil {
-				fmt.Printf("Takip bildirimi oluşturulurken hata: %v\n", err)
-				// Bildirimin oluşturulamaması takip işlemini engellememelidir
+		if err := database.DB.Create(&notification).Error; err != nil {
+			fmt.Printf("Takip bildirimi oluşturulurken veritabanı hatası: %v\n", err)
+			// Bildirimin oluşturulamaması takip işlemini engellememelidir
+		} else {
+			fmt.Printf("Takip bildirimi veritabanına kaydedildi. Kullanıcı %d -> %d\n", followerID, followingUser.ID)
+		}
+
+		// WebSocket üzerinden bildirim gönder
+		if notifService != nil {
+			err := notifService.CreateFollowNotification(
+				c.Request.Context(),
+				fmt.Sprintf("%d", followingUser.ID),
+				fmt.Sprintf("%d", follower.ID),
+				follower.FullName,
+				follower.Username,
+				follower.ProfileImage,
+			)
+			if err != nil {
+				fmt.Printf("WebSocket takip bildirimi gönderilemedi: %v\n", err)
 			} else {
-				fmt.Printf("Takip bildirimi oluşturuldu. Kullanıcı %d -> %d\n", followerID, followingUser.ID)
-				// WebSocket üzerinden bildirim gönder (opsiyonel)
-				if notifService != nil {
-					wsNotification := services.Notification{
-						ID:            fmt.Sprintf("%d", notification.ID),
-						UserID:        fmt.Sprintf("%d", notification.UserID),
-						ActorID:       fmt.Sprintf("%d", notification.SenderID),
-						ActorName:     follower.FullName,
-						ActorUsername: follower.Username,
-						Type:          services.NotificationTypeFollow,
-						Content:       notification.Content,
-						EntityID:      fmt.Sprintf("%d", notification.ReferenceID),
-						EntityType:    "user",
-						IsRead:        notification.IsRead,
-						CreatedAt:     notification.CreatedAt,
-					}
-
-					if err := notifService.SendNotification(c.Request.Context(), wsNotification); err != nil {
-						fmt.Printf("WebSocket bildirimi gönderilemedi: %v\n", err)
-					}
-				}
+				fmt.Printf("WebSocket takip bildirimi başarıyla gönderildi. Kullanıcı %d -> %d\n", followerID, followingUser.ID)
 			}
 		}
 
@@ -280,22 +296,30 @@ func AcceptFollowRequest(c *gin.Context) {
 		return
 	}
 
-	// Bildirim oluştur
-	var follower models.User
-	if err := tx.Select("id, username, full_name").First(&follower, request.FollowerID).Error; err != nil {
+	// Kabul eden kullanıcının (takip edilen) bilgilerini al
+	var acceptor models.User
+	if err := tx.Select("id, username, full_name, profile_image").First(&acceptor, request.FollowingID).Error; err != nil {
 		tx.Commit() // Takip işlemi başarılı olduğu için transaction'ı commit et
 		c.JSON(http.StatusOK, Response{Success: true, Message: "Takip isteği kabul edildi fakat bildirim için kullanıcı bilgileri alınamadı"})
 		return
 	}
 
+	// Takip isteği gönderen kullanıcının (takipçi) bilgilerini al
+	var follower models.User
+	if err := tx.Select("id, username, full_name").First(&follower, request.FollowerID).Error; err != nil {
+		tx.Commit() // Takip işlemi başarılı olduğu için transaction'ı commit et
+		c.JSON(http.StatusOK, Response{Success: true, Message: "Takip isteği kabul edildi fakat bildirim için takipçi bilgileri alınamadı"})
+		return
+	}
+
+	// Veritabanı bildirimi oluştur
 	notification := models.Notification{
-		UserID:      request.FollowerID,
-		SenderID:    request.FollowingID,
-		Type:        "follow_accepted",
-		Content:     fmt.Sprintf("%s takip isteğinizi kabul etti", follower.FullName),
-		ReferenceID: uint(userID.(uint)),
-		IsRead:      false,
-		CreatedAt:   time.Now(),
+		ToUserID:   request.FollowerID,
+		FromUserID: request.FollowingID,
+		Type:       "follow_accept",
+		Message:    fmt.Sprintf("%s takip isteğinizi kabul etti", acceptor.FullName),
+		IsRead:     false,
+		CreatedAt:  time.Now(),
 	}
 
 	if err := tx.Create(&notification).Error; err != nil {
@@ -307,6 +331,23 @@ func AcceptFollowRequest(c *gin.Context) {
 	if err := tx.Commit().Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "İşlem tamamlanırken hata: " + err.Error()})
 		return
+	}
+
+	// WebSocket üzerinden takip kabul bildirimi gönder
+	if notifService != nil {
+		err := notifService.CreateFollowAcceptNotification(
+			c.Request.Context(),
+			fmt.Sprintf("%d", follower.ID), // Takipçiye bildirim gönder
+			fmt.Sprintf("%d", acceptor.ID), // Kabul eden kullanıcı ID
+			acceptor.FullName,              // Kabul eden kullanıcı adı
+			acceptor.Username,              // Kabul eden kullanıcı adı
+			acceptor.ProfileImage,          // Kabul eden kullanıcı profil resmi
+		)
+		if err != nil {
+			fmt.Printf("WebSocket takip kabul bildirimi gönderilemedi: %v\n", err)
+		} else {
+			fmt.Printf("WebSocket takip kabul bildirimi başarıyla gönderildi. Kullanıcı %d -> %d\n", acceptor.ID, follower.ID)
+		}
 	}
 
 	c.JSON(http.StatusOK, Response{Success: true, Message: "Takip isteği kabul edildi"})

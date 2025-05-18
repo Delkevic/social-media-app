@@ -25,12 +25,21 @@ type NotificationSettingsRequest struct {
 	NewsletterEnabled *bool `json:"newsletterEnabled"`
 }
 
+// CreateNotificationRequest bildirimi oluşturmak için gerekli yapı
+type CreateNotificationRequest struct {
+	Type       string `json:"type" binding:"required"`       // Bildirim türü: "follow", "like", "comment", vb.
+	ToUserID   uint   `json:"toUserId" binding:"required"`   // Bildirimin gönderileceği kullanıcı
+	FromUserID uint   `json:"fromUserId" binding:"required"` // Bildirimi gönderen kullanıcı
+	Message    string `json:"message" binding:"required"`    // Bildirim mesajı
+}
+
 // Bildirimleri getirme
 func GetNotifications(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
+	// Kullanıcının bildirimlerini en yeni önce gelecek şekilde sırala
 	var notifications []models.Notification
-	if err := database.DB.Where("user_id = ?", userID).
+	if err := database.DB.Where("to_user_id = ?", userID).
 		Order("created_at DESC").
 		Find(&notifications).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{
@@ -40,14 +49,19 @@ func GetNotifications(c *gin.Context) {
 		return
 	}
 
-	// Bildirimler için kullanıcı bilgilerini yükle
+	// Bildirimler için gönderen kullanıcı bilgilerini yükle
 	for i := range notifications {
-		if notifications[i].SenderID > 0 {
+		if notifications[i].FromUserID > 0 {
 			var fromUser models.User
-			database.DB.Select("id, username, profile_image").First(&fromUser, notifications[i].SenderID)
+			database.DB.Select("id, username, full_name, profile_image").First(&fromUser, notifications[i].FromUserID)
 
-			// Bildirim mesajına kullanıcı adını ekle
-			notifications[i].Content = fromUser.Username + " " + notifications[i].Content
+			// Eğer mesajda kullanıcı adı yoksa, ekle
+			if fromUser.Username != "" && len(notifications[i].Message) > 0 {
+				// Mesajda zaten kullanıcı adı varsa ekleme
+				if notifications[i].Message[0] != '@' {
+					notifications[i].Message = fmt.Sprintf("@%s %s", fromUser.Username, notifications[i].Message)
+				}
+			}
 		}
 	}
 
@@ -56,13 +70,24 @@ func GetNotifications(c *gin.Context) {
 
 	for _, notification := range notifications {
 		notificationResponse := map[string]interface{}{
-			"id":          notification.ID,
-			"type":        notification.Type,
-			"content":     notification.Content,
-			"time":        formatTimeAgo(notification.CreatedAt),
-			"isRead":      notification.IsRead,
-			"referenceId": notification.ReferenceID,
-			"createdAt":   notification.CreatedAt,
+			"id":         notification.ID,
+			"type":       notification.Type,
+			"message":    notification.Message,
+			"fromUserId": notification.FromUserID,
+			"toUserId":   notification.ToUserID,
+			"time":       formatTimeAgo(notification.CreatedAt),
+			"isRead":     notification.IsRead,
+			"createdAt":  notification.CreatedAt,
+		}
+
+		// Gönderen kullanıcının bilgilerini ekle
+		if notification.FromUserID > 0 {
+			var fromUser models.User
+			if database.DB.Select("id, username, full_name, profile_image").First(&fromUser, notification.FromUserID).Error == nil {
+				notificationResponse["fromUserName"] = fromUser.FullName
+				notificationResponse["fromUserUsername"] = fromUser.Username
+				notificationResponse["fromUserProfileImage"] = fromUser.ProfileImage
+			}
 		}
 
 		responseNotifications = append(responseNotifications, notificationResponse)
@@ -87,7 +112,7 @@ func MarkNotificationAsRead(c *gin.Context) {
 
 	// Bildirimi kontrol et
 	var notification models.Notification
-	result := database.DB.Where("id = ? AND user_id = ?", notificationID, userID).First(&notification)
+	result := database.DB.Where("id = ? AND to_user_id = ?", notificationID, userID).First(&notification)
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, Response{
 			Success: false,
@@ -121,7 +146,7 @@ func MarkAllNotificationsAsRead(c *gin.Context) {
 
 	// Kullanıcının okunmamış tüm bildirimlerini güncelle
 	result := database.DB.Model(&models.Notification{}).
-		Where("user_id = ? AND is_read = ?", userID, false).
+		Where("to_user_id = ? AND is_read = ?", userID, false).
 		Update("is_read", true)
 
 	if result.Error != nil {
@@ -135,6 +160,37 @@ func MarkAllNotificationsAsRead(c *gin.Context) {
 	c.JSON(http.StatusOK, Response{
 		Success: true,
 		Message: fmt.Sprintf("%d bildirim okundu olarak işaretlendi", result.RowsAffected),
+	})
+}
+
+// CreateNotification yeni bir bildirim oluşturur
+func CreateNotification(c *gin.Context) {
+	var request CreateNotificationRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, Response{Success: false, Message: "Geçersiz istek formatı: " + err.Error()})
+		return
+	}
+
+	// Yeni bildirimi oluştur
+	notification := models.Notification{
+		Type:       request.Type,
+		FromUserID: request.FromUserID,
+		ToUserID:   request.ToUserID,
+		Message:    request.Message,
+		IsRead:     false,
+		CreatedAt:  time.Now(),
+	}
+
+	// Bildirimi veritabanına kaydet
+	if err := database.DB.Create(&notification).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{Success: false, Message: "Bildirim oluşturulurken bir hata oluştu: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, Response{
+		Success: true,
+		Message: "Bildirim başarıyla oluşturuldu",
+		Data:    notification,
 	})
 }
 
@@ -320,16 +376,15 @@ func TestCreateNotification(c *gin.Context) {
 
 	// Veritabanına bildirim kaydı oluştur
 	notification := models.Notification{
-		UserID:      request.ReceiverID,
-		SenderID:    userID.(uint),
-		Type:        request.Type,
-		Content:     request.Message,
-		ReferenceID: 0, // Test bildirimi
-		IsRead:      false,
-		CreatedAt:   time.Now(),
+		ToUserID:   request.ReceiverID,
+		FromUserID: userID.(uint),
+		Type:       request.Type,
+		Message:    request.Message,
+		IsRead:     false,
+		CreatedAt:  time.Now(),
 	}
 
-	// Kullanıcı bilgilerini al (SenderID için)
+	// Kullanıcı bilgilerini al (FromUserID için)
 	var sender models.User
 	if err := database.DB.Select("username, profile_image, full_name").First(&sender, userID).Error; err != nil {
 		fmt.Printf("[WARN] Bildirim gönderen kullanıcı bilgisi alınamadı (ID: %v): %v\n", userID, err)
@@ -371,14 +426,14 @@ func TestCreateNotification(c *gin.Context) {
 		// NotificationService için gerekli formatta bildirim oluştur
 		wsNotification := services.Notification{
 			ID:                fmt.Sprintf("%d", notification.ID),
-			UserID:            fmt.Sprintf("%d", notification.UserID),
-			ActorID:           fmt.Sprintf("%d", notification.SenderID),
+			UserID:            fmt.Sprintf("%d", notification.ToUserID),
+			ActorID:           fmt.Sprintf("%d", notification.FromUserID),
 			ActorName:         sender.FullName,
 			ActorUsername:     sender.Username,
 			ActorProfileImage: sender.ProfileImage,
 			Type:              notificationType,
-			Content:           notification.Content,
-			EntityID:          fmt.Sprintf("%d", notification.ReferenceID),
+			Content:           notification.Message,
+			EntityID:          "0",    // Test bildirimi için sabit değer
 			EntityType:        "test", // Test bildirimi için sabit değer
 			IsRead:            notification.IsRead,
 			CreatedAt:         notification.CreatedAt,
@@ -400,7 +455,7 @@ func TestCreateNotification(c *gin.Context) {
 			return
 		}
 
-		fmt.Printf("[INFO] Bildirim WebSocket üzerinden başarıyla gönderildi. Alıcı: %d\n", notification.UserID)
+		fmt.Printf("[INFO] Bildirim WebSocket üzerinden başarıyla gönderildi. Alıcı: %d\n", notification.ToUserID)
 	} else {
 		fmt.Println("[ERROR] Bildirim servisi bulunamadı, WebSocket bildirimi gönderilemedi")
 		c.JSON(http.StatusOK, Response{
