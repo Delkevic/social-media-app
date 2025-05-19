@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   X, Heart, MessageCircle, Share2, ChevronUp, ChevronDown, 
-  VolumeX, Volume2, Music, User, Send, Bookmark
+  VolumeX, Volume2, Music, User, Send, Bookmark, Loader2
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../services/api";
@@ -486,29 +486,30 @@ const ReelShow = ({ reel, reels = [], isOpen, onClose, profileUser }) => {
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl max-h-[70vh] overflow-y-auto z-50"
+              transition={{ type: "spring", damping: 30, stiffness: 250 }}
+              className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-md border-t-2 border-[#0affd9]/50 rounded-t-2xl max-h-[70vh] overflow-y-auto z-[100] shadow-2xl shadow-[#0affd9]/30"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="sticky top-0 bg-white dark:bg-gray-900 flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="font-semibold text-lg dark:text-white">Yorumlar</h3>
+              <div className="sticky top-0 bg-black/70 backdrop-blur-sm flex justify-between items-center p-4 border-b border-[#0affd9]/30">
+                <h3 className="font-semibold text-lg text-[#0affd9] tracking-wider">Yorumlar</h3>
                 <button 
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" 
+                  className="text-gray-400 hover:text-[#0affd9] transition-colors p-1 rounded-full hover:bg-[#0affd9]/10" 
                   onClick={toggleCommentForm}
                 >
-                  <X size={20} />
+                  <X size={22} />
                 </button>
               </div>
               
-              <div className="p-4 space-y-4 min-h-[200px]">
+              <div className="p-4 space-y-4 min-h-[200px] max-h-[calc(70vh-140px)] overflow-y-auto fancy-scrollbar">
                 {loadingComments ? (
-                  <div className="flex justify-center items-center h-20">
-                    <div className="w-8 h-8 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                  <div className="flex flex-col justify-center items-center h-32 text-gray-400">
+                    <Loader2 className="h-8 w-8 animate-spin text-[#0affd9] mb-2" />
+                    <span>Yorumlar yükleniyor...</span>
                   </div>
                 ) : comments.length > 0 ? (
                   comments.map((comment) => (
-                    <div key={comment.id} className="flex space-x-3 py-3 border-b border-gray-100 dark:border-gray-800">
-                      <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+                    <div key={comment.id} className="flex space-x-3 py-3 border-b border-[#0affd9]/10 last:border-b-0">
+                      <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#0affd9]/30">
                         {comment.user?.profileImage ? (
                           <img 
                             src={getFullImageUrl(comment.user.profileImage)} 
@@ -516,24 +517,25 @@ const ReelShow = ({ reel, reels = [], isOpen, onClose, profileUser }) => {
                             alt={comment.user.username}
                           />
                         ) : (
-                          <div className="w-full h-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                          <div className="w-full h-full bg-black/50 flex items-center justify-center text-[#0affd9] text-base font-bold">
                             {comment.user?.username?.charAt(0).toUpperCase() || 'A'}
                           </div>
                         )}
                       </div>
                       <div className="flex-1">
                         <div className="flex justify-between items-start">
-                          <span className="font-medium text-sm dark:text-white">{comment.user?.username || 'Anonim'}</span>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString('tr-TR') : ''}
+                          <span className="font-medium text-sm text-[#0affd9]">{comment.user?.username || 'Anonim'}</span>
+                          <span className="text-xs text-gray-500">
+                            {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
                           </span>
                         </div>
-                        <p className="text-sm mt-1 text-gray-800 dark:text-gray-200">{comment.content}</p>
+                        <p className="text-sm mt-1 text-gray-300 whitespace-pre-wrap break-words">{comment.content}</p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <div className="text-center py-8 text-gray-500">
+                    <MessageCircle size={32} className="mx-auto mb-2 opacity-50"/>
                     Henüz yorum yok. İlk yorumu sen yap!
                   </div>
                 )}
@@ -541,22 +543,22 @@ const ReelShow = ({ reel, reels = [], isOpen, onClose, profileUser }) => {
               
               <form 
                 onSubmit={submitComment}
-                className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-3 flex items-center gap-2"
+                className="sticky bottom-0 bg-black/70 backdrop-blur-sm border-t border-[#0affd9]/30 p-3 flex items-center gap-3"
               >
                 <input
                   type="text"
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   placeholder="Bir yorum yaz..."
-                  className="flex-1 h-10 px-4 rounded-full bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                  className="flex-1 h-10 px-4 rounded-full bg-black/50 border border-[#0affd9]/20 text-gray-200 placeholder-gray-500 focus:ring-1 focus:ring-[#0affd9] focus:border-[#0affd9] outline-none transition-all"
                 />
                 <button 
                   type="submit"
                   disabled={!comment.trim()}
-                  className={`w-10 h-10 flex items-center justify-center rounded-full ${
-                    comment.trim() 
-                      ? 'bg-blue-500 text-white' 
-                      : 'bg-gray-200 text-gray-400 dark:bg-gray-700'
+                  className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 ease-in-out
+                    ${comment.trim() 
+                      ? 'bg-[#0affd9] text-black hover:bg-[#0affd9]/80 transform hover:scale-110' 
+                      : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                   }`}
                 >
                   <Send size={18} />

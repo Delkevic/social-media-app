@@ -848,7 +848,7 @@ const Reels = () => {
                         />
                         
                         {/* Video bilgileri (caption, username, vb.) - takip et butonu rengi değiştiriliyor */}
-                        <div className="absolute bottom-24 left-4 right-16 z-30 bg-gradient-to-t from-black/70 to-transparent pt-16 pb-3 px-2 -mx-2 rounded-b-xl">
+                        <div className="absolute bottom-20 left-4 right-16 z-30 bg-gradient-to-t from-black/70 to-transparent pt-16 pb-3 px-2 -mx-2 rounded-b-xl">
                           <h4 className="text-white font-bold flex items-center text-lg">
                             {reel.user.username}
                             <span className="ml-2 text-sm bg-[#0affd9] text-black px-1.5 py-0.5 rounded-full text-[10px] font-medium">Takip Et</span>
@@ -866,16 +866,18 @@ const Reels = () => {
                         
                         {/* Mobil ekranlarda (md breakpoint altında) içerideki kontrol butonları */}
                         <div className="absolute bottom-4 right-3 z-30 md:hidden">
-                          <VideoControls 
-                            reel={reel} 
-                            onLikeClick={handleLike}
-                            onCommentClick={handleComment}
-                            onShareClick={handleShare}
-                            onSaveClick={handleSave}
-                            isLiked={likedReels[reel.id] || reel.isLiked}
-                            isSaved={savedReels[reel.id]}
-                            formatNumber={formatNumber}
-                          />
+                          <div className="bg-black/40 backdrop-blur-sm p-2 rounded-xl border border-[#0affd9]/20 shadow-lg shadow-black/50">
+                            <VideoControls 
+                              reel={reel} 
+                              onLikeClick={handleLike}
+                              onCommentClick={handleComment}
+                              onShareClick={handleShare}
+                              onSaveClick={handleSave}
+                              isLiked={likedReels[reel.id] || reel.isLiked}
+                              isSaved={savedReels[reel.id]}
+                              formatNumber={formatNumber}
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -896,17 +898,19 @@ const Reels = () => {
                   
                   {/* Masaüstü ekranlarda (md breakpoint üstünde) dışarıdaki kontrol butonları */}
                   {reels.length > 0 && (
-                    <div className="hidden md:flex items-center">
-                      <VideoControls 
-                        reel={reels[currentReelIndex]} 
-                        onLikeClick={handleLike}
-                        onCommentClick={handleComment}
-                        onShareClick={handleShare}
-                        onSaveClick={handleSave}
-                        isLiked={likedReels[reels[currentReelIndex].id] || reels[currentReelIndex].isLiked}
-                        isSaved={savedReels[reels[currentReelIndex].id]}
-                        formatNumber={formatNumber}
-                      />
+                    <div className="hidden md:flex items-center justify-center absolute right-[-80px] bottom-10 z-30">
+                      <div className="bg-black/40 backdrop-blur-sm p-2 rounded-xl border border-[#0affd9]/20 shadow-lg shadow-black/50">
+                        <VideoControls 
+                          reel={reels[currentReelIndex]} 
+                          onLikeClick={handleLike}
+                          onCommentClick={handleComment}
+                          onShareClick={handleShare}
+                          onSaveClick={handleSave}
+                          isLiked={likedReels[reels[currentReelIndex].id] || reels[currentReelIndex].isLiked}
+                          isSaved={savedReels[reels[currentReelIndex].id]}
+                          formatNumber={formatNumber}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

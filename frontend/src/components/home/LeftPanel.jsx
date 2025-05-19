@@ -105,7 +105,7 @@ const LeftPanel = ({ showMessagesAndNotifications = true, onPostFormToggle }) =>
         {/* Logo veya Başlık */}
         <div className="mb-8 p-2">
           <Link to="/" className="text-2xl font-bold text-[#0affd9]">
-            MyApp
+            BUZZİFY
           </Link>
       </div>
 
@@ -184,13 +184,33 @@ const LeftPanel = ({ showMessagesAndNotifications = true, onPostFormToggle }) =>
       
       {/* Post Oluşturma Modalı */}
       {showCreatePostModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-black rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-[#0affd9]/20 p-5">
-            <h3 className="text-lg font-semibold text-white mb-4">Yeni Gönderi Oluştur</h3>
-            <CreatePostForm 
-              onSubmit={handleSubmitPost} 
-              onCancel={() => setShowCreatePostModal(false)}
-            />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div 
+            className="bg-black/90 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-[#0affd9]/40 animate-fadeIn"
+            style={{
+              boxShadow: "0 0 30px rgba(10, 255, 217, 0.3)"
+            }}
+          >
+            {/* Modal Başlık */}
+            <div className="bg-gradient-to-r from-[#0affd9]/20 to-black border-b border-[#0affd9]/30 p-4 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-[#0affd9]">Gönderi Oluştur</h3>
+              <button 
+                onClick={() => setShowCreatePostModal(false)}
+                className="text-gray-400 hover:text-[#0affd9] transition-colors p-1.5 rounded-full hover:bg-[#0affd9]/10"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Form İçeriği */}
+            <div className="p-5">
+              <CreatePostForm 
+                onSubmit={handleSubmitPost} 
+                onCancel={() => setShowCreatePostModal(false)}
+              />
+            </div>
           </div>
         </div>
       )}

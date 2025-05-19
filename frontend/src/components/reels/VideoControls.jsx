@@ -84,7 +84,7 @@ const VideoControls = ({
   };
 
   return (
-    <div className="flex flex-col items-center gap-6">
+    <div className="flex flex-col items-center gap-4">
       {/* Beğeni butonu */}
       <div className="flex flex-col items-center relative">
         <button 
@@ -110,7 +110,7 @@ const VideoControls = ({
             )}
           </AnimatePresence>
         </button>
-        <span className="text-white text-xs mt-1">{formatNumber(reel.likeCount || 0)}</span>
+        <span className="text-white text-xs mt-3">{formatNumber(reel.likeCount || 0)}</span>
       </div>
       
       {/* Yorum butonu */}
@@ -121,7 +121,7 @@ const VideoControls = ({
         >
           <MessageCircle className="h-8 w-8 text-white" />
         </button>
-        <span className="text-white text-xs mt-1">{formatNumber(reel.commentCount || 0)}</span>
+        <span className="text-white text-xs mt-3">{formatNumber(reel.commentCount || 0)}</span>
       </div>
       
       {/* Kaydet butonu (Eski Paylaş) */}
@@ -134,7 +134,7 @@ const VideoControls = ({
             className={`h-8 w-8 transition-colors duration-300 ${isSaved ? 'text-yellow-400 fill-yellow-400' : 'text-white'}`} 
           />
         </button>
-        <span className="text-white text-xs mt-1">Kaydet</span>
+        <span className="text-white text-xs mt-3">Kaydet</span>
       </div>
       
       {/* Daha fazla seçenek butonu */}
@@ -149,15 +149,15 @@ const VideoControls = ({
         >
           <MoreVertical className="h-8 w-8 text-white" />
         </button>
-        <span className="text-white text-xs mt-1">Diğer</span>
+        <span className="text-white text-xs mt-3">Diğer</span>
         
         {/* Daha fazla seçenek menüsü */}
         {showMoreOptions && activeReelId && (
-          <div className="absolute right-12 top-0 w-52 bg-slate-800 rounded-lg shadow-lg overflow-hidden z-50">
+          <div className="absolute right-12 bottom-0 w-52 bg-slate-800 rounded-lg shadow-lg overflow-hidden z-50">
             <motion.div
-              initial={{ opacity: 0, y: -5 }}
+              initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
+              exit={{ opacity: 0, y: 5 }}
               transition={{ duration: 0.2 }}
             >
               {/* Kullanıcı profili */}

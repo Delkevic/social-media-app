@@ -35,7 +35,7 @@ import { toast } from 'react-hot-toast';
 
 // Profil resmi URL'ini tam hale getiren yardımcı fonksiyon
 const getFullImageUrl = (url) => {
-  if (!url) return `https://ui-avatars.com/api/?name=U`;
+  if (!url) return `https://ui-avatars.com/api/?name=U&background=0D1117&color=0AFFD9`;
   if (url.startsWith('http')) return url;
   return `${API_BASE_URL}/${url}`;
 };
@@ -48,28 +48,28 @@ const MediaPreview = ({ media, onCancel }) => {
   
   return (
     <div className="relative mb-2 w-full">
-      <div className="rounded-md overflow-hidden border border-gray-700 bg-gray-800">
+      <div className="rounded-md overflow-hidden border border-[#0affd9]/30 bg-black/30">
         {media.fileType === 'image' ? (
           <img 
             src={mediaUrl} 
             alt="Upload preview" 
-            className="max-h-64 max-w-full object-contain"
+            className="max-h-64 max-w-full object-contain mx-auto"
           />
         ) : media.fileType === 'video' ? (
           <video 
             src={mediaUrl} 
             controls 
-            className="max-h-64 max-w-full"
+            className="max-h-64 max-w-full mx-auto"
           />
         ) : (
-          <div className="flex items-center justify-center p-4">
-            <FileIcon className="mr-2 text-blue-400" />
-            <span className="text-white">{media.name}</span>
+          <div className="flex items-center justify-center p-4 text-gray-300">
+            <FileIcon className="mr-2 text-[#0affd9]" />
+            <span>{media.name}</span>
           </div>
         )}
       </div>
       <button 
-        className="absolute -top-2 -right-2 rounded-full bg-red-500 text-white p-1"
+        className="absolute -top-2 -right-2 rounded-full bg-red-600 hover:bg-red-700 text-white p-1 transition-colors"
         onClick={onCancel}
       >
         <X size={16} />
@@ -81,10 +81,10 @@ const MediaPreview = ({ media, onCancel }) => {
 // Yükleme göstergesi
 const UploadProgress = ({ progress }) => {
   return (
-    <div className="mb-2 w-full">
-      <div className="bg-gray-700 rounded-full h-2.5">
+    <div className="mb-2 w-full px-1">
+      <div className="bg-gray-700/50 rounded-full h-2">
         <div 
-          className="bg-blue-500 h-2.5 rounded-full" 
+          className="bg-[#0affd9] h-2 rounded-full transition-all duration-300 ease-out"
           style={{ width: `${progress}%` }}
         ></div>
       </div>
@@ -254,7 +254,6 @@ const NewConversation = ({ onClose, onSelectUser }) => {
   const [followingLoading, setFollowingLoading] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState(null);
 
-  // Takip edilen kullanıcıları getir
   useEffect(() => {
     const fetchFollowing = async () => {
       setFollowingLoading(true);
@@ -269,17 +268,13 @@ const NewConversation = ({ onClose, onSelectUser }) => {
         setFollowingLoading(false);
       }
     };
-
-    fetchFollowing();
   }, []);
 
-  // Kullanıcı arama - debounce ile
   const handleSearch = async (query) => {
     if (!query.trim()) {
       setSearchResults([]);
       return;
     }
-
     setLoading(true);
     try {
       const response = await api.user.searchUsers(query);
@@ -288,26 +283,21 @@ const NewConversation = ({ onClose, onSelectUser }) => {
       }
     } catch (error) {
       console.error("Kullanıcı arama hatası:", error);
+      setSearchResults([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Arama değişikliği - debounce ile anlık arama
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearch(value);
-    
-    // Önceki timeout'u temizle
     if (searchTimeout) {
       clearTimeout(searchTimeout);
     }
-    
-    // 300ms sonra aramayı başlat (debounce)
     const timeout = setTimeout(() => {
       handleSearch(value);
     }, 300);
-    
     setSearchTimeout(timeout);
   };
 
@@ -317,13 +307,13 @@ const NewConversation = ({ onClose, onSelectUser }) => {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2 }}
-      className="bg-gray-800/90 backdrop-blur-md rounded-xl shadow-xl border border-gray-700/50 w-full max-w-md overflow-hidden"
+      className="bg-black/70 backdrop-blur-md rounded-xl shadow-2xl border border-[#0affd9]/30 w-full max-w-md overflow-hidden"
     >
-      <div className="p-4 border-b border-gray-700/50 flex justify-between items-center">
-        <h2 className="text-lg font-semibold text-gray-100">Yeni Mesaj</h2>
+      <div className="p-4 border-b border-[#0affd9]/20 flex justify-between items-center">
+        <h2 className="text-lg font-semibold text-[#0affd9]">Yeni Mesaj</h2>
         <button 
           onClick={onClose}
-          className="text-gray-400 hover:text-white transition-colors p-1 rounded-full hover:bg-gray-700/50"
+          className="text-gray-400 hover:text-[#0affd9] transition-colors p-1 rounded-full hover:bg-[#0affd9]/10"
         >
           <X size={20} />
         </button>
@@ -335,32 +325,35 @@ const NewConversation = ({ onClose, onSelectUser }) => {
             type="text"
             value={search}
             onChange={handleSearchChange}
-            placeholder="Kime mesaj göndermek istiyorsun?"
-            className="w-full py-2.5 px-4 pr-10 bg-gray-700/60 rounded-lg text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 border border-transparent focus:border-indigo-500/50 transition-all"
+            placeholder="Kullanıcı ara..."
+            className="w-full py-2.5 px-4 pr-10 bg-black/50 border border-[#0affd9]/20 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0affd9] focus:border-[#0affd9] transition-all"
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
             {loading ? (
-              <div className="w-5 h-5 border-t-2 border-indigo-400 border-solid rounded-full animate-spin"></div>
+              <div className="w-5 h-5 border-t-2 border-[#0affd9] border-solid rounded-full animate-spin"></div>
             ) : (
               <Search size={18} />
             )}
           </div>
         </div>
         
-        <div className="max-h-72 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600/50 scrollbar-track-transparent pr-1">
+        <div className="max-h-72 overflow-y-auto scrollbar-thin scrollbar-thumb-[#0affd9]/50 scrollbar-track-transparent pr-1">
           {searchResults.length > 0 ? (
-            <div className="mb-4">
+            <div className="mb-1">
               <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 px-1">Arama Sonuçları</h3>
               {searchResults.map(user => (
                 <div 
                   key={user.id}
-                  onClick={() => onSelectUser(user.id)}
-                  className="flex items-center p-2.5 hover:bg-gray-700/50 cursor-pointer rounded-lg transition-colors duration-150"
+                  onClick={() => {
+                    onSelectUser(user.id);
+                    onClose();
+                  }}
+                  className="flex items-center p-2.5 hover:bg-[#0affd9]/10 cursor-pointer rounded-lg transition-colors duration-150"
                 >
                   <img 
                     src={getFullImageUrl(user.profileImage)} 
                     alt={user.username} 
-                    className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                    className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-[#0affd9]/20"
                   />
                   <div className="ml-3 overflow-hidden">
                     <p className="text-gray-100 font-medium truncate text-sm">{user.fullName || user.username}</p>
@@ -373,7 +366,33 @@ const NewConversation = ({ onClose, onSelectUser }) => {
             <div className="py-4 text-center text-gray-400 text-sm">
               <p>"<span className='font-medium text-gray-300'>{search}</span>" ile eşleşen kullanıcı bulunamadı.</p>
             </div>
-          ) : null}
+          ) : (
+             !search.trim() && !loading && followingUsers.length > 0 && (
+              <div className="mb-1">
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 px-1">Takip Edilenler</h3>
+                {followingUsers.map(user => (
+                  <div 
+                    key={user.id}
+                    onClick={() => {
+                      onSelectUser(user.id);
+                      onClose();
+                    }}
+                    className="flex items-center p-2.5 hover:bg-[#0affd9]/10 cursor-pointer rounded-lg transition-colors duration-150"
+                  >
+                    <img 
+                      src={getFullImageUrl(user.profileImage)} 
+                      alt={user.username} 
+                      className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-[#0affd9]/20"
+                    />
+                    <div className="ml-3 overflow-hidden">
+                      <p className="text-gray-100 font-medium truncate text-sm">{user.fullName || user.username}</p>
+                      <p className="text-gray-400 text-xs truncate">@{user.username}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
         </div>
       </div>
     </motion.div>
@@ -383,145 +402,165 @@ const NewConversation = ({ onClose, onSelectUser }) => {
 const MessageList = React.memo(({ messages, currentUser, formatTime }) => {
   const messageGroups = useMemo(() => {
     const groups = {};
-    
     messages.forEach(message => {
-      // Geçerli bir tarih olduğundan emin olalım
       let messageDateStr;
       try {
-        messageDateStr = new Date(message.sentAt).toLocaleDateString(tr.code); 
+        const dateObj = parseISO(message.sentAt);
+        if (isToday(dateObj)) messageDateStr = 'Bugün';
+        else if (isYesterday(dateObj)) messageDateStr = 'Dün';
+        else messageDateStr = format(dateObj, 'd MMMM yyyy', { locale: tr });
       } catch (e) {
         console.warn("Geçersiz tarih formatı:", message.sentAt);
-        messageDateStr = "Bilinmeyen Tarih";
+        messageDateStr = "Belirsiz Zaman";
       }
-      
       if (!groups[messageDateStr]) {
         groups[messageDateStr] = [];
       }
       groups[messageDateStr].push(message);
     });
-    
     return groups;
   }, [messages]);
   
-  return (
-    <div className="space-y-4 px-2 md:px-4">
-      {Object.keys(messageGroups).sort((a, b) => new Date(a.split('.').reverse().join('-')) - new Date(b.split('.').reverse().join('-'))).map(dateStr => {
-        let displayDate;
-        const todayStr = new Date().toLocaleDateString(tr.code);
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toLocaleDateString(tr.code);
+  const sortedDates = Object.keys(messageGroups).sort((a, b) => {
+    const specialDatesOrder = { "Bugün": 0, "Dün": 1 };
+    const aIsSpecial = specialDatesOrder[a] !== undefined;
+    const bIsSpecial = specialDatesOrder[b] !== undefined;
 
-        if (dateStr === todayStr) {
-          displayDate = 'Bugün';
-        } else if (dateStr === yesterdayStr) {
-          displayDate = 'Dün';
-        } else {
-          displayDate = dateStr;
-        }
-        
-        return (
+    if (aIsSpecial && bIsSpecial) return specialDatesOrder[a] - specialDatesOrder[b];
+    if (aIsSpecial) return -1;
+    if (bIsSpecial) return 1;
+    
+    try {
+      return parseISO(messages.find(m => format(parseISO(m.sentAt), 'd MMMM yyyy', { locale: tr }) === b || (isToday(parseISO(m.sentAt)) && b === "Bugün") || (isYesterday(parseISO(m.sentAt)) && b === "Dün") ).sentAt) - parseISO(messages.find(m => format(parseISO(m.sentAt), 'd MMMM yyyy', { locale: tr }) === a || (isToday(parseISO(m.sentAt)) && a === "Bugün") || (isYesterday(parseISO(m.sentAt)) && a === "Dün")).sentAt);
+    } catch (e) {
+        return 0;
+    }
+  });
+
+  return (
+    <div className="space-y-2 px-2 md:px-4 pb-2">
+      {sortedDates.map(dateStr => (
           <div key={dateStr}>
-            <div className="flex justify-center my-4">
-              <span className="text-xs px-3 py-1 rounded-full bg-gray-700/50 text-gray-400 border border-gray-600/50">
-                {displayDate}
+            <div className="flex justify-center my-3">
+              <span className="text-xs px-3 py-1 rounded-full bg-black/40 text-gray-400 border border-[#0affd9]/20 shadow-sm">
+                {dateStr}
               </span>
             </div>
             
-            {messageGroups[dateStr].map((message) => {
-              const isCurrentUser = currentUser && message.senderId === currentUser.id;
-              const isTemporary = message.id && message.id.toString().startsWith('temp-');
-              
-              // Tik durumunu belirle
-              let tickIcon = null;
-              if (isCurrentUser) {
-                if (isTemporary) {
-                  tickIcon = <Check size={16} className="text-gray-500" />;
-                } else if (message.isRead) {
-                  tickIcon = <CheckCheck size={16} className="text-sky-400" />;
-                } else if (message.isDelivered) {
-                  tickIcon = <CheckCheck size={16} className="text-gray-500" />;
-                } else {
-                  tickIcon = <Check size={16} className="text-gray-500" />;
+            <div className="space-y-3">
+              {messageGroups[dateStr].map((message) => {
+                const isCurrentUser = currentUser && message.senderId === currentUser.id;
+                const isTemporary = message.id && message.id.toString().startsWith('temp-');
+                
+                let tickIcon = null;
+                if (isCurrentUser && !isTemporary) {
+                  if (message.isRead) {
+                    tickIcon = <CheckCheck size={16} className="text-[#0affd9]/80" />;
+                  } else if (message.isDelivered) {
+                    tickIcon = <CheckCheck size={16} className="text-gray-500" />;
+                  } else {
+                    tickIcon = <Check size={16} className="text-gray-500" />;
+                  }
                 }
-              }
-              
-              return (
-                <motion.div 
-                  key={message.id} 
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
-                  className={`flex mb-3 items-end ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-                >
-                  {/* Karşı tarafın avatarı (isteğe bağlı) */} 
-                  {/* {!isCurrentUser && ( ... avatar kodu ... )} */}
-                  
-                  <div 
-                    className={`relative max-w-[75%] md:max-w-[65%] rounded-t-2xl px-4 py-2.5 shadow-sm ${ 
-                      isCurrentUser
-                        ? 'bg-gradient-to-br from-sky-500 to-indigo-600 text-white rounded-l-2xl'
-                        : 'bg-gray-700/80 text-gray-100 rounded-r-2xl border border-gray-600/50'
-                    } ${isTemporary ? 'opacity-60' : ''}`}
+                
+                return (
+                  <motion.div 
+                    key={message.id} 
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5, transition: { duration: 0.15 } }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    className={`flex mb-1 items-end ${isCurrentUser ? 'justify-end pl-10' : 'justify-start pr-10'}`}
                   >
-                    <p className="text-sm leading-relaxed break-words">{message.content}</p> 
-                    <div className="text-xs mt-1.5 text-right flex items-center justify-end space-x-1 ${isCurrentUser ? 'text-sky-100/70' : 'text-gray-400/70'}">
-                      <span>{formatTime(message.sentAt)}</span>
-                      {isCurrentUser && tickIcon && (
-                        <span>
-                          {tickIcon}
-                        </span>
+                    {!isCurrentUser && (
+                       <img 
+                        src={getFullImageUrl(message.senderInfo?.profileImage)} 
+                        alt={message.senderInfo?.username || "Avatar"} 
+                        className="w-7 h-7 rounded-full object-cover mr-2 self-start border-2 border-transparent group-hover:border-[#0affd9]/50 transition-all"
+                      />
+                    )}
+                    <div 
+                      className={`relative max-w-[80%] md:max-w-[70%] rounded-2xl px-3.5 py-2 shadow-md group ${ 
+                        isCurrentUser
+                          ? 'bg-gradient-to-br from-[#0AAFFD] to-[#0AFFD9]/90 text-black rounded-br-none'
+                          : 'bg-black/40 text-gray-200 rounded-bl-none border border-[#0affd9]/20'
+                      } ${isTemporary ? 'opacity-70' : ''}`}
+                    >
+                      {message.mediaUrl && (
+                        <div className="mb-1.5 last:mb-0">
+                           {message.mediaType?.startsWith('image/') ? (
+                            <img src={mediaService.getMediaUrl(message.mediaUrl, 'image')} alt="Medya" className="rounded-lg max-w-xs max-h-60 object-contain cursor-pointer shadow-md" 
+                              onClick={() => window.open(mediaService.getMediaUrl(message.mediaUrl, 'image'), '_blank')} />
+                          ) : message.mediaType?.startsWith('video/') ? (
+                            <video src={mediaService.getMediaUrl(message.mediaUrl, 'video')} controls className="rounded-lg max-w-xs max-h-60 shadow-md" />
+                          ) : (
+                            <a href={mediaService.getMediaUrl(message.mediaUrl, 'file')} target="_blank" rel="noopener noreferrer" className="text-[#0affd9] hover:underline flex items-center bg-black/30 p-2 rounded-md">
+                              <FileIcon size={18} className="mr-2" />
+                              Dosyayı Görüntüle
+                            </a>
+                          )}
+                        </div>
                       )}
+                      {message.content && <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{message.content}</p>} 
+                      <div className={`text-[11px] mt-1.5 flex items-center ${isCurrentUser ? 'justify-end text-black/60' : 'justify-start text-gray-500/80'}`}>
+                        <span>{formatTime(message.sentAt)}</span>
+                        {isCurrentUser && tickIcon && (
+                          <span className="ml-1.5">
+                            {tickIcon}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              );
-            })}
+                     {isCurrentUser && (
+                       <img 
+                        src={getFullImageUrl(currentUser?.profile_picture)}
+                        alt={currentUser?.username || "Avatar"} 
+                        className="w-7 h-7 rounded-full object-cover ml-2 self-start border-2 border-transparent group-hover:border-[#0affd9]/50 transition-all"
+                      />
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
           </div>
-        );
-      })}
+        ))}
     </div>
   );
 });
 
 // Yazıyor göstergesi bileşeni
 const TypingIndicator = React.memo(({ senderInfo }) => {
-  // senderInfo yoksa veya resmi yoksa varsayılan göster
   const profileImageUrl = getFullImageUrl(senderInfo?.profileImage);
-  const usernameInitial = senderInfo?.username?.charAt(0).toUpperCase() || '?';
 
   return (
     <motion.div 
-      className="flex mb-3 items-end justify-start pl-2 md:pl-4"
-      initial={{ opacity: 0, y: 5 }}
+      className="flex mb-1 items-end justify-start pl-2 md:pl-4"
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 5 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
+      exit={{ opacity: 0, y: -5 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
     >
-      {/* Profil Resmi */} 
-      <div className="flex-shrink-0 mr-2">
-        <img 
-          src={profileImageUrl}
-          alt={senderInfo?.username || 'avatar'}
-          className="w-8 h-8 rounded-full object-cover border border-gray-600/50"
-        />
-      </div>
-      {/* Baloncuk */}
-      <div className="max-w-[70%] rounded-t-2xl rounded-r-2xl px-4 py-3 bg-gray-700/80 text-gray-100 border border-gray-600/50">
-        <div className="flex space-x-1.5 items-center h-5">
+      <img 
+        src={profileImageUrl}
+        alt={senderInfo?.username || 'avatar'}
+        className="w-7 h-7 rounded-full object-cover mr-2 self-start border-2 border-transparent"
+      />
+      <div className="max-w-[70%] rounded-2xl rounded-bl-none px-3.5 py-3 bg-black/40 border border-[#0affd9]/20 shadow-md">
+        <div className="flex space-x-1.5 items-center h-4">
           {[0, 1, 2].map((i) => (
             <motion.div
               key={i}
-              className="w-2 h-2 rounded-full bg-gray-400/70"
+              className="w-1.5 h-1.5 rounded-full bg-[#0affd9]/70"
               animate={{
-                opacity: [0.3, 0.8, 0.3], // Soluklaşma efekti
-                scale: [0.8, 1.1, 0.8]    // Hafif büyüme efekti
+                opacity: [0.4, 1, 0.4],
+                scale: [0.8, 1.2, 0.8]
               }}
               transition={{
                 repeat: Infinity,
-                duration: 1.2,            // Süreyi biraz uzat
+                duration: 1.2,
                 ease: "easeInOut",
-                delay: i * 0.2           // Noktaları gecikmeli başlat
+                delay: i * 0.2
               }}
             />
           ))}
@@ -1316,24 +1355,29 @@ const Messages = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-black p-0 md:p-4 lg:p-6 flex items-center justify-center">
+    <div className="min-h-screen bg-black p-0 flex items-center justify-center">
       <div className="max-w-screen-xl w-full mx-auto relative">
-        {/* Arka plan */} 
-        <div className="absolute inset-0 -z-10 overflow-hidden opacity-50">
-          {/* İsteğe bağlı: Daha soyut bir arka plan eklenebilir */}
+        <div className="absolute inset-0 -z-10 overflow-hidden opacity-30">
+          <SparklesCore
+            id="tsparticlesfullpage"
+            background="transparent"
+            minSize={0.3}
+            maxSize={0.8}
+            particleDensity={50}
+            className="w-full h-full"
+            particleColor="#0AFFD9"
+          />
         </div>
         
-        {/* Ana mesajlaşma arayüzü */} 
-        <div className="relative w-full h-[calc(100vh-2rem)] md:h-[calc(100vh-3rem)] lg:h-[calc(100vh-4rem)] overflow-hidden rounded-none md:rounded-2xl shadow-2xl bg-gray-800/60 backdrop-blur-xl border border-gray-700/50 flex">
+        <div className="relative w-full h-screen md:h-[calc(100vh-2rem)] lg:h-[calc(100vh-3rem)] overflow-hidden rounded-none md:rounded-2xl shadow-2xl bg-black/70 backdrop-blur-xl border border-[#0affd9]/20 flex">
           
-          {/* Sol panel - Konuşma listesi */} 
-          <div className={`${isMobile && showMobileChat ? 'hidden' : 'flex'} md:flex flex-col w-full md:w-[320px] lg:w-[360px] bg-gray-800/70 h-full border-r border-gray-700/50`}>
-            <div className="p-4 border-b border-gray-700/50">
+          <div className={`${isMobile && showMobileChat ? 'hidden' : 'flex'} md:flex flex-col w-full md:w-[340px] lg:w-[380px] bg-black/60 backdrop-blur-sm h-full border-r border-[#0affd9]/20`}>
+            <div className="p-4 border-b border-[#0affd9]/20">
               <div className="flex items-center justify-between mb-4">
-                <h1 className="text-xl font-semibold text-gray-100">Sohbetler</h1>
+                <h1 className="text-xl font-semibold text-[#0affd9] tracking-wide">Sohbetler</h1>
                 <button 
                   onClick={() => setShowNewConversation(true)}
-                  className="flex items-center bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors text-sm font-medium shadow-md hover:shadow-lg"
+                  className="flex items-center bg-[#0affd9]/90 hover:bg-[#0affd9] text-black px-3 py-1.5 rounded-lg transition-all duration-300 text-sm font-medium shadow-md hover:shadow-lg hover:shadow-[#0affd9]/30 transform hover:scale-105"
                 >
                   <PlusCircle size={16} className="mr-1.5" /> Yeni
                 </button>
@@ -1345,83 +1389,52 @@ const Messages = () => {
                   placeholder="Sohbetleri ara..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-gray-700/50 text-gray-200 placeholder-gray-400 border border-gray-600/70 rounded-lg py-2 pl-9 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-50 focus:border-transparent transition-colors"
+                  className="w-full bg-black/50 text-gray-200 placeholder-gray-500 border border-[#0affd9]/30 rounded-lg py-2 pl-9 pr-4 focus:outline-none focus:ring-1 focus:ring-[#0affd9] focus:border-[#0affd9] transition-colors"
                 />
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
               </div>
             </div>
 
-            <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-gray-600/50 scrollbar-track-transparent">
+            <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-[#0affd9]/40 hover:scrollbar-thumb-[#0affd9]/60 scrollbar-track-transparent scrollbar-thumb-rounded-full pr-1">
               {loading && conversations.length === 0 ? (
                 <div className="flex justify-center items-center h-40">
-                  <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-indigo-400"></div>
+                  <Loader size={28} className="animate-spin text-[#0affd9]/70" />
                 </div>
               ) : conversations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center text-center p-6 text-gray-400">
-                   {(!previousChats || previousChats.length === 0) && (
-                     <>
-                       <MessageSquare className="h-12 w-12 mb-3 opacity-30" />
-                       <p className="text-sm">Henüz bir sohbetiniz yok.</p>
-                     </>
-                   )}
-                   
-                   {previousChats && previousChats.length > 0 && (
-                     <div className="w-full">
-                       <div className="space-y-1">
-                         {previousChats.map((user) => (
-                           <motion.div
-                             key={user.id}
-                             initial={{ opacity: 0 }}
-                             animate={{ opacity: 1 }}
-                             transition={{ delay: 0.05 }}
-                             className="flex items-center p-2.5 rounded-lg cursor-pointer hover:bg-gray-700/40 transition-colors"
-                             onClick={() => startNewConversation(user.id)}
-                           >
-                             <img
-                               src={getFullImageUrl(user.profileImage)}
-                               alt={user.username}
-                               className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-gray-700/70"
-                             />
-                             <div className="ml-3 overflow-hidden">
-                               <p className="text-gray-200 text-sm font-medium truncate">{user.fullName || user.username}</p>
-                               <p className="text-gray-400 text-xs truncate">@{user.username}</p>
-                             </div>
-                           </motion.div>
-                         ))}
-                       </div>
-                     </div>
-                   )}
+                <div className="flex flex-col items-center justify-center text-center p-6 text-gray-500 mt-8">
+                   <MessageSquare className="h-16 w-16 mb-4 opacity-30 text-[#0affd9]/50" />
+                   <p className="text-sm">Henüz bir sohbetiniz yok.</p>
+                   <p className="text-xs mt-1">Yeni bir sohbet başlatarak mesajlaşmaya başlayın.</p>
                  </div>
               ) : filteredConversations.length === 0 && search ? (
-                <div className="flex flex-col items-center justify-center text-center p-6 text-gray-400">
-                  <Search className="h-12 w-12 mb-3 opacity-30" />
+                <div className="flex flex-col items-center justify-center text-center p-6 text-gray-500 mt-8">
+                  <Search className="h-16 w-16 mb-4 opacity-30 text-[#0affd9]/50" />
                   <p className="text-sm">"<span className='font-medium text-gray-300'>{search}</span>" için sonuç bulunamadı.</p>
                 </div>
               ) : (
-                <div className="p-2 space-y-1">
+                <div className="p-2 space-y-1.5">
                   {filteredConversations.map((conversation) => (
                     <motion.div
                       key={conversation.sender ? conversation.sender.id : `conversation-${Date.now()}-${Math.random()}`}
-                      layout // Animate layout changes
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className={`flex items-center p-2.5 rounded-lg cursor-pointer transition-all duration-200 ease-out relative overflow-hidden ${ 
+                      layout 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -5 }}
+                      transition={{ duration: 0.25, ease: "easeInOut" }}
+                      className={`flex items-center p-2.5 rounded-lg cursor-pointer transition-all duration-200 ease-out relative overflow-hidden group ${ 
                         selectedConversation?.sender?.id === conversation.sender?.id
-                          ? 'bg-gradient-to-r from-gray-700/50 to-gray-700/30 shadow-inner'
-                          : 'hover:bg-gray-700/40'
+                          ? 'bg-gradient-to-r from-[#0AAFFD] to-[#0AFFD9]/90 text-black rounded-br-none'
+                          : 'hover:bg-[#0AAFFD]/10'
                       }`}
                       onClick={() => {
                         selectConversation(conversation);
                         if (isMobile) setShowMobileChat(true);
                       }}
                     >
-                      {/* Aktif Konuşma Vurgusu */} 
                       {selectedConversation?.sender?.id === conversation.sender?.id && (
                         <motion.div 
                           layoutId="activeConversationHighlight"
-                          className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 rounded-r-full"
+                          className="absolute left-0 top-0 bottom-0 w-1 bg-[#0AAFFD] rounded-r-full"
                           initial={false}
                           animate={{ opacity: 1 }}
                           transition={{ duration: 0.3 }}
@@ -1432,27 +1445,26 @@ const Messages = () => {
                         <img
                           src={getFullImageUrl(conversation.sender?.profileImage)}
                           alt={conversation.sender?.username}
-                          className="w-11 h-11 rounded-full object-cover border-2 border-gray-700/50"
+                          className={`w-11 h-11 rounded-full object-cover border-2 ${selectedConversation?.sender?.id === conversation.sender?.id ? 'border-[#0AAFFD]/70' : 'border-gray-700/50 group-hover:border-[#0AAFFD]/30'} transition-colors`}
                         />
-                        {/* Online Durum */} 
-                        <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ${conversation.sender?.online ? 'bg-green-500' : 'bg-gray-600'} border-2 border-gray-800`}></div>
+                        <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ${conversation.sender?.online ? 'bg-green-400' : 'bg-gray-600'} border-2 border-black/70`}></div>
                       </div>
 
                       <div className="ml-3 flex-1 min-w-0">
                         <div className="flex justify-between items-center">
-                          <span className={`font-semibold text-sm truncate ${selectedConversation?.sender?.id === conversation.sender?.id ? 'text-white' : 'text-gray-200'}`}>
+                          <span className={`font-semibold text-sm truncate ${selectedConversation?.sender?.id === conversation.sender?.id ? 'text-[#0AAFFD]' : 'text-gray-200 group-hover:text-white'}`}>
                             {conversation.sender?.fullName || conversation.sender?.username || 'Bilinmeyen Kullanıcı'}
                           </span>
-                          <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
+                          <span className="text-xs text-gray-500 group-hover:text-gray-400 flex-shrink-0 ml-2">
                             {conversation.lastTimestamp ? formatMessageTime(conversation.lastTimestamp) : ''}
                           </span>
                         </div>
                         <div className="flex items-center justify-between mt-0.5">
-                          <p className="text-xs text-gray-400 truncate pr-2">
-                             {conversation.lastMessage}
+                          <p className={`text-xs truncate pr-2 ${conversation.unreadCount > 0 && selectedConversation?.sender?.id !== conversation.sender?.id ? 'text-gray-300 font-medium' : 'text-gray-400 group-hover:text-gray-300'}`}>
+                             {conversation.lastMessage || "..."}
                           </p>
                           {conversation.unreadCount > 0 && (
-                            <div className="flex-shrink-0 w-4 h-4 text-[10px] rounded-full bg-indigo-500 text-white flex items-center justify-center font-bold">
+                            <div className="flex-shrink-0 w-4 h-4 text-[10px] rounded-full bg-[#0AAFFD] text-black flex items-center justify-center font-bold shadow-md">
                               {conversation.unreadCount}
                             </div>
                           )}
@@ -1465,66 +1477,60 @@ const Messages = () => {
             </div>
           </div>
 
-          {/* Sağ panel - Mesajlaşma */} 
-          <div className={`${isMobile && !showMobileChat ? 'hidden' : 'flex'} md:flex flex-col w-full flex-1 bg-gradient-to-b from-gray-800/80 to-gray-900/90 h-full`}>
+          <div className={`${isMobile && !showMobileChat ? 'hidden' : 'flex'} md:flex flex-col w-full flex-1 bg-black/50 h-full`}>
             {!selectedConversation ? (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center text-gray-500">
-                <MessageSquare size={56} className="opacity-20 mb-4" />
+                <MessageSquare size={64} className="opacity-20 mb-5 text-[#0AAFFD]/40" />
                 <h3 className="text-lg font-medium text-gray-400 mb-1">Sohbet Seç</h3>
                 <p className="max-w-xs text-sm">Başlamak için sol panelden bir sohbet seçin veya yeni bir sohbet başlatın.</p>
               </div>
             ) : (
               <>
-                {/* Mesaj başlığı */} 
-                <div className="p-3 px-4 border-b border-gray-700/50 flex items-center flex-shrink-0 bg-gray-800/50 shadow-sm">
+                <div className="p-3 px-4 border-b border-[#0AAFFD]/20 flex items-center flex-shrink-0 bg-black/60 backdrop-blur-sm shadow-sm">
                   {isMobile && (
                     <button
                       onClick={handleBackToConversations}
-                      className="mr-3 text-gray-400 hover:text-white p-1 rounded-full hover:bg-gray-700/50 transition-colors"
+                      className="mr-3 text-gray-400 hover:text-[#0AAFFD] p-1 rounded-full hover:bg-[#0AAFFD]/10 transition-colors"
                     >
                       <ChevronLeft size={22} />
                     </button>
                   )}
-                  
                   <div className="flex items-center flex-1 min-w-0">
                      <img
                         src={getFullImageUrl(selectedConversation.sender?.profileImage)}
                         alt={selectedConversation.sender?.username}
-                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                        className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-[#0AAFFD]/40"
                       />
                     <div className="ml-3 overflow-hidden">
                       <h2 className="font-semibold text-gray-100 truncate text-sm">
                         {selectedConversation.sender?.fullName || selectedConversation.sender?.username}
                       </h2>
                       <span className="text-xs text-gray-400">
-                        {formatLastSeen(selectedConversation.sender?.lastSeen)} {/* lastSeen backend'den gelmeli */}
+                        {selectedConversation.sender?.online ? <span className="text-green-400">Çevrimiçi</span> : formatLastSeen(selectedConversation.sender?.lastSeen)}
                       </span>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center space-x-2 ml-3">
-                    {/* Başlık ikonları */} 
-                    <button className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+                  <div className="flex items-center space-x-1.5 ml-3">
+                    <button className="p-2 rounded-full text-gray-400 hover:text-[#0AAFFD] hover:bg-[#0AAFFD]/10 transition-colors">
                       <Phone size={18} />
                     </button>
-                    <button className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+                    <button className="p-2 rounded-full text-gray-400 hover:text-[#0AAFFD] hover:bg-[#0AAFFD]/10 transition-colors">
                       <Video size={18} />
                     </button>
-                    <button className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors">
+                    <button className="p-2 rounded-full text-gray-400 hover:text-[#0AAFFD] hover:bg-[#0AAFFD]/10 transition-colors">
                       <MoreVertical size={18} />
                     </button>
                   </div>
                 </div>
                 
-                {/* Mesaj içeriği */} 
-                <div className="flex-1 overflow-y-auto py-4 scrollbar-thin scrollbar-thumb-gray-600/50 scrollbar-track-transparent">
+                <div ref={messageContainerRef} className="flex-1 overflow-y-auto py-4 scrollbar-thin scrollbar-thumb-[#0AAFFD]/40 hover:scrollbar-thumb-[#0AAFFD]/60 scrollbar-track-transparent scrollbar-thumb-rounded-full">
                   {loading && messages.length === 0 ? (
                     <div className="flex justify-center items-center h-full">
-                      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-indigo-400"></div>
+                      <Loader size={28} className="animate-spin text-[#0AAFFD]/70" />
                     </div>
                   ) : messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-gray-500 text-center px-4">
-                      <MessageSquare size={40} className="opacity-20 mb-3" />
+                       <MessageSquare size={48} className="opacity-20 mb-3 text-[#0AAFFD]/40" />
                       <p className="text-sm">Henüz mesaj yok. İlk mesajı gönderin!</p>
                     </div>
                   ) : (
@@ -1535,47 +1541,40 @@ const Messages = () => {
                         currentUser={currentUser} 
                         formatTime={formatMessageTime} 
                       />
-                      
-                      {/* Yazma göstergesi */} 
                       {isTyping && selectedConversation && (
                         <TypingIndicator key="typing-indicator" senderInfo={selectedConversation.sender} />
                       )}
-
-                      {/* Scroll hedefi her zaman en sonda olmalı */} 
-                      <div key="scroll-spacer" ref={messagesEndRef} className="h-px" /> 
-                      
+                      <div key="scroll-end-ref" ref={messagesEndRef} className="h-px" />
                     </AnimatePresence>
                   )}
                 </div>
                 
-                {/* Mesaj yazma alanı */} 
-                <div className="message-input-container border-t border-gray-700 p-3">
+                <div className="border-t border-[#0AAFFD]/20 p-3 bg-black/60 backdrop-blur-sm">
                   {mediaFile && !isUploading && (
                     <MediaPreview 
                       media={mediaFile} 
                       onCancel={handleCancelMedia} 
                     />
                   )}
-                  
                   {isUploading && <UploadProgress progress={uploadProgress} />}
                   
-                  <form onSubmit={handleSendMessage} className="flex items-center">
+                  <form onSubmit={handleSendMessage} className="flex items-center gap-2">
                     <input 
                       type="file" 
                       ref={fileInputRef}
                       className="hidden" 
                       onChange={handleFileSelect}
-                      accept="image/*, video/*" 
+                      accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip,.rar"
                     />
-                    
                     <button 
                       type="button" 
-                      className="p-2 text-gray-400 hover:text-white transition-colors mr-2"
+                      className="p-2.5 text-gray-400 hover:text-[#0AAFFD] transition-colors rounded-full hover:bg-[#0AAFFD]/10"
                       onClick={handleFileButtonClick}
                       disabled={isUploading}
+                      title="Dosya Ekle"
                     >
                       {isUploading ? (
-                        <Loader size={20} className="animate-spin" />
+                        <Loader size={20} className="animate-spin text-[#0AAFFD]" />
                       ) : (
                         <Image size={20} />
                       )}
@@ -1583,17 +1582,28 @@ const Messages = () => {
                     
                     <input
                       type="text"
+                      ref={messageInputRef}
                       value={newMessage}
                       onChange={handleMessageInputChange}
                       placeholder="Mesajınızı yazın..."
-                      className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-full focus:outline-none"
+                      className="flex-1 bg-black/40 border border-[#0AAFFD]/25 text-gray-200 placeholder-gray-500 px-4 py-2.5 rounded-full focus:outline-none"
                       disabled={isUploading}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          handleSendMessage(e);
+                        }
+                      }}
                     />
                     
                     <button
                       type="submit"
-                      className={`p-2 ml-2 text-white rounded-full ${(!newMessage.trim() && !mediaFile) || isUploading ? 'bg-gray-600' : 'bg-blue-500 hover:bg-blue-600'}`}
+                      className={`p-2.5 rounded-full transition-all duration-300 ease-in-out transform ${
+                        (!newMessage.trim() && !mediaFile) || isUploading 
+                        ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+                        : 'bg-[#0AAFFD] text-black hover:bg-[#0AAFFD]/80 hover:scale-110 shadow-md hover:shadow-[#0AAFFD]/40'
+                      }`}
                       disabled={(!newMessage.trim() && !mediaFile) || isUploading}
+                      title="Gönder"
                     >
                       <Send size={20} />
                     </button>
@@ -1605,17 +1615,22 @@ const Messages = () => {
         </div>
       </div>
 
-      {/* Yeni Mesaj Modal */} 
       {showNewConversation && (
         <AnimatePresence>
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => setShowNewConversation(false)} // Arka plana tıklayınca kapat
+            className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[100] p-4"
+            onClick={() => setShowNewConversation(false)}
           >
-            <motion.div onClick={(e) => e.stopPropagation()} > {/* Modal içeriğine tıklanınca kapanmasın */} 
+            <motion.div 
+              onClick={(e) => e.stopPropagation()}
+              initial={{ scale: 0.9, opacity: 0.8 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+            > 
               <NewConversation 
                 onClose={() => setShowNewConversation(false)} 
                 onSelectUser={startNewConversation}
