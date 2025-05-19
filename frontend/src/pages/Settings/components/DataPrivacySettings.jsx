@@ -105,7 +105,7 @@ const DataPrivacySettings = () => {
   const handlePrivacyToggle = (key, value) => {
     setPrivacyControls(prev => ({ ...prev, [key]: value }));
     // Normalde burada API'ye kaydetme işlemi de yapılır
-    toast.info(`Ayarlar güncellendi: ${key} ${value ? 'açıldı' : 'kapatıldı'}. Kaydetme işlemi henüz uygulanmadı.`);
+    toast.success(`Ayarlar güncellendi: ${key} ${value ? 'açıldı' : 'kapatıldı'}. Kaydetme işlemi henüz uygulanmadı.`);
   };
 
   return (

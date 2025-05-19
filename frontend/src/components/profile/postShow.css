@@ -13,6 +13,58 @@
   backdrop-filter: blur(5px);
 }
 
+/* Modal container */
+.post-modal-container {
+  position: relative;
+  display: flex;
+  width: 100%;
+  max-width: 1200px;
+  height: 90vh;
+  max-height: 90vh;
+}
+
+/* Post Navigation Buttons */
+.post-nav-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: rgba(10, 255, 217, 0.9);
+  border: 1px solid rgba(10, 255, 217, 0.3);
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1100;
+  transition: all 0.2s ease-in-out;
+}
+
+.post-nav-button:hover {
+  background: rgba(10, 255, 217, 0.2);
+  box-shadow: 0 0 15px rgba(10, 255, 217, 0.4);
+}
+
+.post-nav-prev {
+  left: -60px;
+}
+
+.post-nav-next {
+  right: -60px;
+}
+
+@media (max-width: 1320px) {
+  .post-nav-prev {
+    left: 10px;
+  }
+  
+  .post-nav-next {
+    right: 10px;
+  }
+}
+
 /* Modal content styling */
 .post-modal-content {
   background-color: rgba(0, 0, 0, 0.95);

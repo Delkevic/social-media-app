@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 // import "../styles/Profile.css"; // CSS dosyasını kaldırıyoruz
 import PostShow from "../components/profile/postShow";
@@ -35,6 +35,7 @@ const Profile = () => {
   });
 
   const [selectedPost, setSelectedPost] = useState(null);
+  const [selectedPostIndex, setSelectedPostIndex] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedReel, setSelectedReel] = useState(null);
   const [isReelModalOpen, setIsReelModalOpen] = useState(false);
@@ -57,6 +58,10 @@ const Profile = () => {
   const [followStatus, setFollowStatus] = useState('none'); // none, following, requested, follows_you
   const [canViewProfile, setCanViewProfile] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
+
+  const [generatedThumbnails, setGeneratedThumbnails] = useState({});
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
 
   // Keşfet reelslerini getir
   const fetchExploreReels = useCallback(async () => {
@@ -94,6 +99,67 @@ const Profile = () => {
     }
   }, [navigate]);
 
+  // Video dosyasından thumbnail oluşturan fonksiyon
+  const generateThumbnailFromVideo = useCallback((videoUrl, reelId) => {
+    if (!videoUrl || generatedThumbnails[reelId]) return;
+
+    console.log(`${reelId} için thumbnail oluşturuluyor...`);
+    
+    // Gizli video ve canvas elementleri oluşturalım
+    const video = document.createElement('video');
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Video yüklendiğinde ilk kareyi yakalamak için event listener ekleyelim
+    video.addEventListener('loadeddata', () => {
+      // Video boyutlarını ayarla
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // İlk kareyi çiz
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Canvas'tan veri URL'si al
+      const thumbnailUrl = canvas.toDataURL('image/jpeg');
+      
+      // Oluşturulan thumbnail'i state'e ekle
+      setGeneratedThumbnails(prev => ({
+        ...prev,
+        [reelId]: thumbnailUrl
+      }));
+      
+      console.log(`${reelId} için thumbnail oluşturuldu!`);
+    });
+    
+    // Hata durumunu ele alalım
+    video.addEventListener('error', (e) => {
+      console.error(`Video yüklenirken hata: ${videoUrl}`, e);
+    });
+    
+    // Video'yu yükleyelim (tam URL ile)
+    video.crossOrigin = "Anonymous"; // Cross-origin desteği için (CORS hatalarını önlemek için)
+    video.src = videoUrl;
+    video.currentTime = 0.5; // İlk karenin yanındaki kare (siyah ekran olmaması için)
+    video.muted = true; // Sessiz
+    video.playsInline = true; // Mobile uyumlu
+    
+    // Safari'de sadece load yerine play/pause ile thumbnail oluşturma çalışabilir
+    video.load();
+    
+    // Safari için ek önlem
+    setTimeout(() => {
+      if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+        video.play().then(() => {
+          setTimeout(() => {
+            video.pause();
+          }, 100);
+        }).catch(err => {
+          console.error("Video oynatma hatası:", err);
+        });
+      }
+    }, 500);
+  }, [generatedThumbnails]);
+
   // Kullanıcının reelslerini getir
   const fetchUserReels = useCallback(async () => {
     try {
@@ -104,6 +170,7 @@ const Profile = () => {
         return;
       }
 
+      console.log(`Reels çekiliyor: ${username}`);
       const response = await fetch(
         `${API_BASE_URL}/api/profile/${username}/reels`,
         {
@@ -114,8 +181,60 @@ const Profile = () => {
       );
       if (response.ok) {
         const data = await response.json();
+        console.log("Reels API yanıtı:", data);
         if (data.success && data.data) {
-          setReels(data.data);
+          // Thumbnail ve video URL'lerini işle
+          const processedReels = data.data.map(reel => {
+            console.log(`Reel ID: ${reel.id}, Thumbnail: ${reel.thumbnail}, Video URL: ${reel.videoURL}`);
+            
+            // Video URL işleme
+            let processedVideoURL = null;
+            if (reel.videoURL) {
+              // URL formatını düzelt
+              if (!reel.videoURL.includes('cloudinary.com') && !reel.videoURL.startsWith('http')) {
+                processedVideoURL = `${API_BASE_URL}${reel.videoURL}`;
+              } else {
+                processedVideoURL = reel.videoURL;
+              }
+            }
+            
+            // Thumbnail işleme - Kullanıcının yüklediği kapak resmini öncelikle kullan
+            let processedThumbnail = null;
+            // Eğer reel'de thumbnail varsa (kullanıcı tarafından yüklenmiş kapak resmi)
+            if (reel.thumbnail && reel.thumbnail !== "") {
+              // URL formatını düzelt
+              if (!reel.thumbnail.includes('cloudinary.com') && !reel.thumbnail.startsWith('http')) {
+                processedThumbnail = `${API_BASE_URL}${reel.thumbnail}`;
+              } else {
+                processedThumbnail = reel.thumbnail;
+              }
+              console.log(`${reel.id} için kapak resmi var: ${processedThumbnail}`);
+            } else {
+              // Kapak resmi yoksa, placeholder kullan ve otomatik oluşturma işareti koy
+              processedThumbnail = `https://ui-avatars.com/api/?name=Video&background=000000&color=0affd9&size=300`;
+              console.log(`${reel.id} için kapak resmi yok, otomatik oluşturulacak.`);
+            }
+            
+            return {
+              ...reel,
+              videoURL: processedVideoURL,
+              thumbnail: processedThumbnail,
+              // Her reel için videodan thumbnail oluşturmak için flag ekleyelim
+              // Sadece thumbnail yoksa veya placeholder ise otomatik thumbnail oluşturma işlemi başlat
+              needsThumbnailGeneration: (!reel.thumbnail || reel.thumbnail === "") && processedVideoURL
+            };
+          });
+          
+          console.log("İşlenmiş reels:", processedReels);
+          setReels(processedReels);
+          
+          // Video thumbnail'leri oluşturmak için işlemi başlat
+          processedReels.forEach(reel => {
+            if (reel.needsThumbnailGeneration && reel.videoURL) {
+              console.log(`${reel.id} için videodan otomatik thumbnail oluşturuluyor...`);
+              generateThumbnailFromVideo(reel.videoURL, reel.id);
+            }
+          });
         } else {
           console.log("No reels found or API returned an unexpected format");
           setReels([]);
@@ -128,7 +247,7 @@ const Profile = () => {
       console.error("Error fetching reels:", error);
       setReels([]);
     }
-  }, [navigate, username]);
+  }, [navigate, username, API_BASE_URL, generateThumbnailFromVideo]);
 
   // Profil bilgilerini ve gönderileri getiren ana fonksiyon
   const fetchProfileData = useCallback(async () => {
@@ -247,58 +366,22 @@ const Profile = () => {
           console.log("İşlenmiş gönderiler:", postsData);
           setPosts(postsData); 
 
-          // Resimli/Resimsiz ayırma mantığı aynı kalabilir
-          const withImages = postsData.filter((post) => {
-            if (!post) return false;
-            
-            let postImages = post.images;
-            if (typeof post.images === "string") {
-              try {
-                postImages = JSON.parse(post.images);
-              } catch (e) {
-                console.error("Images parse hatası:", e, post.images);
-                postImages = null;
-              }
-            }
-            return (
-              postImages &&
-              (Array.isArray(postImages)
-                ? postImages.length > 0
-                : typeof postImages === 'object' && postImages !== null && Object.keys(postImages).length > 0)
-            );
-          });
-
-          const withoutImages = postsData.filter((post) => {
-            if (!post) return false;
-            
-            let postImages = post.images;
-            if (typeof post.images === "string") {
-              try {
-                postImages = JSON.parse(post.images);
-              } catch (e) {
-                postImages = null;
-              }
-            }
-            return (
-              !postImages ||
-              (Array.isArray(postImages)
-                ? postImages.length === 0
-                : typeof postImages === 'object' && postImages !== null && Object.keys(postImages).length === 0)
-            );
-          });
-
+          // Optimize edilmiş fonksiyonları kullan
+          const withImages = filterImagePosts(postsData);
+          const withoutImages = postsData.filter(post => !withImages.includes(post));
+          
+          console.log("İmaj içeren gönderi sayısı:", withImages.length);
+          console.log("İmaj içermeyen gönderi sayısı:", withoutImages.length);
+          console.log("Örnek gönderi verileri:", 
+              withImages.length > 0 ? withImages[0] : "Resimli gönderi yok", 
+              withoutImages.length > 0 ? withoutImages[0] : "Metinli gönderi yok");
+          
           setImagePosts(withImages);
           setTextPosts(withoutImages);
           
           // Debug - boş geliyorsa kontrol ekleyelim
           if (postsData.length === 0) {
             console.log("Kullanıcı gönderileri boş döndü");
-          }
-          if (withImages.length === 0) {
-            console.log("Resimli gönderiler boş");
-          }
-          if (withoutImages.length === 0) {
-            console.log("Metinli gönderiler boş");
           }
        } else {
          console.error("Gönderiler alınamadı:", response.message);
@@ -318,28 +401,136 @@ const Profile = () => {
   const getFirstImageUrl = (imagesData) => {
     if (!imagesData) return null;
     let imageUrl = null;
+    
+    console.log("GetFirstImageUrl - İşlenen veri:", imagesData);
+    
     try {
-      // Check if it's already a URL string
-      if (typeof imagesData === 'string' && (imagesData.startsWith('/') || imagesData.startsWith('http'))) {
-        imageUrl = imagesData; // Use directly if it's a URL string
-      } else {
-        // Try parsing as JSON
-        const parsedImages = typeof imagesData === 'string' ? JSON.parse(imagesData) : imagesData;
-        if (Array.isArray(parsedImages) && parsedImages.length > 0 && parsedImages[0].url) {
-          imageUrl = parsedImages[0].url; // Get URL from the first element of the array
-        } else if (typeof parsedImages === 'object' && parsedImages !== null && Object.keys(parsedImages).length > 0 && parsedImages[Object.keys(parsedImages)[0]].url) {
-          // Handle case where it might be an object (though array is expected)
-          imageUrl = parsedImages[Object.keys(parsedImages)[0]].url;
+      // 1. Direkt URL string kontrolü
+      if (typeof imagesData === 'string') {
+        // Cloudinary URL kontrolü
+        if (imagesData.includes('cloudinary.com')) {
+          console.log("Cloudinary URL formatında:", imagesData);
+          return imagesData; // Cloudinary URL'ini olduğu gibi döndür
+        }
+        // URL olabilecek bir string mi?
+        if (imagesData.startsWith('/') || imagesData.startsWith('http')) {
+          console.log("String URL formatında:", imagesData);
+          return getFullImageUrl(imagesData); // Direkt URL olarak işle
+        }
+        
+        // JSON string olabilir mi?
+        try {
+          const parsed = JSON.parse(imagesData);
+          console.log("JSON string başarıyla ayrıştırıldı:", parsed);
+          imagesData = parsed;
+        } catch (jsonError) {
+          console.log("JSON ayrıştırma hatası, string olarak kullanılıyor:", jsonError);
+          // String'i olduğu gibi kullan
+          return getFullImageUrl(imagesData);
+        }
+      }
+      
+      // 2. Array formatı kontrolü
+      if (Array.isArray(imagesData)) {
+        console.log("Dizi formatında:", imagesData);
+        if (imagesData.length > 0) {
+          // Dizi içinde obje durumu
+          if (typeof imagesData[0] === 'object' && imagesData[0] !== null) {
+            if (imagesData[0].url) {
+              imageUrl = imagesData[0].url;
+            } else if (imagesData[0].path) {
+              imageUrl = imagesData[0].path;
+            } else {
+              // Objenin ilk değerini kullan
+              const firstValue = Object.values(imagesData[0])[0];
+              if (typeof firstValue === 'string') {
+                imageUrl = firstValue;
+              }
+            }
+          } else if (typeof imagesData[0] === 'string') {
+            // Dizi içinde string durumu
+            imageUrl = imagesData[0];
+          }
+        }
+      }
+      // 3. Obje formatı kontrolü
+      else if (typeof imagesData === 'object' && imagesData !== null) {
+        console.log("Obje formatında:", imagesData);
+        
+        // url veya path direkt özellik olarak var mı?
+        if (imagesData.url) {
+          imageUrl = imagesData.url;
+        } else if (imagesData.path) {
+          imageUrl = imagesData.path;
+        }
+        // İlk özelliği kullan
+        else if (Object.keys(imagesData).length > 0) {
+          const firstKey = Object.keys(imagesData)[0];
+          const firstValue = imagesData[firstKey];
+          
+          if (typeof firstValue === 'string') {
+            imageUrl = firstValue;
+          } else if (typeof firstValue === 'object' && firstValue !== null) {
+            if (firstValue.url) {
+              imageUrl = firstValue.url;
+            } else if (firstValue.path) {
+              imageUrl = firstValue.path;
+            }
+          }
         }
       }
     } catch (e) {
-      console.error("Error parsing/processing image data:", e, imagesData);
-      // If parsing fails but it looks like a URL, try using it directly
-      if (typeof imagesData === 'string' && (imagesData.startsWith('/') || imagesData.startsWith('http'))) {
-          imageUrl = imagesData;
-      }
+      console.error("Resim verisini işlerken hata:", e, imagesData);
     }
-    return imageUrl ? getFullImageUrl(imageUrl) : null; // Return the full URL or null
+    
+    if (!imageUrl) {
+      console.log("Resim URL'si bulunamadı!");
+      return null;
+    }
+    
+    console.log("İşlenmiş resim URL'si:", imageUrl);
+    // Cloudinary URL kontrolü
+    if (imageUrl && imageUrl.includes('cloudinary.com')) {
+      return imageUrl; // Cloudinary URL'ini olduğu gibi döndür
+    }
+    return getFullImageUrl(imageUrl);
+  };
+
+  // Resimli gönderileri ayıran fonksiyon - optimize edildi
+  const filterImagePosts = (postsData) => {
+    return postsData.filter(post => {
+      if (!post) return false;
+      
+      // 1. Basit kontrol: Post'da images alanı var mı?
+      if (!post.images) return false;
+      
+      // 2. images bir string ise:
+      if (typeof post.images === 'string') {
+        // a. JSON string olabilir
+        try {
+          const parsed = JSON.parse(post.images);
+          // JSON olarak parse edilebildi, içeriği kontrol et
+          if (Array.isArray(parsed) && parsed.length > 0) return true;
+          if (typeof parsed === 'object' && parsed !== null && Object.keys(parsed).length > 0) return true;
+          return false;
+        } catch (e) {
+          // b. URL string olabilir
+          return post.images.startsWith('/') || post.images.startsWith('http');
+        }
+      }
+      
+      // 3. Array ise:
+      if (Array.isArray(post.images)) {
+        return post.images.length > 0;
+      }
+      
+      // 4. Obje ise:
+      if (typeof post.images === 'object' && post.images !== null) {
+        return Object.keys(post.images).length > 0;
+      }
+      
+      return false;
+    });
   };
 
   // Helper function to check if there are multiple images
@@ -365,8 +556,11 @@ const Profile = () => {
   };
 
   const processUrl = (url) => {
-    // Eğer URL zaten mutlak bir URL ise, olduğu gibi döndür
-    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    // Eğer URL null veya undefined ise null döndür
+    if (!url) return null;
+    
+    // Eğer URL zaten mutlak bir URL ise (http://, https://, veya Cloudinary URL'i)
+    if (url.startsWith('http://') || url.startsWith('https://') || url.includes('cloudinary.com')) {
       return url;
     }
     // Değilse, API_BASE_URL'yi başına ekle
@@ -409,21 +603,46 @@ const Profile = () => {
   };
   
   const handlePostClick = (post) => {
+    // Post indexini bul
+    const postIndex = imagePosts.findIndex(p => p.id === post.id);
+    setSelectedPostIndex(postIndex !== -1 ? postIndex : 0);
+    
     // Görsel/Video URL'lerini tam URL'ye dönüştür
     let processedImages = null;
     if (post.images) {
       try {
-        // Check if it's already a URL string
-        if (typeof post.images === 'string' && (post.images.startsWith('/') || post.images.startsWith('http'))) {
-           processedImages = [{ url: getFullImageUrl(post.images) }]; // Treat as a single image array
+        // Check if it's already a URL string or Cloudinary URL
+        if (typeof post.images === 'string' && (
+          post.images.startsWith('/') || 
+          post.images.startsWith('http') || 
+          post.images.includes('cloudinary.com')
+        )) {
+           // Cloudinary URL kontrolü - olduğu gibi bırak
+           if (post.images.includes('cloudinary.com')) {
+             processedImages = [{ url: post.images }];
+           } else {
+             processedImages = [{ url: getFullImageUrl(post.images) }]; // Treat as a single image array
+           }
         } else {
           const parsedImages = typeof post.images === 'string' ? JSON.parse(post.images) : post.images;
           if (Array.isArray(parsedImages)) {
-            processedImages = parsedImages.map(img => ({ ...img, url: getFullImageUrl(img.url) }));
+            processedImages = parsedImages.map(img => {
+              // URL değerini kontrol et
+              if (img.url && img.url.includes('cloudinary.com')) {
+                return { ...img, url: img.url }; // Cloudinary URL'ini olduğu gibi bırak
+              } else {
+                return { ...img, url: getFullImageUrl(img.url) };
+              }
+            });
           } else if (typeof parsedImages === 'object' && parsedImages !== null) {
              // Handle potential object format if necessary
             processedImages = Object.entries(parsedImages).reduce((acc, [key, img]) => {
-              acc[key] = { ...img, url: getFullImageUrl(img.url) };
+              // URL değerini kontrol et
+              if (img.url && img.url.includes('cloudinary.com')) {
+                acc[key] = { ...img, url: img.url }; // Cloudinary URL'ini olduğu gibi bırak
+              } else {
+                acc[key] = { ...img, url: getFullImageUrl(img.url) };
+              }
               return acc;
             }, {});
           }
@@ -431,8 +650,13 @@ const Profile = () => {
       } catch (e) {
         console.error("Image parse/processing error in handlePostClick:", e, post.images);
          // If parsing fails but it looks like a URL, treat as single image
-         if (typeof post.images === 'string' && (post.images.startsWith('/') || post.images.startsWith('http'))) {
-             processedImages = [{ url: getFullImageUrl(post.images) }];
+         if (typeof post.images === 'string') {
+             // Cloudinary URL kontrolü - olduğu gibi bırak
+             if (post.images.includes('cloudinary.com')) {
+               processedImages = [{ url: post.images }];
+             } else if (post.images.startsWith('/') || post.images.startsWith('http')) {
+               processedImages = [{ url: getFullImageUrl(post.images) }];
+             }
          }
       }
     }
@@ -454,14 +678,50 @@ const Profile = () => {
     setIsModalOpen(true);
   };
 
+  // Post gezinme fonksiyonları
+  const navigateToNextPost = () => {
+    if (selectedPostIndex < imagePosts.length - 1) {
+      const nextPost = imagePosts[selectedPostIndex + 1];
+      handlePostClick(nextPost);
+    }
+  };
+  
+  const navigateToPreviousPost = () => {
+    if (selectedPostIndex > 0) {
+      const prevPost = imagePosts[selectedPostIndex - 1];
+      handlePostClick(prevPost);
+    }
+  };
+
   const handleReelClick = (reel) => {
-     setSelectedReel({
-        ...reel,
-        videoURL: getFullVideoUrl(reel.videoURL),
+    console.log("Tıklanan reel:", reel);
+    
+    // Oluşturulan thumbnail varsa onu da reele ekleyelim
+    let thumbnailToUse = reel.thumbnail;
+    
+    // Otomatik oluşturulan thumbnail varsa onu kullan
+    if (generatedThumbnails[reel.id]) {
+      console.log(`${reel.id} için otomatik oluşturulan thumbnail kullanılıyor`);
+      thumbnailToUse = generatedThumbnails[reel.id];
+    }
+    // API'den gelen thumbnail varsa ve placeholder değilse onu kullan
+    else if (reel.thumbnail && !reel.thumbnail.includes("ui-avatars.com")) {
+      console.log(`${reel.id} için API'den gelen thumbnail kullanılıyor`);
+      thumbnailToUse = reel.thumbnail;
+    }
+    // Hiçbiri yoksa placeholder kullan
+    else {
+      console.log(`${reel.id} için placeholder thumbnail kullanılıyor`);
+      thumbnailToUse = `https://ui-avatars.com/api/?name=Video&background=000000&color=0affd9&size=300`;
+    }
+    
+    setSelectedReel({
+      ...reel,
+      thumbnail: thumbnailToUse,
       user: { // Reel'e ait kullanıcı bilgisi, profil bilgileriyle aynı
         ...user,
         profileImage: user?.profile_picture ? getFullImageUrl(user.profile_picture) : null,
-        username: user?.username // reel objesinde user.username yoksa diye
+        username: user?.username 
       }
     });
     setIsReelModalOpen(true);
@@ -1030,29 +1290,63 @@ const Profile = () => {
                       {activeTab === "reels" && (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-1 md:gap-2">
                           {reels.length > 0 ? (
-                        reels.map((reel) => (
-                              <div
-                            key={reel.id}
-                            className="relative aspect-[9/16] cursor-pointer group overflow-hidden rounded-md border border-[#0affd9]/10"
-                                onClick={() => handleReelClick(reel)}
-                              >
-                            <img
-                              src={reel.thumbnail ? getFullImageUrl(reel.thumbnail) : `https://ui-avatars.com/api/?name=Reel&background=000000&color=0affd9&size=300`}
-                              alt={`Reel by ${user.username}`}
-                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                              <div className="flex flex-col items-center text-white space-y-1">
-                                <span className="flex items-center">
-                                  <Heart size={16} className="mr-1 text-[#0affd9]" /> {reel.likeCount || 0}
-                                </span>
-                                <span className="flex items-center">
-                                  <MessageCircle size={16} className="mr-1 text-[#0affd9]" /> {reel.commentCount || 0}
-                                </span>
-                                  </div>
+                        reels.map((reel) => {
+                          // Öncelikle thumbnail değerini kontrol edelim
+                          console.log(`Render edilecek reel: ${reel.id}, Thumbnail: ${reel.thumbnail}`);
+                          
+                          // Thumbnail seçim mantığı: otomatik oluşturulan > API'den gelen > placeholder
+                          let thumbnailUrl;
+                          
+                          if (generatedThumbnails[reel.id]) {
+                            // Otomatik oluşturulan thumbnail varsa onu kullan
+                            thumbnailUrl = generatedThumbnails[reel.id];
+                          } else if (reel.thumbnail && !reel.thumbnail.includes("ui-avatars.com")) {
+                            // API'den gelen ve placeholder olmayan thumbnail varsa
+                            thumbnailUrl = reel.thumbnail;
+                          } else {
+                            // Hiçbiri yoksa placeholder kullan
+                            thumbnailUrl = `https://ui-avatars.com/api/?name=Video&background=000000&color=0affd9&size=300`;
+                          }
+                          
+                          return (
+                            <div
+                              key={reel.id}
+                              className="relative aspect-[9/16] cursor-pointer group overflow-hidden rounded-md border border-[#0affd9]/10"
+                              onClick={() => handleReelClick(reel)}
+                            >
+                              {/* Thumbnail görüntüsü - oluşturulan, API'den gelen veya placeholder */}
+                              <img
+                                src={thumbnailUrl}
+                                alt={`Reel by ${user.username}`}
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                onError={(e) => {
+                                  console.error(`Resim yüklenemedi: ${thumbnailUrl}`);
+                                  e.target.onerror = null; // Sonsuz döngüyü engelle
+                                  e.target.src = `https://ui-avatars.com/api/?name=Video&background=000000&color=0affd9&size=300`; // Yedek görüntü
+                                }}
+                              />
+                              
+                              {/* Video ikonu - Bu reelin bir video olduğunu göster */}
+                              <div className="absolute top-2 right-2 bg-black/50 rounded-full p-1.5">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#0affd9]" viewBox="0 0 20 20" fill="currentColor">
+                                  <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                                </svg>
+                              </div>
+                              
+                              {/* Hover overlay */}
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                                <div className="flex flex-col items-center text-white space-y-1">
+                                  <span className="flex items-center">
+                                    <Heart size={16} className="mr-1 text-[#0affd9]" /> {reel.likeCount || 0}
+                                  </span>
+                                  <span className="flex items-center">
+                                    <MessageCircle size={16} className="mr-1 text-[#0affd9]" /> {reel.commentCount || 0}
+                                  </span>
                                 </div>
                               </div>
-                            ))
+                            </div>
+                          );
+                        })
                           ) : (
                         <div className="col-span-3 p-8 text-center">
                           <p className="text-gray-400">Henüz reels paylaşılmamış</p>
@@ -1099,7 +1393,21 @@ const Profile = () => {
 
       {/* Gönderi Modal'ı */}
       {isModalOpen && selectedPost && (
-        <PostShow post={selectedPost} onClose={closeModal} />
+        <PostShow 
+          post={selectedPost} 
+          onClose={closeModal} 
+          isOpen={isModalOpen} 
+          profileUser={user}
+          onNext={navigateToNextPost}
+          onPrevious={navigateToPreviousPost}
+          onPostDelete={postId => {
+            // Silinen gönderiyi listeden kaldır
+            setPosts(prev => prev.filter(p => p.id !== postId));
+            // Modal'ı kapat
+            closeModal();
+            toast.success('Gönderi başarıyla silindi');
+          }}
+        />
       )}
       
       {/* Reel Modal'ı */}

@@ -377,7 +377,7 @@ func ToggleLike(c *gin.Context) {
 	// Kullanıcı kimliğini al
 	userID, exists := c.Get("userID")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Kullanıcı oturumu bulunamadı"})
+		c.JSON(http.StatusUnauthorized, gin.H{"success": false, "error": "Kullanıcı oturumu bulunamadı"})
 		return
 	}
 
@@ -385,14 +385,14 @@ func ToggleLike(c *gin.Context) {
 	postIDStr := c.Param("id")
 	postID, err := strconv.Atoi(postIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz gönderi ID'si"})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Geçersiz gönderi ID'si"})
 		return
 	}
 
 	// Postu kontrol et
 	var post models.Post
 	if err := database.DB.First(&post, postID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Gönderi bulunamadı"})
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "Gönderi bulunamadı"})
 		return
 	}
 
@@ -489,34 +489,39 @@ func UnlikePost(c *gin.Context) {
 	})
 }
 
-// Gönderiyi kaydetme
+// SavePost gönderiyi kaydeder
 func SavePost(c *gin.Context) {
 	userID, _ := c.Get("userID")
 	postIDStr := c.Param("id")
 	postID, _ := strconv.Atoi(postIDStr)
 
-	// Gönderiyi kontrol et
+	// Gönderiyi kontrol et
 	var post models.Post
 	if err := database.DB.First(&post, postID).Error; err != nil {
 		c.JSON(http.StatusNotFound, Response{
 			Success: false,
-			Message: "Gönderi bulunamadı",
+			Message: "Gönderi bulunamadı",
 		})
 		return
 	}
 
-	// Kaydı kontrol et (zaten kaydedilmiş mi?)
+	// Kaydı kontrol et (zaten kaydedilmiş mi?)
 	var existingSave models.SavedPost
 	result := database.DB.Where("user_id = ? AND post_id = ?", userID, postID).First(&existingSave)
 	if result.RowsAffected > 0 {
-		c.JSON(http.StatusBadRequest, Response{
-			Success: false,
-			Message: "Bu gönderi zaten kaydedilmiş",
+		// Zaten kaydedilmiş durumunu başarısız değil, özel bir durum olarak döndür
+		c.JSON(http.StatusOK, Response{
+			Success: true,
+			Message: "Bu gönderi zaten kaydedilmiş",
+			Data: map[string]interface{}{
+				"saved":        true,
+				"alreadySaved": true,
+			},
 		})
 		return
 	}
 
-	// Kayıt oluştur - created_at sütunu olmadığı için field list'ten çıkarıyoruz
+	// Kayıt oluştur - created_at sütunu olmadığı için field list'ten çıkarıyoruz
 	savedPost := models.SavedPost{
 		UserID: userID.(uint),
 		PostID: uint(postID),
@@ -526,29 +531,32 @@ func SavePost(c *gin.Context) {
 	if err := database.DB.Omit("created_at").Create(&savedPost).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{
 			Success: false,
-			Message: "Gönderi kaydedilirken bir hata oluştu: " + err.Error(),
+			Message: "Gönderi kaydedilirken bir hata oluştu: " + err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, Response{
 		Success: true,
-		Message: "Gönderi başarıyla kaydedildi",
+		Message: "Gönderi başarıyla kaydedildi",
+		Data: map[string]interface{}{
+			"saved": true,
+		},
 	})
 }
 
-// Gönderi kaydını kaldırma
+// Gönderi kaydını kaldırma
 func UnsavePost(c *gin.Context) {
 	userID, _ := c.Get("userID")
 	postIDStr := c.Param("id")
 	postID, _ := strconv.Atoi(postIDStr)
 
-	// Gönderiyi kontrol et
+	// Gönderiyi kontrol et
 	var post models.Post
 	if err := database.DB.First(&post, postID).Error; err != nil {
 		c.JSON(http.StatusNotFound, Response{
 			Success: false,
-			Message: "Gönderi bulunamadı",
+			Message: "Gönderi bulunamadı",
 		})
 		return
 	}
@@ -556,16 +564,24 @@ func UnsavePost(c *gin.Context) {
 	// Kaydı sil
 	result := database.DB.Where("user_id = ? AND post_id = ?", userID, postID).Delete(&models.SavedPost{})
 	if result.RowsAffected == 0 {
-		c.JSON(http.StatusBadRequest, Response{
-			Success: false,
-			Message: "Bu gönderi kaydedilmemiş",
+		// Kaydedilmemiş gönderi durumunu başarısız değil, özel bir durum olarak döndür
+		c.JSON(http.StatusOK, Response{
+			Success: true,
+			Message: "Bu gönderi kaydedilmemiş",
+			Data: map[string]interface{}{
+				"saved":    false,
+				"notSaved": true,
+			},
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, Response{
 		Success: true,
-		Message: "Gönderi kaydı başarıyla kaldırıldı",
+		Message: "Gönderi kaydı başarıyla kaldırıldı",
+		Data: map[string]interface{}{
+			"saved": false,
+		},
 	})
 }
 

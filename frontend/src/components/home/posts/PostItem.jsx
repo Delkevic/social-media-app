@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../../services/api';
-import { API_BASE_URL } from '../../../config/constants';
+import { API_BASE_URL, DEFAULT_PLACEHOLDER_IMAGE, DEFAULT_AVATAR_URL } from '../../../config/constants';
 import { formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, X, Trash2, AlertCircle, Bug } from 'lucide-react';
 import { createTestPost } from '../../../services/api';
+import PostShow from '../../profile/postShow';
 
-const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
+const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) => {
   // Prop kontrolleri
   if (!post) {
     console.error('PostItem: post prop\'u gerekli');
@@ -30,6 +31,11 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
   const [isLiking, setIsLiking] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [showPostModal, setShowPostModal] = useState(false);
+  const [selectedPost, setSelectedPost] = useState(null);
+  const [likeCount, setLikeCount] = useState(post?.likes || 0);
+  const [isLiked, setIsLiked] = useState(post?.liked || false);
+  const [commentCount, setCommentCount] = useState(post?.comment_count || post?.comments_count || post?.comments || 0);
 
   // Debug mod için Shift tuş basımı dinleyicisi
   useEffect(() => {
@@ -187,12 +193,17 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
     setIsLiking(true);
     
     // Şu anki beğeni durumunu al
-    const currentLikedState = post.liked;
-    const currentLikeCount = post.likes || 0;
+    const currentLikedState = isLiked;
+    const currentLikeCount = likeCount;
     
-    // Optimistik UI güncellemesi (hemen güncelle, sonra doğrula)
-    post.liked = !currentLikedState;
-    post.likes = currentLikedState ? Math.max(0, currentLikeCount - 1) : currentLikeCount + 1;
+    // State'i optimistik olarak güncelle
+    setIsLiked(!currentLikedState);
+    setLikeCount(prev => currentLikedState ? Math.max(0, prev - 1) : prev + 1);
+    
+    // Eğer onLike prop'u varsa, parent bileşene değişikliği bildir
+    if (onLike) {
+      onLike(post.id);
+    }
     
     try {
       // Sunucuya istek gönder
@@ -200,23 +211,40 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
         ? await api.posts.unlike(post.id) 
         : await api.posts.like(post.id);
       
+      console.log(`Post ${post.id} beğeni API yanıtı:`, response);
+      
       if (!response.success) {
+        // Hata durumunda önceki duruma geri dön
+        setIsLiked(currentLikedState);
+        setLikeCount(currentLikeCount);
         throw new Error(response.message || 'Beğeni işlemi başarısız oldu');
       }
       
-      // Sunucudan dönen doğru like sayısını kullanıyoruz (varsa)
-      if (response.data && typeof response.data.likeCount !== 'undefined') {
-        post.likes = response.data.likeCount;
+      // API yanıtında beğeni sayısı döndüyse, onu kullan
+      if (response.data) {
+        // Farklı API response formatlarını kontrol et
+        if (typeof response.data.likeCount !== 'undefined') {
+          setLikeCount(response.data.likeCount);
+          console.log(`API'den likeCount alındı: ${response.data.likeCount}`);
+        } else if (typeof response.data.likes !== 'undefined') {
+          setLikeCount(response.data.likes);
+          console.log(`API'den likes alındı: ${response.data.likes}`);
+        } else if (typeof response.data === 'number') {
+          // Bazen API doğrudan sayı dönebilir
+          setLikeCount(response.data);
+          console.log(`API'den sayısal değer alındı: ${response.data}`);
+        }
       }
       
-      console.log(`Post ${post.id} beğeni durumu: ${post.liked ? 'beğenildi' : 'beğeni kaldırıldı'}, sayı: ${post.likes}`);
+      // Parent component'in kullanması için post nesnesine değerleri ata
+      // ama direkt state güncellemesi için kullanma
+      post.liked = !currentLikedState;
+      post.likes = likeCount;
+      
+      console.log(`Post ${post.id} beğeni durumu güncellendi: ${!currentLikedState ? 'beğenildi' : 'beğeni kaldırıldı'}, sayı: ${likeCount}`);
       
     } catch (error) {
       console.error('Beğeni işlemi başarısız:', error);
-      
-      // Hata durumunda orijinal duruma geri dön
-      post.liked = currentLikedState;
-      post.likes = currentLikeCount;
       
       // Kullanıcıya bildir
       setError('Beğeni işlemi başarısız oldu: ' + (error.message || 'Bilinmeyen hata'));
@@ -230,8 +258,16 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
     // Şu anki kaydetme durumunu al
     const currentSavedState = post.saved;
     
-    // Optimistik UI güncellemesi
-    post.saved = !currentSavedState;
+    // Optimistik UI güncellemesi için bir kopya oluştur
+    const updatedPost = {
+      ...post,
+      saved: !currentSavedState
+    };
+    
+    // Parent bileşene bildir (varsa)
+    if (onSave) {
+      onSave(post.id);
+    }
     
     try {
       // Sunucuya istek gönder
@@ -243,13 +279,10 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
         throw new Error(response.message || 'Gönderi kaydetme işlemi başarısız oldu');
       }
       
-      console.log(`Post ${post.id} kaydetme durumu: ${post.saved ? 'kaydedildi' : 'kaydı kaldırıldı'}`);
+      console.log(`Post ${post.id} kaydetme durumu: ${updatedPost.saved ? 'kaydedildi' : 'kaydı kaldırıldı'}`);
       
     } catch (error) {
       console.error('Kaydetme işlemi başarısız:', error);
-      
-      // Hata durumunda orijinal duruma geri dön
-      post.saved = currentSavedState;
       
       // Kullanıcıya bildir
       setError('Kaydetme işlemi başarısız oldu: ' + (error.message || 'Bilinmeyen hata'));
@@ -329,17 +362,24 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       const commentText = comment.trim();
       setComment('');
       
+      // Optimistik UI güncellemesi (yorum sayısını artır)
+      setCommentCount(prev => prev + 1);
+      
       // API'ye yorumu gönder
       const response = await api.posts.addComment(safePostId, commentText, parentId);
       
       console.log('Yorum gönderme yanıtı:', response);
       
       if (!response?.success) {
+        // Başarısız olduysa optimistik güncellemeyi geri al
+        setCommentCount(prev => Math.max(0, prev - 1));
         throw new Error(response?.message || 'Yorum gönderilirken bir hata oluştu');
       }
       
-      // Gönderi yorum sayısını güncelle
-      post.comments = (post.comments || 0) + 1;
+      // Gönderi yorum sayısını güncelle (post objesi için)
+      post.comments = commentCount;
+      post.comment_count = commentCount;
+      post.comments_count = commentCount;
       
       // Yeni yorumu ekle (API yanıtı yorumu içeriyorsa)
       if (response.data && response.data.comment) {
@@ -417,7 +457,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
   const getFullImageUrl = (imageUrl) => {
     if (!imageUrl) {
       console.log("Boş görsel URL'i, varsayılan görüntü döndürülüyor");
-      return `${API_BASE_URL}/uploads/images/no-image.jpg`; // Backend'deki varsayılan resim
+      return DEFAULT_PLACEHOLDER_IMAGE; // Varsayılan resim
     }
     
     try {
@@ -429,14 +469,14 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
           imageUrl = imageUrl.path;
         } else {
           console.error("Nesne türünde görsel URL'i beklenmeyen formatta:", imageUrl);
-          return `${API_BASE_URL}/uploads/images/missing-image.jpg`; // Backend'deki yedek resim
+          return DEFAULT_PLACEHOLDER_IMAGE; // Varsayılan resim
         }
       }
       
       // URL string olmalı
       if (typeof imageUrl !== 'string') {
         console.error("Görsel URL'i string değil:", typeof imageUrl, imageUrl);
-        return `${API_BASE_URL}/uploads/images/invalid-image.jpg`; // Backend'deki yedek resim
+        return DEFAULT_PLACEHOLDER_IMAGE; // Varsayılan resim
       }
       
       // URL zaten HTTP/HTTPS ile başlıyorsa doğrudan kullan
@@ -471,7 +511,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       return `${API_BASE_URL}/${imageUrl}`;
     } catch (error) {
       console.error("URL oluşturma hatası:", error, "Orijinal URL:", imageUrl);
-      return `${API_BASE_URL}/uploads/images/error-image.jpg`; // Backend'deki hata resmi
+      return DEFAULT_PLACEHOLDER_IMAGE; // Varsayılan resim
     }
   };
 
@@ -526,11 +566,57 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
     }
   };
 
+  const handleImageError = (e) => {
+    console.error("Görsel yükleme hatası:", e.target.src);
+    e.target.onerror = null; // Sonsuz hata döngüsünü önle
+    e.target.src = DEFAULT_PLACEHOLDER_IMAGE; // Varsayılan resim
+  };
+
   const getImageArray = () => {
+    // Tüm olası görsel dizisi alanlarını kontrol et
     if (post.imageUrls && post.imageUrls.length > 0) return post.imageUrls;
     if (post.images && post.images.length > 0) return post.images;
     if (post.media && post.media.length > 0) return post.media;
+    
+    // Büyük harfle başlayan alanları kontrol et
+    if (post.ImageUrls && post.ImageUrls.length > 0) return post.ImageUrls;
+    if (post.Images && post.Images.length > 0) return post.Images;
+    if (post.Media && post.Media.length > 0) return post.Media;
+    
+    // Tekil görsel alanlarını kontrol et
     if (post.image) return [post.image];
+    if (post.coverImage) return [post.coverImage];
+    if (post.thumbnail) return [post.thumbnail];
+    if (post.Image) return [post.Image];
+    if (post.CoverImage) return [post.CoverImage];
+    if (post.Thumbnail) return [post.Thumbnail];
+    
+    // String olarak saklanmış JSON dizilerini kontrol et
+    if (typeof post.images === 'string') {
+      try {
+        const parsedImages = JSON.parse(post.images);
+        if (Array.isArray(parsedImages) && parsedImages.length > 0) {
+          return parsedImages;
+        }
+      } catch (e) {
+        // JSON parse hatası, tek bir URL olabilir
+        return [post.images];
+      }
+    }
+    
+    if (typeof post.media === 'string') {
+      try {
+        const parsedMedia = JSON.parse(post.media);
+        if (Array.isArray(parsedMedia) && parsedMedia.length > 0) {
+          return parsedMedia;
+        }
+      } catch (e) {
+        // JSON parse hatası, tek bir URL olabilir
+        return [post.media];
+      }
+    }
+    
+    // Hiçbir görsel bulunamadı
     return [];
   };
 
@@ -553,6 +639,59 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
   const currentUserProfileImageUrl = currentUser?.profileImage 
     ? (currentUser.profileImage.startsWith('http') ? currentUser.profileImage : `${API_BASE_URL}/${currentUser.profileImage}`)
     : null;
+
+  // Gönderi modalını açma fonksiyonu
+  const handlePostClick = () => {
+    // Görsele tıklandığında modalı aç
+    setShowPostModal(true);
+    setSelectedPost(post);
+    console.log('Gönderi tıklandı, modal açılıyor');
+  };
+
+  // Yorum butonuna tıklandığında modal açılacak yeni fonksiyon
+  const handleCommentClick = (e) => {
+    e.stopPropagation(); // Event propagation'ı durdur
+    setShowPostModal(true);
+    setSelectedPost(post);
+    console.log('Yorum butonu tıklandı, modal açılıyor');
+  };
+
+  // Gönderi silme işleyicisi - hem normal silme hem de modal üzerinden silme için
+  const handlePostDelete = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+    
+    try {
+      const response = await api.posts.delete(post.id);
+      console.log('Gönderi silme yanıtı:', response);
+      
+      if (response.success) {
+        // Modalı kapat
+        setShowPostModal(false);
+        
+        // Parent bileşene silme işlemini bildir
+        if (typeof onDelete === 'function') {
+          onDelete(post.id);
+        }
+      } else {
+        throw new Error(response.message || 'Gönderi silinirken bir hata oluştu');
+      }
+    } catch (error) {
+      console.error('Gönderi silme hatası:', error);
+      alert('Gönderi silinirken bir hata oluştu: ' + error.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Post değiştiğinde beğeni sayısını ve yorum sayısını güncelle
+  useEffect(() => {
+    if (post) {
+      setLikeCount(post.likes || 0);
+      setIsLiked(post.liked || false);
+      setCommentCount(post.comment_count || post.comments_count || post.comments || 0);
+    }
+  }, [post?.id, post?.likes, post?.liked, post?.comment_count, post?.comments_count, post?.comments]);
 
   // ---- YORUM BİLEŞENİ ----
   const Comment = ({ comment, onReply, currentUser, setComments }) => {
@@ -584,7 +723,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
 
     const commentUserProfileImageUrl = comment.user?.profileImage 
       ? (comment.user.profileImage.startsWith('http') ? comment.user.profileImage : `${API_BASE_URL}/${comment.user.profileImage}`)
-      : null;
+      : DEFAULT_AVATAR_URL;
 
     const handleReplySubmit = async (e) => {
       e.preventDefault();
@@ -749,13 +888,13 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
         {/* Yorum Yapan Kullanıcı Avatarı */}
         <Link to={`/profile/${comment.user?.username}`} className="flex-shrink-0">
           {commentUserProfileImageUrl ? (
-            <img src={commentUserProfileImageUrl} alt={comment.user?.username} className="w-8 h-8 rounded-full object-cover bg-gray-700" />
+            <img src={commentUserProfileImageUrl} alt={comment.user?.username} className="w-8 h-8 rounded-full object-cover bg-gray-700" onError={handleImageError} />
           ) : (
             <div className="w-8 h-8 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold">
               {getInitial(comment.user?.username)}
-                </div>
-              )}
-            </Link>
+            </div>
+          )}
+        </Link>
         
         <div className="flex-1">
           {/* Kullanıcı Adı ve Yorum İçeriği */}
@@ -823,7 +962,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
             <form onSubmit={handleReplySubmit} className="mt-2 flex space-x-2 items-start">
               <Link to={`/profile/${currentUser?.username}`} className="flex-shrink-0">
                  {currentUserProfileImageUrl ? (
-                   <img src={currentUserProfileImageUrl} alt={currentUser?.username} className="w-6 h-6 rounded-full object-cover bg-gray-700" />
+                   <img src={currentUserProfileImageUrl} alt={currentUser?.username} className="w-6 h-6 rounded-full object-cover bg-gray-700" onError={handleImageError} />
                  ) : (
                    <div className="w-6 h-6 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] text-xs font-bold">
                      {getInitial(currentUser?.username)}
@@ -865,24 +1004,29 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
   // ---- YORUM BİLEŞENİ SONU ----
 
   return (
-    <div className="rounded-2xl overflow-hidden bg-black/60 border border-[#0affd9]/20 backdrop-blur-lg shadow-lg mb-6">
-      {/* Gönderi Başlığı */} 
-      <div className="flex items-center justify-between p-3 border-b border-[#0affd9]/20">
-        <Link to={`/profile/${post.user?.username}`} className="flex items-center space-x-3 group">
-          {userProfileImageUrl ? (
-            <img src={userProfileImageUrl} alt={post.user?.username} className="w-10 h-10 rounded-full object-cover border-2 border-transparent group-hover:border-[#0affd9] transition-colors" />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold border-2 border-transparent group-hover:border-[#0affd9] transition-colors">
-              {post.user?.username ? post.user.username[0].toUpperCase() : 'P'}
+    <div className="bg-black/30 border border-[#0affd9]/10 rounded-2xl p-4 mb-6 overflow-hidden cursor-pointer" onClick={handlePostClick}>
+      {/* Üst Kısım - Kullanıcı Bilgisi */}
+      <div className="flex justify-between items-center mb-4">
+        <Link to={`/profile/${post.user?.username || post.username}`} className="flex items-center">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#0affd9] to-blue-500 flex items-center justify-center text-white font-bold overflow-hidden">
+            {post.user?.profile_picture || post.user?.profileImage ? (
+              <img 
+                src={getFullImageUrl(post.user?.profile_picture || post.user?.profileImage)} 
+                alt={post.user?.username || post.username}
+                className="w-full h-full object-cover"
+                onError={handleImageError}
+              />
+            ) : (
+              (post.user?.username || post.username || "?").charAt(0).toUpperCase()
+            )}
+          </div>
+          <div className="ml-3">
+            <div className="font-semibold text-white">
+              {post.user?.username || post.username || "İsimsiz Kullanıcı"}
             </div>
-          )}
-          <div>
-            <p className="font-semibold text-sm text-white group-hover:text-[#0affd9] transition-colors">
-              {post.user?.username || 'Bilinmeyen Kullanıcı'}
-            </p>
-            <p className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">
-              {formatDate(post.createdAt || post.CreatedAt)}
-            </p>
+            <div className="text-xs text-gray-400">
+              {formatDate(post.created_at || post.createdAt)}
+            </div>
           </div>
         </Link>
         
@@ -911,7 +1055,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
                 <div className="absolute right-0 mt-2 w-40 bg-gray-900 border border-[#0affd9]/20 rounded-lg shadow-lg z-10 py-1">
                   {currentUser?.id === post.user?.id && (
                   <button
-                    onClick={handleDelete}
+                    onClick={handlePostDelete}
                     disabled={isDeleting}
                       className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-red-600/20 disabled:opacity-50 transition-colors flex items-center"
                   >
@@ -942,27 +1086,8 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       )}
       
       {/* Post içeriği */}
-      <div className="px-3 py-2 text-white">
-        {post.caption && (
-          <h3 className="text-lg font-semibold mb-2">{post.caption}</h3>
-        )}
-        <p className="text-sm">{post.content}</p>
-        
-        {/* Etiketler */}
-        {post.tags && post.tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {post.tags.map((tag, index) => (
-              tag.trim() && (
-                <span 
-                  key={index} 
-                  className="inline-block px-2 py-1 rounded-md text-xs bg-[#0affd9]/10 text-[#0affd9]"
-                >
-                  #{tag.trim()}
-                </span>
-              )
-            ))}
-          </div>
-        )}
+      <div className="mb-4" onClick={handlePostClick}>
+        <p className="text-white whitespace-pre-wrap break-words">{post.content}</p>
       </div>
       
       {/* Gönderi Medyası (Resim veya Video) */} 
@@ -992,18 +1117,17 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
                 }
                 
                 return (
-          <div className="relative bg-black">
-            {imagesToUse && imagesToUse.length > 0 && (
-              <img
+          <div className="relative mb-4 rounded-xl overflow-hidden" onClick={handlePostClick}>
+            <div 
+              className="aspect-[4/3] bg-black" 
+            >
+              <img 
                 src={getFullImageUrl(imagesToUse[currentImageIndex])}
-                alt={`Gönderi resmi ${currentImageIndex + 1}`}
-                className="w-full h-auto max-h-[70vh] object-contain"
-                      onError={(e) => {
-                  console.error("Görsel yükleme hatası:", e.target.src);
-                  e.target.src = `${API_BASE_URL}/uploads/images/image-error.jpg`; // Backend'deki hata resmi
-                }}
+                alt="Post content"
+                className="w-full h-full object-contain"
+                onError={handleImageError}
               />
-            )}
+            </div>
             
             {hasVideoUrl && (
               <video
@@ -1052,31 +1176,26 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       })()}
       
       {/* Etkileşim Butonları */} 
-      <div className="flex justify-between items-center p-3 border-t border-[#0affd9]/20">
-        <div className="flex space-x-4 items-center">
-          {/* Beğen Butonu */} 
-        <button 
-          onClick={handleLike}
-          disabled={isLiking}
-            className={`flex items-center space-x-1 transition-colors ${post.liked ? 'text-[#0affd9]' : 'text-gray-400 hover:text-white'} disabled:opacity-50`}
-            aria-label={post.liked ? 'Beğeniyi geri al' : 'Beğen'}
-           >
-             <Heart size={22} className={`${post.liked ? 'fill-current' : ''}`} />
-             <span className="text-sm font-medium">{post.likeCount || post.likes || 0}</span>
-        </button>
-        
-          {/* Yorum Butonu */} 
-        <button 
-          onClick={() => setShowComments(!showComments)}
-             className="flex items-center space-x-1 text-gray-400 hover:text-white transition-colors"
-             aria-label="Yorumları göster/gizle"
-           >
-             <MessageCircle size={22} />
-             <span className="text-sm font-medium">{comments.length || post.commentCount || 0}</span>
-        </button>
-        
+      <div className="flex justify-between items-center mb-2">
+        <div className="flex space-x-4">
+          <button 
+            className={`flex items-center space-x-1 ${isLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
+            onClick={handleLike}
+          >
+            <Heart className={`h-5 w-5 ${isLiked ? 'fill-red-500' : ''}`} />
+            <span>{likeCount}</span>
+          </button>
+          
+          <button 
+            className="flex items-center space-x-1 text-gray-400 hover:text-[#0affd9]"
+            onClick={handleCommentClick}
+          >
+            <MessageCircle className="h-5 w-5" />
+            <span>{commentCount}</span>
+          </button>
+          
           {/* Gönder Butonu (Paylaşım için placeholder) */} 
-        <button 
+          <button 
              className="text-gray-400 hover:text-white transition-colors"
              aria-label="Gönder"
            >
@@ -1108,7 +1227,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
            <form onSubmit={handleSubmitComment} className="flex items-center space-x-2 mb-4">
              <Link to={`/profile/${currentUser?.username}`} className="flex-shrink-0">
                {currentUserProfileImageUrl ? (
-                 <img src={currentUserProfileImageUrl} alt={currentUser?.username} className="w-8 h-8 rounded-full object-cover bg-gray-700" />
+                 <img src={currentUserProfileImageUrl} alt={currentUser?.username} className="w-8 h-8 rounded-full object-cover bg-gray-700" onError={handleImageError} />
                ) : (
                  <div className="w-8 h-8 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold">
                    {currentUser?.username ? currentUser.username[0].toUpperCase() : 'U'}
@@ -1150,6 +1269,15 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
           )}
         </div>
       )}
+      
+      {/* PostShow Modalı */}
+      <PostShow 
+        post={selectedPost || post}
+        isOpen={showPostModal}
+        onClose={() => setShowPostModal(false)}
+        profileUser={post.user}
+        onPostDelete={handlePostDelete}
+      />
     </div>
   );
 };

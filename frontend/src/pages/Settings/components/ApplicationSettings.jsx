@@ -85,7 +85,7 @@ const ApplicationSettings = () => {
   const handleLanguageChange = (e) => {
     setLanguage(e.target.value);
     // Burada dil değişikliğini API'ye kaydetme veya context güncelleme işlemleri yapılabilir.
-    toast.info(`Dil değiştirildi: ${e.target.options[e.target.selectedIndex].text}. Kaydetme işlemi henüz uygulanmadı.`);
+    toast.success(`Dil değiştirildi: ${e.target.options[e.target.selectedIndex].text}. Kaydetme işlemi henüz uygulanmadı.`);
   };
 
   const handleDarkModeToggle = (checked) => {
@@ -93,7 +93,7 @@ const ApplicationSettings = () => {
     // Tema değişikliğini uygula (örneğin body class'ını değiştirerek)
     document.body.classList.toggle('dark', checked);
     localStorage.setItem('theme', checked ? 'dark' : 'light'); // Tema tercihini sakla
-    toast.info(`Tema değiştirildi: ${checked ? 'Karanlık' : 'Aydınlık'}.`);
+    toast.success(`Tema değiştirildi: ${checked ? 'Karanlık' : 'Aydınlık'}.`);
   };
 
   const handleHighQualityMediaToggle = (checked) => {
@@ -103,13 +103,13 @@ const ApplicationSettings = () => {
       setWifiHighQuality(true);
     }
     // API kaydetme işlemi...
-    toast.info(`Yüksek kalite medya ${checked ? 'açıldı' : 'kapatıldı'}. Kaydetme işlemi henüz uygulanmadı.`);
+    toast.success(`Yüksek kalite medya ${checked ? 'açıldı' : 'kapatıldı'}. Kaydetme işlemi henüz uygulanmadı.`);
   };
 
   const handleWifiHighQualityToggle = (checked) => {
     setWifiHighQuality(checked);
     // API kaydetme işlemi...
-    toast.info(`Wi-Fi'de yüksek kalite ${checked ? 'açıldı' : 'kapatıldı'}. Kaydetme işlemi henüz uygulanmadı.`);
+    toast.success(`Wi-Fi'de yüksek kalite ${checked ? 'açıldı' : 'kapatıldı'}. Kaydetme işlemi henüz uygulanmadı.`);
   };
   
   // Güncellemeleri kontrol etme (simülasyon)

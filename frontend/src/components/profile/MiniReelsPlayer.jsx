@@ -25,6 +25,8 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
   const getFullMediaUrl = (url) => {
     if (!url) return '';
     if (url.startsWith('http')) return url;
+    // UI Avatars URL'si kontrolü - zaten tam URL olduğu için direkt döndür
+    if (url.includes('ui-avatars.com')) return url;
     // URL kontrolü - eğer URL başında slash yoksa ekle
     const formattedUrl = url.startsWith('/') ? url : `/${url}`;
     return `${API_BASE_URL}${formattedUrl}`;

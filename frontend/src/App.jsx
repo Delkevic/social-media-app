@@ -13,6 +13,7 @@ import Reels from './pages/Reels'; // Uncommented this line
 import Messages from './pages/Messages'; // Messages sayfasını import ettik
 import SettingsPage from './pages/Settings/SettingsPage'; // Settings sayfasını import ediyoruz
 import FollowRequestsPage from './pages/FollowRequestsPage'; // Takip istekleri sayfasını import ediyoruz
+import Explore from './pages/Explore'; // Explore sayfasını import ediyoruz
 import { ChatPanel } from './components/chat/ChatPanel';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider, useNotification } from './context/NotificationContext'; // useNotification hook'unu da import ediyoruz
@@ -160,6 +161,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <FollowRequestsPage />
+              </ProtectedRoute>
+            } 
+          />
+          {/* Keşfet Sayfası */}
+          <Route 
+            path="/explore"
+            element={
+              <ProtectedRoute>
+                <Explore />
               </ProtectedRoute>
             } 
           />

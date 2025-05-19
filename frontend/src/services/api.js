@@ -75,7 +75,7 @@ const fetchWithAuth = async (endpoint, options = {}) => {
   
   const url = `${API_URL}${endpoint}`;
   const method = options.method || 'GET';
-  console.log(`API isteği: ${method} ${url}`, options.body ? `Body: ${JSON.stringify(options.body).substring(0, 100)}...` : '');
+  console.log(`API isteği: ${method} ${url}${options.body ? ` Body: ${JSON.stringify(options.body).substring(0, 100)}...` : ''}`);
   
   try {
     const response = await fetch(url, config);
@@ -121,7 +121,8 @@ const fetchWithAuth = async (endpoint, options = {}) => {
       } else if (errorData.message) {
         errorMessage = errorData.message;
       } else if (errorData.error) {
-        errorMessage = errorData.error;
+        // error alanı string veya object olabilir
+        errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error);
       } else if (errorData.errors && Array.isArray(errorData.errors) && errorData.errors.length > 0) {
         // Eğer errors bir dizi ise ilk hatayı al
         errorMessage = typeof errorData.errors[0] === 'string' 
@@ -131,12 +132,44 @@ const fetchWithAuth = async (endpoint, options = {}) => {
         errorMessage = `Sunucu hatası (${response.status})`;
       }
       
-      return { 
-        success: false, 
-        message: errorMessage, 
+      // Standarize edilmiş yanıt oluştur
+      const standardizedError = {
+        success: false,
+        message: errorMessage,
         error: errorData,
         status: response.status
       };
+      
+      // 400 Bad Request ve benzeri durumlarda özel işlem
+      if (response.status === 400) {
+        // Özellikle "zaten" içeren hata mesajlarını işaretle
+        const isAlreadyDoneError = errorMessage && (
+          errorMessage.toLowerCase().includes('zaten') || 
+          errorMessage.toLowerCase().includes('already') ||
+          errorMessage.toLowerCase().includes('mevcut')
+        );
+        
+        if (isAlreadyDoneError) {
+          standardizedError.isAlreadyDoneError = true;
+          
+          // "zaten beğenilmiş" durumu için ek işaretleme
+          if (errorMessage.toLowerCase().includes('beğen') || errorMessage.toLowerCase().includes('like')) {
+            standardizedError.isAlreadyLikedError = true;
+          }
+          
+          // "zaten kaydedilmiş" durumu için ek işaretleme
+          if (errorMessage.toLowerCase().includes('kaydet') || errorMessage.toLowerCase().includes('save')) {
+            standardizedError.isAlreadySavedError = true;
+          }
+          
+          // "zaten takip ediliyor" durumu için ek işaretleme
+          if (errorMessage.toLowerCase().includes('takip') || errorMessage.toLowerCase().includes('follow')) {
+            standardizedError.isAlreadyFollowingError = true;
+          }
+        }
+      }
+      
+      return standardizedError;
     }
     
     // Yanıtı parse et
@@ -144,6 +177,16 @@ const fetchWithAuth = async (endpoint, options = {}) => {
     try {
       const jsonResponse = await response.json();
       console.log(`API Cevap (${endpoint}):`, jsonResponse);
+      
+      // Beğeni ile ilgili yanıtları özel olarak logla
+      if (endpoint.includes('/like')) {
+        console.log(`Beğeni işlemi yanıtı (${endpoint}):`, {
+          rawResponse: jsonResponse,
+          hasLikeCount: jsonResponse.data && 'likeCount' in jsonResponse.data,
+          hasLikes: jsonResponse.data && 'likes' in jsonResponse.data,
+          likeValue: jsonResponse.data?.likeCount || jsonResponse.data?.likes
+        });
+      }
       
       // Standart yanıt yapısı oluştur
       if (jsonResponse.success === undefined) {
@@ -192,6 +235,20 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 const api = {
   // Token yenileme
   refreshToken,
+  
+  // Genel HTTP metodları
+  get: (endpoint) => fetchWithAuth(endpoint),
+  post: (endpoint, data) => fetchWithAuth(endpoint, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  put: (endpoint, data) => fetchWithAuth(endpoint, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (endpoint) => fetchWithAuth(endpoint, {
+    method: 'DELETE',
+  }),
   
   // Kullanıcı ile ilgili işlemler
   user: {
@@ -280,14 +337,121 @@ const api = {
     }),
     like: (postId) => fetchWithAuth(`/posts/${postId}/like`, {
       method: 'POST',
+    }).then(response => {
+      console.log(`Like API response for post ${postId}:`, response);
+      
+      // Başarılı bir yanıt olduğunu doğrula
+      if (response.success) {
+        // Eğer likeCount veya likes yoksa, bunları eklemeye çalış
+        if (!response.data?.likeCount && !response.data?.likes) {
+          // Eğer response.data yoksa veya obje değilse, yeni bir obje oluştur
+          if (!response.data || typeof response.data !== 'object') {
+            return {
+              ...response,
+              data: {
+                likeCount: 1, // Beğenildiği için en az 1 olmalı
+                likes: 1,
+                isLiked: true
+              }
+            };
+          }
+          
+          // Eğer data objesi varsa, likeCount ve likes alanlarını ekle
+          return {
+            ...response,
+            data: {
+              ...response.data,
+              likeCount: typeof response.data.likeCount !== 'undefined' ? response.data.likeCount : 1,
+              likes: typeof response.data.likes !== 'undefined' ? response.data.likes : 1,
+              isLiked: true
+            }
+          };
+        }
+        
+        // likeCount ve likes uyumlu değilse, birini diğerine eşitle
+        if (response.data && 
+            typeof response.data === 'object' && 
+            typeof response.data.likeCount !== 'undefined' && 
+            typeof response.data.likes !== 'undefined' && 
+            response.data.likeCount !== response.data.likes) {
+          
+          // likeCount'u öncelikli tut
+          const likeValue = response.data.likeCount;
+          return {
+            ...response,
+            data: {
+              ...response.data,
+              likeCount: likeValue,
+              likes: likeValue
+            }
+          };
+        }
+      }
+      
+      return response;
     }),
     unlike: (postId) => fetchWithAuth(`/posts/${postId}/like`, {
       method: 'DELETE',
+    }).then(response => {
+      console.log(`Unlike API response for post ${postId}:`, response);
+      
+      // Başarılı bir yanıt olduğunu doğrula
+      if (response.success) {
+        // Eğer likeCount veya likes yoksa, bunları eklemeye çalış
+        if (!response.data?.likeCount && !response.data?.likes) {
+          // Eğer response.data yoksa veya obje değilse, yeni bir obje oluştur
+          if (!response.data || typeof response.data !== 'object') {
+            return {
+              ...response,
+              data: {
+                likeCount: 0, // Beğeni kaldırıldığı için 0 olabilir
+                likes: 0,
+                isLiked: false
+              }
+            };
+          }
+          
+          // Eğer data objesi varsa, likeCount ve likes alanlarını ekle
+          return {
+            ...response,
+            data: {
+              ...response.data,
+              likeCount: typeof response.data.likeCount !== 'undefined' ? response.data.likeCount : 0,
+              likes: typeof response.data.likes !== 'undefined' ? response.data.likes : 0,
+              isLiked: false
+            }
+          };
+        }
+        
+        // likeCount ve likes uyumlu değilse, birini diğerine eşitle
+        if (response.data && 
+            typeof response.data === 'object' && 
+            typeof response.data.likeCount !== 'undefined' && 
+            typeof response.data.likes !== 'undefined' && 
+            response.data.likeCount !== response.data.likes) {
+          
+          // likeCount'u öncelikli tut
+          const likeValue = response.data.likeCount;
+          return {
+            ...response,
+            data: {
+              ...response.data,
+              likeCount: likeValue,
+              likes: likeValue
+            }
+          };
+        }
+      }
+      
+      return response;
     }),
     save: (postId) => fetchWithAuth(`/posts/${postId}/save`, {
       method: 'POST',
     }),
     unsave: (postId) => fetchWithAuth(`/posts/${postId}/save`, {
+      method: 'DELETE',
+    }),
+    delete: (postId) => fetchWithAuth(`/posts/${postId}`, {
       method: 'DELETE',
     }),
     addComment: (postId, content, parentId = null) => {
@@ -301,15 +465,42 @@ const api = {
         body: JSON.stringify(data),
       });
     },
-    getComments: (postId) => fetchWithAuth(`/posts/${postId}/comments`),
-    // Yeni eklenen yorum işlevleri
+    getComments: (postId) => {
+      console.log(`Post ${postId} için yorumlar getiriliyor`);
+      return fetchWithAuth(`/posts/${postId}/comments`)
+        .then(response => {
+          if (!response.success) {
+            console.error("Yorumlar alınamadı:", response.message);
+            return { success: false, data: [], message: response.message };
+          }
+          
+          // API yanıt formatını kontrol et ve normalize et
+          let commentsData = [];
+          
+          if (Array.isArray(response.data)) {
+            commentsData = response.data;
+          } else if (response.data && Array.isArray(response.data.comments)) {
+            commentsData = response.data.comments;
+          } else if (response.data && typeof response.data === 'object') {
+            commentsData = [response.data];
+          }
+          
+          return { 
+            success: true, 
+            data: commentsData,
+            message: "Yorumlar başarıyla alındı"
+          };
+        });
+    },
+    deleteComment: (commentId) => {
+      console.log(`Yorum silme isteği api.posts üzerinden gönderiliyor, ID: ${commentId}`);
+      // api.comments.delete metodunu çağır
+      return api.comments.delete(commentId);
+    },
     likeComment: (commentId) => fetchWithAuth(`/api/comments/${commentId}/like`, {
       method: 'POST',
     }),
     unlikeComment: (commentId) => fetchWithAuth(`/api/comments/${commentId}/like`, {
-      method: 'DELETE',
-    }),
-    deleteComment: (commentId) => fetchWithAuth(`/comments/${commentId}`, {
       method: 'DELETE',
     }),
     reportComment: (commentId) => fetchWithAuth(`/comments/${commentId}/report`, {
@@ -681,9 +872,25 @@ const api = {
     toggleLike: (commentId) => fetchWithAuth(`/comments/${commentId}/like`, {
       method: 'POST',
     }),
-    delete: (commentId) => fetchWithAuth(`/comments/${commentId}`, {
-      method: 'DELETE',
-    }),
+    delete: (commentId) => {
+      console.log(`Yorum silme isteği gönderiliyor, ID: ${commentId}`);
+      // Yorum silme endpoint'i: /api/comments/:id veya /comments/:id olabilir
+      // Önce /api/comments/:id endpoint'ini deneyelim
+      return fetchWithAuth(`/api/comments/${commentId}`, {
+        method: 'DELETE',
+      }).then(response => {
+        // Eğer başarılıysa veya özel bir hata yoksa direkt döndür
+        if (response.success || !response.status || response.status !== 404) {
+          return response;
+        }
+        
+        // 404 hatası alırsak alternatif endpoint'i deneyelim
+        console.log("İlk endpoint başarısız, alternatif endpoint deneniyor");
+        return fetchWithAuth(`/comments/${commentId}`, {
+          method: 'DELETE',
+        });
+      });
+    },
     report: (commentId) => fetchWithAuth(`/comments/${commentId}/report`, {
       method: 'POST',
     }),

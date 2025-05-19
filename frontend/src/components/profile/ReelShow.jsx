@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   X, Heart, MessageCircle, Share2, ChevronUp, ChevronDown, 
-  VolumeX, Volume2, Music, User, Send 
+  VolumeX, Volume2, Music, User, Send, Bookmark
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../services/api";
@@ -21,6 +21,7 @@ const ReelShow = ({ reel, reels = [], isOpen, onClose, profileUser }) => {
   const [loadingComments, setLoadingComments] = useState(false);
   const [isLiking, setIsLiking] = useState(false);
   const [localReels, setLocalReels] = useState([]);
+  const [isBookmarked, setIsBookmarked] = useState(false);
 
   useEffect(() => {
     if (reels.length > 0) {
@@ -112,6 +113,11 @@ const ReelShow = ({ reel, reels = [], isOpen, onClose, profileUser }) => {
     } finally {
       setIsLiking(false);
     }
+  };
+
+  const toggleBookmark = () => {
+    setIsBookmarked(!isBookmarked);
+    toast.success(isBookmarked ? "Kaydedilenlerden kaldırıldı" : "Kaydedilenlere eklendi");
   };
 
   const toggleCommentForm = async () => {
@@ -233,6 +239,22 @@ const ReelShow = ({ reel, reels = [], isOpen, onClose, profileUser }) => {
     }
   };
 
+  const getFullImageUrl = (imageUrl) => {
+    if (!imageUrl) return null;
+
+    if (imageUrl.includes('ui-avatars.com')) return imageUrl;
+
+    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+      return imageUrl;
+    }
+
+    if (imageUrl.startsWith("/")) {
+      return `http://localhost:8080${imageUrl}`;
+    } else {
+      return `http://localhost:8080/${imageUrl}`;
+    }
+  };
+
   const reelVariants = {
     enter: (direction) => ({
       y: direction === "up" ? "120%" : "-120%",
@@ -255,8 +277,8 @@ const ReelShow = ({ reel, reels = [], isOpen, onClose, profileUser }) => {
       scale: 0.9,
       transition: {
         y: { type: "spring", stiffness: 300, damping: 25 },
-        opacity: { duration: 0.2 },
-        scale: { duration: 0.2 }
+        opacity: { duration: 0.3 },
+        scale: { duration: 0.3 }
       }
     })
   };
@@ -317,309 +339,234 @@ const ReelShow = ({ reel, reels = [], isOpen, onClose, profileUser }) => {
   if (!isOpen || !currentReel) return null;
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 bg-black bg-opacity-100 flex items-center justify-center">
-        <motion.div
-          className="relative w-full h-full md:w-[500px] md:h-[90%] flex flex-col"
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 50 }}
-          transition={{ type: "spring", damping: 30 }}
+    <div className="fixed inset-0 z-50 bg-black overflow-hidden" onClick={onClose}>
+      <div className="relative h-full w-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+        {/* Close button */}
+        <button 
+          className="absolute top-5 right-5 z-50 text-white bg-black/40 p-2 rounded-full"
+          onClick={onClose}
         >
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 z-[70] p-2 bg-black bg-opacity-50 rounded-full text-white"
-          >
-            <X size={20} />
-          </button>
-
-          <motion.div 
-            className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 z-[70]"
-            key={`counter-${currentReelIndex}`}
-            initial={{ scale: 0.8, opacity: 0.5 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.3 }}
-          >
-            <p className="text-white text-xs">
-              {currentReelIndex + 1} / {localReels.length}
-            </p>
-          </motion.div>
-
-          <div 
-            className="flex-1 relative flex items-center justify-center bg-black"
+          <X size={20} />
+        </button>
+        
+        {/* Volume control */}
+        <button 
+          className="absolute top-5 left-5 z-50 text-white bg-black/40 p-2 rounded-full"
+          onClick={toggleMute}
+        >
+          {muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+        </button>
+        
+        {/* Previous/Next indicators */}
+        {currentReelIndex > 0 && (
+          <div className="absolute top-1/4 left-8 z-40 text-white opacity-70">
+            <ChevronUp size={28} />
+            <div className="text-xs mt-1">Önceki</div>
+          </div>
+        )}
+        
+        {currentReelIndex < localReels.length - 1 && (
+          <div className="absolute bottom-1/4 left-8 z-40 text-white opacity-70">
+            <div className="text-xs mb-1">Sonraki</div>
+            <ChevronDown size={28} />
+          </div>
+        )}
+        
+        {/* Main video content */}
+        <AnimatePresence initial={false} custom={transitionDirection}>
+          <motion.div
+            key={currentReelIndex}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            variants={reelVariants}
+            custom={transitionDirection}
+            className="absolute inset-0 w-full h-full flex justify-center"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             onWheel={handleWheel}
           >
-            <div className="absolute inset-0 overflow-hidden">
-              <AnimatePresence mode="popLayout" custom={transitionDirection} initial={false}>
-                <motion.div
-                  key={`reel-${currentReelIndex}`}
-                  className="absolute inset-0 flex items-center justify-center w-full h-full"
-                  custom={transitionDirection}
-                  variants={reelVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                >
-                  <video
-                    ref={el => { videoRefs.current[currentReelIndex] = el }}
-                    src={getFullVideoUrl(currentReel.videoURL)}
-                    className="h-full w-full object-contain"
-                    autoPlay
-                    loop
-                    muted={muted}
-                    playsInline
-                    onClick={() => {
-                      const video = videoRefs.current[currentReelIndex];
-                      if (video) {
-                        if (video.paused) {
-                          video.play();
-                        } else {
-                          video.pause();
-                        }
-                      }
-                    }}
-                  />
-
-                  <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
-                    <motion.div 
-                      className="flex items-center mb-3"
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.2 }}
-                    >
-                      <div className="w-10 h-10 rounded-full overflow-hidden mr-3 border-2 border-white/30">
-                        <img
-                          src={profileUser?.profileImage || "https://ui-avatars.com/api/?size=40&name=" + 
-                              (profileUser?.username?.charAt(0) || "U") + "&background=random"}
-                          alt={profileUser?.username}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.src = "https://ui-avatars.com/api/?name=" + 
-                              (profileUser?.username?.charAt(0) || "U") + "&background=random";
-                          }}
-                        />
+            <div className="max-w-[480px] w-full h-full relative bg-black">
+              <video
+                ref={(el) => (videoRefs.current[currentReelIndex] = el)}
+                src={getFullVideoUrl(currentReel.videoUrl)}
+                className="w-full h-full object-contain"
+                loop
+                playsInline
+                autoPlay
+                muted={muted}
+                controls={false}
+                onClick={toggleMute}
+              />
+              
+              {/* Overlay gradient for better readability */}
+              <div className="absolute inset-x-0 bottom-0 h-60 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
+              
+              {/* Reel info overlay */}
+              <div className="absolute bottom-8 left-4 right-20 text-white">
+                <div className="flex items-center mb-3">
+                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3 border-2 border-white">
+                    {currentReel.user?.profileImage ? (
+                      <img 
+                        src={getFullImageUrl(currentReel.user.profileImage)} 
+                        className="w-full h-full object-cover"
+                        alt={currentReel.user.username}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
+                        <User size={24} />
                       </div>
-                      <div className="flex-1">
-                        <p className="font-bold text-white">@{profileUser?.username}</p>
-                        <p className="text-white/80 text-sm">{currentReel.caption}</p>
-                      </div>
-                    </motion.div>
-
-                    {currentReel.music && (
-                      <motion.div 
-                        className="flex items-center mt-2 bg-black/30 rounded-full px-3 py-1.5 w-fit"
-                        initial={{ x: -20, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.3 }}
-                      >
-                        <Music className="h-4 w-4 mr-2 text-white/80" />
-                        <p className="text-white/80 text-xs truncate max-w-[150px]">
-                          {currentReel.music}
-                        </p>
-                      </motion.div>
                     )}
                   </div>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <motion.div
-              key={`flash-${currentReelIndex}`}
-              className="absolute inset-0 bg-white pointer-events-none"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 0.03, 0] }}
-              transition={{ duration: 0.4 }}
-            />
-
-            <div className="absolute right-4 bottom-20 flex flex-col items-center gap-6 z-[60]">
-              <motion.div 
-                className="flex flex-col items-center"
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.4 }}
-              >
-                <div 
-                  className={`rounded-full bg-black/30 p-3 backdrop-blur-sm cursor-pointer ${isLiking ? 'opacity-50' : ''}`}
-                  onClick={handleLike}
-                >
-                  <Heart 
-                    className={`h-6 w-6 ${currentReel?.isLiked ? "text-red-500 fill-red-500" : "text-white"}`}
-                  />
+                  <div>
+                    <div className="font-medium">{currentReel.user?.username || 'Anonim'}</div>
+                    <div className="text-xs opacity-80">{currentReel.createdAt ? new Date(currentReel.createdAt).toLocaleDateString('tr-TR') : ''}</div>
+                  </div>
                 </div>
-                <span className="text-white text-xs mt-1">
-                  {formatNumber(currentReel?.likeCount)}
-                </span>
-              </motion.div>
+                
+                {currentReel.description && (
+                  <p className="mb-3 text-white/90 text-sm">{currentReel.description}</p>
+                )}
+                
+                {currentReel.music && (
+                  <div className="flex items-center mb-3 text-xs">
+                    <Music size={14} className="mr-1" />
+                    <div className="truncate">{currentReel.music}</div>
+                  </div>
+                )}
+              </div>
               
-              <motion.div 
-                className="flex flex-col items-center"
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.5 }}
-              >
-                <div 
-                  className="rounded-full bg-black/30 p-3 backdrop-blur-sm cursor-pointer"
+              {/* Interaction buttons */}
+              <div className="absolute right-4 bottom-24 flex flex-col items-center space-y-6">
+                <div className="flex flex-col items-center">
+                  <button 
+                    className={`w-12 h-12 rounded-full bg-black/30 flex items-center justify-center ${currentReel.isLiked ? 'text-red-500' : 'text-white'}`}
+                    onClick={handleLike}
+                  >
+                    <Heart size={28} className={currentReel.isLiked ? 'fill-red-500' : ''} />
+                  </button>
+                  <span className="text-white text-xs mt-1">{formatNumber(currentReel.likeCount || 0)}</span>
+                </div>
+                
+                <div className="flex flex-col items-center">
+                  <button 
+                    className="w-12 h-12 rounded-full bg-black/30 flex items-center justify-center text-white"
+                    onClick={toggleCommentForm}
+                  >
+                    <MessageCircle size={28} />
+                  </button>
+                  <span className="text-white text-xs mt-1">{formatNumber(currentReel.commentCount || 0)}</span>
+                </div>
+                
+                <div className="flex flex-col items-center">
+                  <button 
+                    className={`w-12 h-12 rounded-full bg-black/30 flex items-center justify-center ${isBookmarked ? 'text-blue-400' : 'text-white'}`}
+                    onClick={toggleBookmark}
+                  >
+                    <Bookmark size={28} className={isBookmarked ? 'fill-blue-400' : ''} />
+                  </button>
+                  <span className="text-white text-xs mt-1">Kaydet</span>
+                </div>
+                
+                <div className="flex flex-col items-center">
+                  <button className="w-12 h-12 rounded-full bg-black/30 flex items-center justify-center text-white">
+                    <Share2 size={28} />
+                  </button>
+                  <span className="text-white text-xs mt-1">Paylaş</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+        
+        {/* Comments panel */}
+        <AnimatePresence>
+          {showCommentForm && (
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-2xl max-h-[70vh] overflow-y-auto z-50"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 bg-white dark:bg-gray-900 flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="font-semibold text-lg dark:text-white">Yorumlar</h3>
+                <button 
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" 
                   onClick={toggleCommentForm}
                 >
-                  <MessageCircle className="h-6 w-6 text-white" />
-                </div>
-                <span className="text-white text-xs mt-1">
-                  {formatNumber(currentReel?.commentCount)}
-                </span>
-              </motion.div>
+                  <X size={20} />
+                </button>
+              </div>
               
-              <motion.div 
-                className="flex flex-col items-center"
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.6 }}
-              >
-                <div className="rounded-full bg-black/30 p-3 backdrop-blur-sm">
-                  <Share2 className="h-6 w-6 text-white" />
-                </div>
-                <span className="text-white text-xs mt-1">
-                  {formatNumber(currentReel?.shareCount)}
-                </span>
-              </motion.div>
-            </div>
-
-            <AnimatePresence>
-              {showCommentForm && (
-                <motion.div 
-                  className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-lg z-[65] rounded-t-2xl"
-                  initial={{ y: "100%" }}
-                  animate={{ y: 0 }}
-                  exit={{ y: "100%" }}
-                  transition={{ type: "spring", damping: 25 }}
-                  style={{ maxHeight: "60%" }}
-                >
-                  <div className="p-4 border-b border-white/10 flex justify-between items-center">
-                    <h3 className="text-white font-semibold">Yorumlar</h3>
-                    <button 
-                      onClick={toggleCommentForm} 
-                      className="text-white/70 hover:text-white"
-                    >
-                      <X size={20} />
-                    </button>
+              <div className="p-4 space-y-4 min-h-[200px]">
+                {loadingComments ? (
+                  <div className="flex justify-center items-center h-20">
+                    <div className="w-8 h-8 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
                   </div>
-                  
-                  <div className="overflow-y-auto p-4" style={{ maxHeight: "calc(100% - 130px)" }}>
-                    {loadingComments ? (
-                      <div className="flex justify-center py-6">
-                        <div className="animate-spin h-8 w-8 border-2 border-t-transparent border-white rounded-full"></div>
-                      </div>
-                    ) : comments.length > 0 ? (
-                      <div className="space-y-4">
-                        {comments.map(comment => (
-                          <div key={comment.id} className="flex space-x-3">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-purple-500/20">
-                              {comment.user.profileImage ? (
-                                <img 
-                                  src={comment.user.profileImage} 
-                                  alt={comment.user.username}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  {comment.user.username.charAt(0).toUpperCase()}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1">
-                              <div className="bg-white/10 rounded-xl p-3">
-                                <p className="text-white font-medium text-sm">{comment.user.username}</p>
-                                <p className="text-white/90 text-sm mt-1">{comment.content}</p>
-                              </div>
-                              <div className="flex gap-4 mt-1 text-xs text-white/50">
-                                <span>{new Date(comment.createdAt).toLocaleDateString()}</span>
-                                <button className="hover:text-white">Yanıtla</button>
-                              </div>
-                            </div>
+                ) : comments.length > 0 ? (
+                  comments.map((comment) => (
+                    <div key={comment.id} className="flex space-x-3 py-3 border-b border-gray-100 dark:border-gray-800">
+                      <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+                        {comment.user?.profileImage ? (
+                          <img 
+                            src={getFullImageUrl(comment.user.profileImage)} 
+                            className="w-full h-full object-cover"
+                            alt={comment.user.username}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                            {comment.user?.username?.charAt(0).toUpperCase() || 'A'}
                           </div>
-                        ))}
+                        )}
                       </div>
-                    ) : (
-                      <div className="text-center py-8 text-white/50">
-                        <p>Henüz yorum yapılmamış</p>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start">
+                          <span className="font-medium text-sm dark:text-white">{comment.user?.username || 'Anonim'}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString('tr-TR') : ''}
+                          </span>
+                        </div>
+                        <p className="text-sm mt-1 text-gray-800 dark:text-gray-200">{comment.content}</p>
                       </div>
-                    )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    Henüz yorum yok. İlk yorumu sen yap!
                   </div>
-                  
-                  <div className="p-4 border-t border-white/10">
-                    <form onSubmit={submitComment} className="flex">
-                      <input
-                        type="text"
-                        placeholder="Yorum yaz..."
-                        className="flex-1 bg-white/10 text-white px-4 py-2 rounded-l-full outline-none"
-                        value={comment}
-                        onChange={(e) => setComment(e.target.value)}
-                      />
-                      <button 
-                        type="submit"
-                        disabled={!comment.trim()}
-                        className={`bg-blue-600 text-white px-4 rounded-r-full flex items-center justify-center ${
-                          !comment.trim() ? 'opacity-50' : 'hover:bg-blue-700'
-                        }`}
-                      >
-                        <Send size={16} />
-                      </button>
-                    </form>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <motion.button
-              className="absolute bottom-4 right-4 p-2 bg-black/30 rounded-full text-white z-[60]"
-              onClick={toggleMute}
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.4 }}
-            >
-              {muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-            </motion.button>
-
-            {localReels.length > 1 && (
-              <>
-                {currentReelIndex > 0 && (
-                  <motion.button
-                    className="absolute top-1/4 left-1/2 transform -translate-x-1/2 p-3 bg-black/50 rounded-full text-white z-[60]"
-                    onClick={goToPrevReel}
-                    initial={{ y: -10, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    whileHover={{ 
-                      scale: 1.3, 
-                      boxShadow: "0 0 20px rgba(255, 255, 255, 0.4)" 
-                    }}
-                  >
-                    <ChevronUp size={28} />
-                  </motion.button>
                 )}
-
-                {currentReelIndex < localReels.length - 1 && (
-                  <motion.button
-                    className="absolute bottom-1/4 left-1/2 transform -translate-x-1/2 p-3 bg-black/50 rounded-full text-white z-[60]"
-                    onClick={goToNextReel}
-                    initial={{ y: 10, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    whileHover={{ 
-                      scale: 1.3, 
-                      boxShadow: "0 0 20px rgba(255, 255, 255, 0.4)" 
-                    }}
-                  >
-                    <ChevronDown size={28} />
-                  </motion.button>
-                )}
-              </>
-            )}
-          </div>
-        </motion.div>
+              </div>
+              
+              <form 
+                onSubmit={submitComment}
+                className="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-3 flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="Bir yorum yaz..."
+                  className="flex-1 h-10 px-4 rounded-full bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                />
+                <button 
+                  type="submit"
+                  disabled={!comment.trim()}
+                  className={`w-10 h-10 flex items-center justify-center rounded-full ${
+                    comment.trim() 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-200 text-gray-400 dark:bg-gray-700'
+                  }`}
+                >
+                  <Send size={18} />
+                </button>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </AnimatePresence>
+    </div>
   );
 };
 
