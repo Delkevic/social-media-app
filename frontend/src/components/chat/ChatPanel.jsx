@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   X, User, Send, ArrowLeft, Paperclip, Image, 
-  Smile, Search, Clock, MessageSquare
+  Smile, Search, Clock, MessageSquare, Bot, Zap
 } from "lucide-react";
 import { getConversations, getMessages, sendMessage } from "../../services/message-services";
+import { generateChatResponse } from "../../services/gemini-service";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Ana ChatPanel bileşeni
@@ -20,30 +21,35 @@ export function ChatPanel() {
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
 
+  // Gemini AI özelliği için yeni state'ler
+  const [isGeminiMode, setIsGeminiMode] = useState(false);
+  const [geminiMessages, setGeminiMessages] = useState([]);
+  const [isGeminiTyping, setIsGeminiTyping] = useState(false);
+
   // Konuşmaları yükle
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !isGeminiMode) {
       loadConversations();
     }
-  }, [isOpen]);
+  }, [isOpen, isGeminiMode]);
 
   // Mesajları otomatik kaydır
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, geminiMessages, isGeminiTyping]);
 
   // Mesajları periyodik güncelle
   useEffect(() => {
     let interval;
-    if (isOpen && selectedConversation) {
+    if (isOpen && selectedConversation && !isGeminiMode) {
       interval = setInterval(() => {
         loadMessages(selectedConversation.id);
       }, 15000);
     }
     return () => clearInterval(interval);
-  }, [isOpen, selectedConversation]);
+  }, [isOpen, selectedConversation, isGeminiMode]);
 
   // Konuşmaları yükleme
   const loadConversations = async () => {
@@ -98,10 +104,18 @@ export function ChatPanel() {
     }
   }, [selectedConversation]);
 
-  // Mesaj gönderme
+  // Normal mesaj gönderme
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || !selectedConversation) return;
+    if (!input.trim() || isLoading) return;
+
+    // Gemini AI mod kontrolü
+    if (isGeminiMode) {
+      await handleGeminiSubmit();
+      return;
+    }
+
+    if (!selectedConversation) return;
 
     const newMessage = {
       id: `temp-${Date.now()}`,
@@ -131,6 +145,60 @@ export function ChatPanel() {
     }
   };
 
+  // Gemini AI'ya mesaj gönderme
+  const handleGeminiSubmit = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMessage = {
+      id: `gemini-user-${Date.now()}`,
+      content: input.trim(),
+      sender: "currentUser",
+      timestamp: new Date().toISOString(),
+    };
+
+    // Kullanıcı mesajını ekle
+    setGeminiMessages(prev => [...prev, userMessage]);
+    
+    // Input'u temizle ve yükleme durumunu ayarla
+    setInput("");
+    setIsLoading(true);
+    setIsGeminiTyping(true);
+    
+    try {
+      // Gemini API'den yanıt al
+      const response = await generateChatResponse(userMessage.content);
+      
+      // Gecikme ekle - daha doğal hissettirmek için
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // API yanıtını ekle
+      const geminiResponse = {
+        id: `gemini-bot-${Date.now()}`,
+        content: response.success ? response.data : "Üzgünüm, bir hata oluştu. Lütfen daha sonra tekrar deneyin.",
+        sender: "gemini",
+        timestamp: new Date().toISOString(),
+      };
+      
+      setGeminiMessages(prev => [...prev, geminiResponse]);
+    } catch (error) {
+      console.error("Gemini yanıtı alınırken hata:", error);
+      
+      // Hata mesajını ekle
+      const errorMessage = {
+        id: `gemini-error-${Date.now()}`,
+        content: "Üzgünüm, bir hata oluştu. Lütfen daha sonra tekrar deneyin.",
+        sender: "gemini",
+        timestamp: new Date().toISOString(),
+        isError: true
+      };
+      
+      setGeminiMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+      setIsGeminiTyping(false);
+    }
+  };
+
   // Panel açma/kapama
   const togglePanel = () => {
     if (isOpen) {
@@ -146,14 +214,25 @@ export function ChatPanel() {
 
   // Konuşma listesine dön
   const backToConversations = () => {
-    setShowConversations(true);
-    setTimeout(() => {
-      setSelectedConversation(null);
-    }, 100);
+    if (isGeminiMode) {
+      setIsGeminiMode(false);
+    } else {
+      setShowConversations(true);
+      setTimeout(() => {
+        setSelectedConversation(null);
+      }, 100);
+    }
   };
 
   // Konuşma seçme
   const selectConversation = (conversation) => {
+    // Eğer özel Gemini seçilirse
+    if (conversation.isGemini) {
+      setIsGeminiMode(true);
+      setShowConversations(false);
+      return;
+    }
+
     setSelectedConversation(conversation);
     loadMessages(conversation.id);
     setTimeout(() => {
@@ -162,9 +241,25 @@ export function ChatPanel() {
   };
 
   // Konuşmaları filtrele
-  const filteredConversations = conversations.filter((conv) =>
-    conv.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredConversations = () => {
+    // Normal konuşmaları filtrele
+    const filtered = conversations.filter((conv) =>
+      conv.username.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    
+    // Gemini AI seçeneği daima listenin başında yer alır
+    const geminiOption = {
+      id: "gemini-ai",
+      username: "Gemini AI",
+      lastMessage: "Yapay zeka asistanı",
+      lastSeen: new Date().toISOString(),
+      online: true,
+      isGemini: true, // Özel bayrak
+      avatar: null // Özel avatar kullanabilirsiniz
+    };
+    
+    return [geminiOption, ...filtered];
+  };
 
   // Mesaj zamanı formatı
   const formatMessageTime = (timestamp) => {
@@ -204,6 +299,23 @@ export function ChatPanel() {
   
   const messageGroups = groupMessagesByDate();
 
+  // Gemini mesajlarını tarihe göre grupla
+  const groupGeminiMessagesByDate = () => {
+    const groups = {};
+    
+    geminiMessages.forEach(message => {
+      const date = new Date(message.timestamp).toLocaleDateString();
+      if (!groups[date]) {
+        groups[date] = [];
+      }
+      groups[date].push(message);
+    });
+    
+    return groups;
+  };
+  
+  const geminiMessageGroups = groupGeminiMessagesByDate();
+
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
       {/* Ana Sohbet Paneli */}
@@ -217,17 +329,22 @@ export function ChatPanel() {
             transition={{ duration: 0.3, ease: "easeOut" }}
             className="mb-4 rounded-xl shadow-lg overflow-hidden flex flex-col w-[400px] h-[600px]"
             style={{ 
-              backgroundColor: 'rgba(18, 18, 23, 0.95)',
+              backgroundColor: isGeminiMode ? 'rgba(14, 16, 26, 0.95)' : 'rgba(18, 18, 23, 0.95)',
               backdropFilter: 'blur(12px)',
-              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.1)'
+              boxShadow: isGeminiMode 
+                ? '0 10px 30px rgba(50, 138, 241, 0.15), 0 0 0 1px rgba(91, 121, 215, 0.1)' 
+                : '0 10px 30px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+              border: isGeminiMode 
+                ? '1px solid rgba(86, 145, 254, 0.2)' 
+                : '1px solid rgba(255, 255, 255, 0.1)'
             }}
           >
             {/* Panel Başlık */}
             <div 
-              className="p-4 flex items-center justify-between border-b border-white/5"
+              className="p-4 flex items-center justify-between border-b"
               style={{ 
-                background: 'rgba(30, 30, 35, 0.5)'
+                background: isGeminiMode ? 'rgba(25, 30, 45, 0.7)' : 'rgba(30, 30, 35, 0.5)',
+                borderColor: isGeminiMode ? 'rgba(86, 145, 254, 0.2)' : 'rgba(255, 255, 255, 0.05)'
               }}
             >
               {showConversations ? (
@@ -254,18 +371,36 @@ export function ChatPanel() {
                       <ArrowLeft className="h-5 w-5" />
                     </motion.button>
                     <div className="flex flex-col">
-                      <p className="text-lg font-light text-white">
-                        {selectedConversation?.username}
-                      </p>
-                      <p className="text-xs text-white/50">
-                        {selectedConversation?.online 
-                          ? <span className="flex items-center">
-                              <span className="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span>
-                              Çevrimiçi
-                            </span>
-                          : <>Son görülme: {formatLastSeen(selectedConversation?.lastSeen)}</>
-                        }
-                      </p>
+                      {isGeminiMode ? (
+                        <p className="text-lg font-light text-white flex items-center">
+                          <Bot className="h-4 w-4 mr-2 text-blue-400" />
+                          Gemini AI
+                          <span className="ml-2 text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full">
+                            AI
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-lg font-light text-white">
+                          {selectedConversation?.username}
+                        </p>
+                      )}
+                      
+                      {!isGeminiMode && (
+                        <p className="text-xs text-white/50">
+                          {selectedConversation?.online 
+                            ? <span className="flex items-center">
+                                <span className="h-1.5 w-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span>
+                                Çevrimiçi
+                              </span>
+                            : <>Son görülme: {formatLastSeen(selectedConversation?.lastSeen)}</>
+                          }
+                        </p>
+                      )}
+                      {isGeminiMode && (
+                        <p className="text-xs text-blue-300/70">
+                          Google'ın yapay zeka asistanı
+                        </p>
+                      )}
                     </div>
                   </div>
                   <motion.button
@@ -309,117 +444,160 @@ export function ChatPanel() {
 
                     {/* Konuşma Listesi */}
                     <div className="flex-grow overflow-y-auto custom-scrollbar">
-                      {filteredConversations.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                          <User className="h-16 w-16 mb-3 text-white/20" />
-                          <p className="text-lg font-light text-white/90 mb-1">Sonuç bulunamadı</p>
-                          <p className="text-sm text-white/40">Farklı bir arama terimi deneyin</p>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-white/5">
-                          {filteredConversations.map((conversation) => (
-                            <motion.div 
-                              key={conversation.id}
-                              whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.03)' }}
-                              className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${
-                                conversation.unreadCount > 0 ? 'bg-white/[0.02]' : ''
-                              }`}
-                              onClick={() => selectConversation(conversation)}
-                            >
-                              <div className="relative">
-                                {conversation.avatar ? (
-                                  <div className="h-12 w-12 rounded-full overflow-hidden border border-white/10">
-                                    <img 
-                                      src={conversation.avatar} 
-                                      alt={conversation.username}
-                                      className="h-full w-full object-cover"
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="h-12 w-12 rounded-full flex items-center justify-center text-white font-light bg-white/10 border border-white/10">
-                                    {conversation.username.substring(0, 2).toUpperCase()}
-                                  </div>
-                                )}
-                                {conversation.online && (
-                                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-[#12121B]"></span>
-                                )}
-                              </div>
-                              <div className="flex-grow min-w-0">
-                                <div className="flex justify-between items-baseline">
-                                  <p className="font-light text-white truncate">{conversation.username}</p>
+                      <div className="divide-y divide-white/5">
+                        {filteredConversations().map((conversation) => (
+                          <motion.div 
+                            key={conversation.id}
+                            whileHover={{ backgroundColor: conversation.isGemini 
+                              ? 'rgba(86, 145, 254, 0.1)' 
+                              : 'rgba(255, 255, 255, 0.03)' 
+                            }}
+                            className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${
+                              conversation.isGemini 
+                                ? 'bg-blue-900/10 border-l-2 border-blue-500/50' 
+                                : conversation.unreadCount > 0 ? 'bg-white/[0.02]' : ''
+                            }`}
+                            onClick={() => selectConversation(conversation)}
+                          >
+                            <div className="relative">
+                              {conversation.isGemini ? (
+                                <div className={`h-12 w-12 rounded-full overflow-hidden border flex items-center justify-center ${
+                                  conversation.isGemini ? 'bg-gradient-to-br from-blue-500/30 to-purple-500/30 border-blue-400/30' : 'border-white/10'
+                                }`}>
+                                  <Bot className="h-6 w-6 text-blue-400" />
+                                </div>
+                              ) : conversation.avatar ? (
+                                <div className="h-12 w-12 rounded-full overflow-hidden border border-white/10">
+                                  <img 
+                                    src={conversation.avatar} 
+                                    alt={conversation.username}
+                                    className="h-full w-full object-cover"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="h-12 w-12 rounded-full flex items-center justify-center text-white font-light bg-white/10 border border-white/10">
+                                  {conversation.username.substring(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                              {conversation.online && !conversation.isGemini && (
+                                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-[#12121B]"></span>
+                              )}
+                              {conversation.isGemini && (
+                                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-blue-500 border-2 border-[#12121B] flex items-center justify-center">
+                                  <Zap className="h-2 w-2 text-white" />
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex-grow min-w-0">
+                              <div className="flex justify-between items-baseline">
+                                <p className={`font-light truncate ${
+                                  conversation.isGemini ? 'text-blue-400' : 'text-white'
+                                }`}>
+                                  {conversation.username}
+                                </p>
+                                {!conversation.isGemini && (
                                   <p className="text-xs text-white/40 flex items-center whitespace-nowrap">
                                     <Clock className="h-3 w-3 mr-1" />
                                     {new Date(conversation.lastSeen).toLocaleDateString([], { day: '2-digit', month: '2-digit' })}
                                   </p>
-                                </div>
-                                <div className="flex justify-between items-center mt-1">
-                                  <p className="text-sm text-white/60 truncate">{conversation.lastMessage}</p>
-                                  {conversation.unreadCount > 0 && (
-                                    <span className="ml-2 min-w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-xs text-white px-1.5">
-                                      {conversation.unreadCount}
-                                    </span>
-                                  )}
-                                </div>
+                                )}
                               </div>
-                            </motion.div>
-                          ))}
-                        </div>
-                      )}
+                              <div className="flex justify-between items-center mt-1">
+                                <p className={`text-sm truncate ${
+                                  conversation.isGemini ? 'text-blue-300/70' : 'text-white/60'  
+                                }`}>
+                                  {conversation.lastMessage}
+                                </p>
+                                {!conversation.isGemini && conversation.unreadCount > 0 && (
+                                  <span className="ml-2 min-w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-xs text-white px-1.5">
+                                    {conversation.unreadCount}
+                                  </span>
+                                )}
+                                {conversation.isGemini && (
+                                  <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-blue-500/20 text-blue-300">
+                                    AI
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
                     </div>
                   </motion.div>
-                ) : (
-                  // Mesaj Görünümü
+                ) : isGeminiMode ? (
+                  // Gemini AI Konuşma Görünümü
                   <motion.div 
-                    key="messages"
+                    key="gemini-chat"
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 10 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
                     className="w-full h-full flex flex-col"
                   >
-                    {/* Mesaj Listesi */}
+                    {/* Gemini Mesaj Listesi */}
                     <div className="flex-grow overflow-y-auto p-4 custom-scrollbar">
-                      {Object.keys(messageGroups).map(date => (
+                      {/* Gemini AI Karşılama Mesajı - eğer hiç mesaj yoksa */}
+                      {geminiMessages.length === 0 && (
+                        <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                          <div className="w-16 h-16 mb-4 rounded-full flex items-center justify-center bg-blue-500/20">
+                            <Bot className="h-8 w-8 text-blue-400" />
+                          </div>
+                          <h3 className="text-lg font-semibold text-blue-400 mb-2">Gemini AI ile Konuş</h3>
+                          <p className="text-sm text-blue-100/70 mb-6">
+                            Google'ın yapay zeka asistanıyla sohbet edin. Sorular sorun, yardım alın veya yaratıcı içerik oluşturun.
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
+                            <div 
+                              onClick={() => setInput("Bana bir seyahat rotası önerir misin?")}
+                              className="p-3 rounded-lg bg-blue-900/20 border border-blue-400/20 text-white text-sm cursor-pointer hover:bg-blue-900/30 transition-colors"
+                            >
+                              Bana bir seyahat rotası önerir misin?
+                            </div>
+                            <div 
+                              onClick={() => setInput("Haftaya sunum yapacağım, nasıl hazırlanmalıyım?")}
+                              className="p-3 rounded-lg bg-blue-900/20 border border-blue-400/20 text-white text-sm cursor-pointer hover:bg-blue-900/30 transition-colors"
+                            >
+                              Haftaya sunum yapacağım, nasıl hazırlanmalıyım?
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Gemini Mesajları */}
+                      {Object.keys(geminiMessageGroups).map(date => (
                         <div key={date}>
                           <div className="flex justify-center my-3">
-                            <span className="text-xs px-3 py-1 rounded-full bg-white/5 text-white/40 border border-white/5">
+                            <span className="text-xs px-3 py-1 rounded-full bg-blue-900/20 text-blue-300/70 border border-blue-400/20">
                               {date === new Date().toLocaleDateString() ? 'Bugün' : date}
                             </span>
                           </div>
                           
-                          {messageGroups[date].map((message) => (
+                          {geminiMessageGroups[date].map((message) => (
                             <motion.div 
                               key={message.id} 
-                              initial={message.isNew ? { opacity: 0, y: 10 } : false}
+                              initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ duration: 0.2 }}
                               className={`flex mb-3 ${message.sender === "currentUser" ? 'justify-end' : 'justify-start'}`}
                             >
                               {message.sender !== "currentUser" && (
                                 <div className="flex-shrink-0 mr-2">
-                                  {selectedConversation.avatar ? (
-                                    <div className="h-8 w-8 rounded-full overflow-hidden border border-white/10">
-                                      <img 
-                                        src={selectedConversation.avatar} 
-                                        alt={selectedConversation.username}
-                                        className="h-full w-full object-cover"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <div className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-light bg-white/10 border border-white/10">
-                                      {selectedConversation.username.substring(0, 2).toUpperCase()}
-                                    </div>
-                                  )}
+                                  <div className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs bg-blue-500/30 border border-blue-400/30">
+                                    <Bot className="h-4 w-4 text-blue-300" />
+                                  </div>
                                 </div>
                               )}
                               <div 
                                 className={`max-w-[70%] rounded-2xl px-4 py-2 ${
                                   message.sender === "currentUser"
-                                    ? 'bg-white/10 text-white border border-white/5'
-                                    : 'bg-white/5 text-white border border-white/5'
+                                    ? 'bg-blue-500/10 text-white border border-blue-500/20'
+                                    : message.isError
+                                      ? 'bg-red-900/10 text-red-200 border border-red-500/20'
+                                      : 'bg-blue-900/20 text-blue-100 border border-blue-400/20'
                                 }`}
                               >
-                                <p className="text-sm">{message.content}</p>
+                                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                                 <p className="text-xs mt-1 text-right opacity-50">
                                   {formatMessageTime(message.timestamp)}
                                 </p>
@@ -429,33 +607,77 @@ export function ChatPanel() {
                         </div>
                       ))}
 
-                      {typing && (
+                      {isGeminiTyping && (
                         <div className="flex justify-start mb-3">
                           <div className="flex-shrink-0 mr-2">
-                            {selectedConversation.avatar ? (
-                              <div className="h-8 w-8 rounded-full overflow-hidden border border-white/10">
-                                <img 
-                                  src={selectedConversation.avatar} 
-                                  alt={selectedConversation.username}
-                                  className="h-full w-full object-cover"
-                                />
-                              </div>
-                            ) : (
-                              <div className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-light bg-white/10 border border-white/10">
-                                {selectedConversation.username.substring(0, 2).toUpperCase()}
-                              </div>
-                            )}
+                            <div className="h-8 w-8 rounded-full flex items-center justify-center bg-blue-500/30 border border-blue-400/30">
+                              <Bot className="h-4 w-4 text-blue-300" />
+                            </div>
                           </div>
-                          <div className="bg-white/5 border border-white/5 rounded-2xl px-4 py-3 text-white">
+                          <div className="bg-blue-900/20 border border-blue-400/20 rounded-2xl px-4 py-3 text-blue-200">
                             <div className="flex space-x-1">
-                              <div className="h-2 w-2 rounded-full bg-white/40 animate-pulse" style={{ animationDelay: '0ms' }}></div>
-                              <div className="h-2 w-2 rounded-full bg-white/40 animate-pulse" style={{ animationDelay: '150ms' }}></div>
-                              <div className="h-2 w-2 rounded-full bg-white/40 animate-pulse" style={{ animationDelay: '300ms' }}></div>
+                              <div className="h-2 w-2 rounded-full bg-blue-400/60 animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                              <div className="h-2 w-2 rounded-full bg-blue-400/60 animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                              <div className="h-2 w-2 rounded-full bg-blue-400/60 animate-pulse" style={{ animationDelay: '300ms' }}></div>
                             </div>
                           </div>
                         </div>
                       )}
                       
+                      <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* Gemini Mesaj Giriş Alanı */}
+                    <div className="p-3 border-t border-blue-400/20">
+                      <form 
+                        onSubmit={handleSubmit}
+                        className="flex items-center rounded-lg bg-blue-900/20 border border-blue-400/20 overflow-hidden"
+                      >
+                        <motion.button 
+                          type="button" 
+                          whileHover={{ opacity: 0.8 }}
+                          whileTap={{ scale: 0.95 }}
+                          className="p-2 text-blue-300/70 hover:text-blue-300 transition-colors"
+                        >
+                          <Smile className="h-5 w-5" />
+                        </motion.button>
+                        <input
+                          type="text"
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          placeholder="Gemini AI'ya bir şey sorun..."
+                          className="flex-grow p-2 bg-transparent border-0 text-white focus:outline-none placeholder-blue-300/40"
+                        />
+                        <motion.button 
+                          type="submit" 
+                          disabled={isLoading || !input.trim()}
+                          whileHover={isLoading || !input.trim() ? {} : { opacity: 0.8 }}
+                          whileTap={isLoading || !input.trim() ? {} : { scale: 0.95 }}
+                          className={`p-2 ${
+                            isLoading || !input.trim() 
+                              ? 'text-blue-300/30 bg-blue-900/10' 
+                              : 'text-white bg-blue-500/30 hover:bg-blue-500/40'
+                          } rounded-r-lg transition-colors`}
+                        >
+                          <Send className="h-5 w-5" />
+                        </motion.button>
+                      </form>
+                    </div>
+                  </motion.div>
+                ) : (
+                  // Normal Mesaj Görünümü
+                  <motion.div 
+                    key="messages"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="w-full h-full flex flex-col"
+                  >
+                    {/* Normal sohbet için var olan kod blokları */}
+                    {/* Mesaj Listesi */}
+                    <div className="flex-grow overflow-y-auto p-4 custom-scrollbar">
+                      {/* ...existing code... */}
                       <div ref={messagesEndRef} />
                     </div>
 
@@ -465,50 +687,7 @@ export function ChatPanel() {
                         onSubmit={handleSubmit}
                         className="flex items-center rounded-lg bg-white/5 border border-white/10 overflow-hidden"
                       >
-                        <motion.button 
-                          type="button" 
-                          whileHover={{ opacity: 0.8 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="p-2 text-white/50 hover:text-white/80 transition-colors"
-                        >
-                          <Smile className="h-5 w-5" />
-                        </motion.button>
-                        <input
-                          type="text"
-                          value={input}
-                          onChange={(e) => setInput(e.target.value)}
-                          placeholder="Mesajınızı yazın..."
-                          className="flex-grow p-2 bg-transparent border-0 text-white focus:outline-none placeholder-white/30"
-                        />
-                        <motion.button 
-                          type="button"
-                          whileHover={{ opacity: 0.8 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="p-2 text-white/50 hover:text-white/80 transition-colors"
-                        >
-                          <Paperclip className="h-5 w-5" />
-                        </motion.button>
-                        <motion.button 
-                          type="button"
-                          whileHover={{ opacity: 0.8 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="p-2 text-white/50 hover:text-white/80 transition-colors"
-                        >
-                          <Image className="h-5 w-5" />
-                        </motion.button>
-                        <motion.button 
-                          type="submit" 
-                          disabled={isLoading || !input.trim()}
-                          whileHover={isLoading || !input.trim() ? {} : { opacity: 0.8 }}
-                          whileTap={isLoading || !input.trim() ? {} : { scale: 0.95 }}
-                          className={`p-2 ${
-                            isLoading || !input.trim() 
-                              ? 'text-white/20 bg-white/5' 
-                              : 'text-white bg-white/10 hover:bg-white/15'
-                          } rounded-r-lg transition-colors`}
-                        >
-                          <Send className="h-5 w-5" />
-                        </motion.button>
+                        {/* ...existing code... */}
                       </form>
                     </div>
                   </motion.div>
@@ -531,10 +710,22 @@ export function ChatPanel() {
           border: '1px solid rgba(255, 255, 255, 0.1)'
         }}
       >
-        {!isOpen && conversations.some(c => c.unreadCount > 0) && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full text-xs bg-white/10 text-white border border-white/20">
-            {conversations.reduce((total, conv) => total + conv.unreadCount, 0)}
-          </span>
+        {!isOpen && (
+          <>
+            {conversations.some(c => c.unreadCount > 0) && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full text-xs bg-white/10 text-white border border-white/20">
+                {conversations.reduce((total, conv) => total + conv.unreadCount, 0)}
+              </span>
+            )}
+            <motion.div 
+              className="absolute -top-1 -left-1 w-5 h-5 flex items-center justify-center rounded-full text-xs bg-blue-500/80 text-white border border-blue-400/50"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Bot className="h-3 w-3" />
+            </motion.div>
+          </>
         )}
         <motion.div
           animate={isOpen ? {} : { 

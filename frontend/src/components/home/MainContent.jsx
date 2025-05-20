@@ -10,6 +10,7 @@ const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShow
   const [isSearching, setIsSearching] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [latestGeminiResponse, setLatestGeminiResponse] = useState(null);
 
   const actualShowCreateForm = showCreateForm !== undefined ? showCreateForm : localShowCreateForm;
   const actualSetShowCreateForm = setShowCreateForm || localSetShowCreateForm;
@@ -68,6 +69,13 @@ const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShow
       if (response.success) {
         // Formu kapat - güncellenmiş state kullanımı
         actualSetShowCreateForm(false);
+        
+        // Gemini yanıtını sakla
+        if (postData.geminiResponse) {
+          setLatestGeminiResponse(postData.geminiResponse);
+          // Yanıtı localStorage'a da kaydedelim
+          localStorage.setItem('latestGeminiResponse', postData.geminiResponse);
+        }
         
         // Başarı mesajı göster
         alert('Gönderi başarıyla oluşturuldu!');
@@ -169,7 +177,30 @@ const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShow
       
       {/* Gönderi Listesi - showSearchOnly durumunda gösterme */}
       {!showSearchOnly && !isSearching && !actualShowCreateForm && (
-        <Feed user={user} />
+        <>
+          {/* Gemini yanıtı varsa göster */}
+          {latestGeminiResponse && (
+            <div className="rounded-xl p-4 backdrop-blur-lg bg-black/50 border border-[#0affd9]/20 mb-4">
+              <div className="flex items-center space-x-2 mb-2">
+                <svg className="w-5 h-5 text-[#0affd9]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 16h2v-2h-2v2zm2.07-7.75-.9.92C11.45 11.9 11 12.5 11 14h2v-.5c0-1.1.45-1.67 1.17-2.42l.9-.92c.57-.58.83-1.17.83-1.66 0-1.1-.9-2-2-2s-2 .9-2 2h2c0-.55.45-1 1-1s1 .45 1 1c0 .48-.2.67-.73 1.22z"/>
+                </svg>
+                <span className="font-medium text-[#0affd9]">Yapay Zeka Düşünüyor ki:</span>
+                <button 
+                  onClick={() => setLatestGeminiResponse(null)} 
+                  className="ml-auto text-gray-400 hover:text-white"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-white">{latestGeminiResponse}</p>
+            </div>
+          )}
+          
+          <Feed user={user} />
+        </>
       )}
     </div>
   );

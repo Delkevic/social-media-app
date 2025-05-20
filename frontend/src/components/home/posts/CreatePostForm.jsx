@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../../../services/api';
+import { generateGeminiResponseForPost } from '../../../services/gemini-service';
 
 const CreatePostForm = ({ onSubmit, onCancel }) => {
   const [content, setContent] = useState('');
@@ -9,10 +10,86 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
+  
+  // Yeni state'ler ekleyelim
+  const [cloudinaryUrls, setCloudinaryUrls] = useState([]);
+  const [base64Images, setBase64Images] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Yeni state ekleyelim - Gemini yanıtı için
+  const [geminiResponse, setGeminiResponse] = useState(null);
+  const [isProcessingGemini, setIsProcessingGemini] = useState(false);
 
   // Cloudinary bilgileri
   const CLOUD_NAME = 'dol4b1lig';
   const UPLOAD_PRESET = 'unsigned_preset';
+
+  // URL'den görseli alıp base64'e dönüştüren fonksiyon
+  const fetchImageAndConvertToBase64 = async (imageUrl, imageId) => {
+    try {
+      console.log(`${imageId} için görsel URL'den base64'e dönüştürülüyor:`, imageUrl);
+      setIsProcessing(true);
+      
+      // URL'den görseli fetch et
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`Görsel alınamadı: ${response.status}`);
+      }
+      
+      // Blob'a dönüştür
+      const blob = await response.blob();
+      
+      // FileReader ile Base64'e dönüştür
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64data = reader.result;
+          console.log(`${imageId} için base64 dönüşümü tamamlandı. İlk 50 karakter:`, base64data.substr(0, 50) + '...');
+          
+          // Base64 verilerini state'e ekle
+          setBase64Images(prevBase64 => [...prevBase64, { 
+            id: imageId,
+            url: imageUrl,
+            base64: base64data
+          }]);
+          
+          resolve(base64data);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error(`${imageId} için base64 dönüşümünde hata:`, error);
+      return null;
+    }
+  };
+
+  // URL listesi değiştiğinde base64 dönüşümlerini yap
+  useEffect(() => {
+    const processImages = async () => {
+      if (cloudinaryUrls.length > 0) {
+        setIsProcessing(true);
+        
+        console.log(`${cloudinaryUrls.length} adet görsel dönüştürülecek`);
+        
+        try {
+          // Her URL için dönüşüm işlemini başlat
+          const promises = cloudinaryUrls.map(item => 
+            fetchImageAndConvertToBase64(item.url, item.id)
+          );
+          
+          await Promise.all(promises);
+          console.log('Tüm görsellerin base64 dönüşümleri tamamlandı');
+        } catch (error) {
+          console.error('Base64 dönüşüm işlemi sırasında hata:', error);
+        } finally {
+          setIsProcessing(false);
+        }
+      }
+    };
+    
+    processImages();
+  }, [cloudinaryUrls]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,9 +116,33 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         hasFailedImages
       });
       
+      // Base64 verilerini de logla
+      console.log(`Saklanan base64 verileri: ${base64Images.length} adet görsel`);
+      base64Images.forEach((img, index) => {
+        console.log(`Base64 #${index} - ID: ${img.id}, URL: ${img.url}, Base64 (ilk 30 karakter): ${img.base64.substr(0, 30)}...`);
+      });
+      
       // Eğer hiç görsel yüklenemezse ve içerik varsa, sadece içerikle devam et
       if (hasFailedImages && imageUrls.length === 0 && content.trim()) {
         console.log('Görseller yüklenemedi, sadece içerikle devam ediliyor');
+      }
+      
+      // Gemini API'ye sorgu göndermek için ilk base64 görselini ve içeriği kullan
+      let geminiResult = null;
+      if (base64Images.length > 0) {
+        setIsProcessingGemini(true);
+        geminiResult = await generateGeminiResponseForPost(
+          base64Images[0].base64,
+          content.trim()
+        );
+        setIsProcessingGemini(false);
+        
+        if (geminiResult.success) {
+          setGeminiResponse(geminiResult.data);
+          console.log("Gemini yanıtı:", geminiResult.data);
+        } else {
+          console.warn("Gemini yanıtı alınamadı:", geminiResult.message);
+        }
       }
       
       // Gönderiyi oluştur - caption ve tags boş string olarak gönderilecek
@@ -49,13 +150,18 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         content: content.trim(),
         caption: '', // Boş caption
         tags: '', // Boş tags
-        images: imageUrls
+        images: imageUrls,
+        base64Images: base64Images, // Base64 verilerini de gönder
+        geminiResponse: geminiResult?.success ? geminiResult.data : null // Gemini yanıtını da ekle
       });
       
       // Formu sıfırla
       setContent('');
       setImages([]);
       setUploadProgress(0);
+      setCloudinaryUrls([]);
+      setBase64Images([]);
+      setGeminiResponse(null);
     } catch (err) {
       console.error('Post oluşturma hatası:', err);
       setError('Gönderi oluşturulurken bir hata oluştu: ' + (err.message || err));
@@ -94,6 +200,13 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
       
       const data = await response.json();
       console.log('Cloudinary yanıtı:', data);
+      
+      // Yeni bir cloudinaryUrl ekle
+      const imageId = Date.now() + Math.random().toString(36).substring(2, 9);
+      setCloudinaryUrls(prev => [...prev, { 
+        id: imageId,
+        url: data.secure_url
+      }]);
       
       return data.secure_url;
     } catch (error) {
@@ -198,7 +311,7 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         className="w-full h-24 p-3 rounded-lg resize-none bg-black/60 border border-[#0affd9]/30 text-white focus:border-[#0affd9] focus:ring-1 focus:ring-[#0affd9]/50 outline-none"
       />
       
-      {/* Görsel önizleme */}
+      {/* Görsel önizlemesi */}
       {images.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {images.map(image => (
@@ -300,6 +413,35 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
           </button>
         </div>
       </div>
+      
+      {/* İşlem göstergesi ekle */}
+      {isProcessing && (
+        <div className="text-center py-2 text-sm text-[#0affd9]">
+          <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-[#0affd9] mr-2"></div>
+          Görseller işleniyor...
+        </div>
+      )}
+
+      {/* Gemini işlemi göstergesi */}
+      {isProcessingGemini && (
+        <div className="text-center py-2 text-sm text-[#0affd9]">
+          <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-[#0affd9] mr-2"></div>
+          Yapay zeka analizi yapılıyor...
+        </div>
+      )}
+      
+      {/* Gemini yanıtı önizlemesi (varsa) */}
+      {geminiResponse && (
+        <div className="p-3 rounded-lg text-sm border border-[#0affd9]/30 bg-[#0affd9]/10 text-[#0affd9]">
+          <div className="flex items-center space-x-2">
+            <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 16h2v-2h-2v2zm1.17-6.83c-.77.77-.79 1.83-.79 1.83h2c0-.6.34-1.16.8-1.62.24-.24.4-.53.4-.85 0-.5-.4-.9-.9-.9-.5 0-.9.4-.9.9 0 .28-.12.52-.32.72-.22.2-.52.32-.84.32-.32 0-.63-.12-.84-.32-.2-.2-.32-.44-.32-.72 0-.28.12-.52.32-.72.21-.2.52-.32.84-.32h.09c.23-.01.44-.12.59-.3.15-.18.22-.4.21-.64-.02-.23-.13-.44-.3-.58-.18-.15-.41-.22-.64-.21-.28.02-.55-.06-.77-.22-.22-.17-.37-.41-.41-.69-.05-.27 0-.56.14-.79.14-.24.35-.4.62-.45l-.08-1.99c-.09.01-.18.03-.27.04-.53.08-1.03.24-1.49.46-.43.21-.83.47-1.18.78-.35.31-.67.67-.93 1.06-.26.4-.47.83-.61 1.28-.15.45-.23.92-.23 1.39s.08.94.23 1.39c.14.45.35.88.61 1.28.26.4.57.75.93 1.06.35.31.75.57 1.18.78.46.22.96.38 1.49.46.41.06.82.09 1.24.09s.83-.03 1.24-.09c.53-.08 1.03-.24 1.49-.46.43-.21.83-.47 1.18-.78.35-.31.67-.66.93-1.06.26-.4.47-.83.61-1.28.15-.45.23-.92.23-1.39 0-1.33-.53-2.54-1.39-3.42-.86-.87-2.06-1.42-3.37-1.42h-.04c.93 0 1.56.98 1.11 1.83-.14.26-.46.43-.8.42-.62-.03-1.21.24-1.65.7z"/>
+            </svg>
+            <span className="font-medium">AI Yorumu:</span>
+          </div>
+          <p className="mt-1">{geminiResponse}</p>
+        </div>
+      )}
     </form>
   );
 };

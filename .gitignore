@@ -187,3 +187,5 @@ settings.json
 .cursorrules
 
 
+backend/development.db-shm
+backend/development.db-wal

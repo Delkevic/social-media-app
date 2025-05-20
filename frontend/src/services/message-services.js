@@ -21,8 +21,9 @@ export const getConversations = async () => {
 export const getMessages = async (userId) => {
   try {
     const response = await api.messages.getConversation(userId);
+    
     if (response.success) {
-      return response.data || [];
+      return response.data;
     }
     throw new Error(response.message || 'Mesajları getirme hatası');
   } catch (error) {

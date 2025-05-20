@@ -15,6 +15,7 @@ const LeftPanel = ({ showMessagesAndNotifications = true, onPostFormToggle }) =>
   const { togglePanel: toggleNotificationPanel } = useNotification(); // Notification hook'undan togglePanel'i alıyoruz
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
   const [isCreatingPost, setIsCreatingPost] = useState(false);
+  const [latestGeminiResponse, setLatestGeminiResponse] = useState(null);
   
   const isActive = (path) => location.pathname === path;
 
@@ -80,6 +81,13 @@ const LeftPanel = ({ showMessagesAndNotifications = true, onPostFormToggle }) =>
       if (response.success) {
         // Formu kapat
         setShowCreatePostModal(false);
+        
+        // Gemini yanıtını sakla
+        if (postData.geminiResponse) {
+          setLatestGeminiResponse(postData.geminiResponse);
+          // Yanıtı localStorage'a da kaydedelim
+          localStorage.setItem('latestGeminiResponse', postData.geminiResponse);
+        }
         
         // Başarı mesajı göster
         toast.success('Gönderi başarıyla oluşturuldu!');

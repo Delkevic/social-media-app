@@ -36,6 +36,8 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
   const [likeCount, setLikeCount] = useState(post?.likes || 0);
   const [isLiked, setIsLiked] = useState(post?.liked || false);
   const [commentCount, setCommentCount] = useState(post?.comment_count || post?.comments_count || post?.comments || 0);
+  const [showGeminiResponse, setShowGeminiResponse] = useState(false);
+  const geminiResponse = localStorage.getItem('latestGeminiResponse');
 
   // Debug mod için Shift tuş basımı dinleyicisi
   useEffect(() => {
@@ -1004,9 +1006,30 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
   // ---- YORUM BİLEŞENİ SONU ----
 
   return (
-    <div className="bg-black/30 border border-[#0affd9]/10 rounded-2xl p-4 mb-6 overflow-hidden cursor-pointer" onClick={handlePostClick}>
-      {/* Üst Kısım - Kullanıcı Bilgisi */}
-      <div className="flex justify-between items-center mb-4">
+    <div className="bg-black/60 rounded-xl overflow-hidden border border-[#0affd9]/10">
+      {/* Gemini yanıtı (varsa) */}
+      {geminiResponse && showGeminiResponse && (
+        <div className="mx-4 mt-3 p-3 rounded-lg bg-[#0affd9]/10 border border-[#0affd9]/30">
+          <div className="flex items-center">
+            <svg className="w-5 h-5 text-[#0affd9] mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 16h2v-2h-2v2zm2.07-7.75-.9.92C11.45 11.9 11 12.5 11 14h2v-.5c0-1.1.45-1.67 1.17-2.42l.9-.92c.57-.58.83-1.17.83-1.66 0-1.1-.9-2-2-2s-2 .9-2 2h2c0-.55.45-1 1-1s1 .45 1 1c0 .48-.2.67-.73 1.22z"/>
+            </svg>
+            <span className="font-medium text-[#0affd9]">Yapay Zeka Yorumu</span>
+            <button 
+              onClick={() => setShowGeminiResponse(false)} 
+              className="ml-auto text-gray-400 hover:text-white p-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="mt-1 text-white">{geminiResponse}</p>
+        </div>
+      )}
+      
+      {/* Post başlık kısmı */}
+      <div className="flex items-center p-4">
         <Link to={`/profile/${post.user?.username || post.username}`} className="flex items-center">
           <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#0affd9] to-blue-500 flex items-center justify-center text-white font-bold overflow-hidden">
             {post.user?.profile_picture || post.user?.profileImage ? (
