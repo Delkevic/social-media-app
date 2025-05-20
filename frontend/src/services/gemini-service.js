@@ -31,8 +31,11 @@ export const generateGeminiResponseForPost = async (base64Image, postContent) =>
           parts: [
             {
               text: `Bu sosyal medya gönderisinin içeriği hakkında 5 tane etiket ver. 
-              Bu etiketler gördüğün şeyi açıklayan tek kelimeden oluşan etiketler olacak. Sadece etiketleri döndür. İçerik: "${postContent || 'İçeriksiz gönderi'}"` 
-              // NOT: Kullanıcı buradaki prompt'u değiştirebilir
+              Bu etiketler gördüğün şeyi açıklayan tek kelimeden oluşan etiketler olacak. 
+              Sadece etiketleri döndür. Başka açıklama veya giriş yapmadan, doğrudan virgülle 
+              ayrılmış etiketleri yaz. Format örneği: Araba, İnsan, Manzara, Spor, Teknoloji
+              insan gibi içerikle ilgili olmayan etiketleri verme. Daha spesifik, postu açıklayan etiketler ver.
+              İçerik: "${postContent || 'İçeriksiz gönderi'}"`  
             },
             {
               inline_data: {
@@ -139,8 +142,8 @@ export const generateChatResponse = async (message, conversationHistory = []) =>
         }
       ]
     };
-
-    // Gemini API'ye istek
+    
+    // Gemini API'ye istek gönderme
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
@@ -148,33 +151,33 @@ export const generateChatResponse = async (message, conversationHistory = []) =>
       },
       body: JSON.stringify(requestBody)
     });
-
+    
     // Yanıt kontrolü
     if (!response.ok) {
       const errorData = await response.text();
       console.error('Gemini Chat API hatası:', errorData);
       throw new Error(`Gemini Chat API hatası: ${response.status} ${response.statusText}`);
     }
-
+    
     // Yanıtı işle
     const responseData = await response.json();
     console.log('Gemini Chat API yanıtı:', responseData);
-
+    
     // Yanıt metnini çıkar
-    const geminiText = responseData.candidates[0]?.content?.parts[0]?.text || 
-      'Üzgünüm, şu anda yanıt veremiyorum. Lütfen daha sonra tekrar deneyin.';
-
+    const geminiText = responseData.candidates[0]?.content?.parts[0]?.text || 'Gemini yanıtı alınamadı';
+    
     return {
       success: true,
-      message: "Gemini yanıtı başarıyla alındı",
+      message: "Gemini Chat yanıtı başarıyla alındı",
       data: geminiText
     };
+    
   } catch (error) {
     console.error('Gemini Chat API hatası:', error);
     return {
       success: false,
       message: `Gemini Chat API çağrısında hata: ${error.message}`,
-      data: "Üzgünüm, bir hata oluştu. Lütfen daha sonra tekrar deneyin."
+      data: null
     };
   }
 };
