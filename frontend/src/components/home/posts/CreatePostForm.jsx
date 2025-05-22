@@ -137,34 +137,23 @@ const CreatePostForm = ({ onSubmit, onCancel }) => {
         );
         setIsProcessingGemini(false);
         
-        if (geminiResult.success) {
-          setGeminiResponse(geminiResult.data);
-          console.log("Gemini yanıtı:", geminiResult.data);
-        } else {
-          console.warn("Gemini yanıtı alınamadı:", geminiResult.message);
+        if (geminiResult && geminiResult.success) {
+          console.log("Gemini etiketleri:", geminiResult.data);
         }
       }
       
-      // Gönderiyi oluştur - caption ve tags boş string olarak gönderilecek
+      // Gönderiyi oluştur
       await onSubmit({
         content: content.trim(),
-        caption: '', // Boş caption
-        tags: '', // Boş tags
+        caption: caption,
+        tags: tags,
         images: imageUrls,
-        base64Images: base64Images, // Base64 verilerini de gönder
-        geminiResponse: geminiResult?.success ? geminiResult.data : null // Gemini yanıtını da ekle
+        base64Images: base64Images,
+        geminiResponse: geminiResult?.success && geminiResult.data ? geminiResult.data.join(', ') : null
       });
-      
-      // Formu sıfırla
-      setContent('');
-      setImages([]);
-      setUploadProgress(0);
-      setCloudinaryUrls([]);
-      setBase64Images([]);
-      setGeminiResponse(null);
     } catch (err) {
-      console.error('Post oluşturma hatası:', err);
-      setError('Gönderi oluşturulurken bir hata oluştu: ' + (err.message || err));
+      setError('Gönderi oluşturulurken bir hata oluştu: ' + err.message);
+      console.error('Gönderi gönderme hatası:', err);
     } finally {
       setIsSubmitting(false);
     }

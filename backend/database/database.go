@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -70,6 +71,7 @@ func ConnectDatabase() {
 		&models.Comment{},
 		&models.CommentLike{},
 		&models.PostImage{},
+		&models.Comment{},
 		&models.Like{},
 		&models.SavedPost{},
 		&models.Reels{},
@@ -86,6 +88,14 @@ func ConnectDatabase() {
 		&models.SupportTicket{},
 		&models.SupportMessage{},
 		&models.TwoFactorAuth{},
+
+		&models.Follow{},
+		&models.Notification{},
+		&models.FollowRequest{},
+		// Yeni modelleri ekle
+		&models.Tag{},
+		&models.PostTag{},
+		&models.UserTag{},
 	)
 
 	if err != nil {
@@ -107,4 +117,27 @@ func getEnvWithDefault(key, defaultValue string) string {
 // GetDB returns the database instance
 func GetDB() *gorm.DB {
 	return DB
+}
+
+// DB connection initialization
+func InitDB() {
+	// Bağlantı başarılı olduktan sonra tablolar migrate edilir
+	if DB != nil {
+		fmt.Println("Veritabanı tablolarını migrate ediliyor...")
+		// UserTag modelini ekleyerek migration listesini güncelle
+		err := DB.AutoMigrate(&models.User{}, &models.Post{}, &models.UserTag{})
+		if err != nil {
+			fmt.Printf("Migration hatası: %v\n", err)
+		} else {
+			fmt.Println("Tablolar başarıyla migrate edildi")
+		}
+	} else {
+		fmt.Println("UYARI: DB bağlantısı nil olduğu için migration yapılamadı")
+	}
+}
+
+// İnit fonksiyonu sorunlu olabileceğinden, main.go'dan açıkça çağrılması gerekiyor
+func init() {
+	// InitDB fonksiyonunu doğrudan çağırmak yerine, ana uygulamada çağırılması için yönlendirme yapılabilir
+	fmt.Println("Database modülü başlatılıyor. InitDB() fonksiyonunu main'den çağırdığınızdan emin olun.")
 }

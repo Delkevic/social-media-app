@@ -75,6 +75,7 @@ const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShow
           setLatestGeminiResponse(postData.geminiResponse);
           // Yanıtı localStorage'a da kaydedelim
           localStorage.setItem('latestGeminiResponse', postData.geminiResponse);
+          console.log("Gemini etiketleri kaydedildi:", postData.geminiResponse);
         }
         
         // Başarı mesajı göster

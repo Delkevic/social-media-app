@@ -118,11 +118,12 @@ func CreatePost(c *gin.Context) {
 	userID, _ := c.Get("userID")
 
 	var request struct {
-		Content  string   `json:"content"`
-		Caption  string   `json:"caption"` // Başlık alanı
-		Tags     string   `json:"tags"`    // Virgülle ayrılmış etiketler
-		Images   []string `json:"images"`
-		ImageUrl string   `json:"imageUrl"` // Cloudinary'den gelen tek URL için
+		Content        string   `json:"content"`
+		Caption        string   `json:"caption"` // Başlık alanı
+		Tags           string   `json:"tags"`    // Virgülle ayrılmış etiketler
+		Images         []string `json:"images"`
+		ImageUrl       string   `json:"imageUrl"`       // Cloudinary'den gelen tek URL için
+		GeminiResponse string   `json:"geminiResponse"` // Gemini'den gelen etiketler
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -172,6 +173,70 @@ func CreatePost(c *gin.Context) {
 			Message: "Gönderi oluşturulurken bir hata oluştu: " + err.Error(),
 		})
 		return
+	}
+
+	// Gemini yanıtını işle ve etiketleri ekle
+	if request.GeminiResponse != "" {
+		// Virgülle ayrılmış etiketleri parçala
+		geminiTags := strings.Split(request.GeminiResponse, ",")
+
+		// Etiket sayısını kontrol et ve maksimum 6 etiket kullan
+		tagCount := len(geminiTags)
+		if tagCount > 6 {
+			tagCount = 6
+		}
+
+		// Ana ve yardımcı etiket sayıları
+		primaryTagCount := 4
+		if tagCount < 4 {
+			primaryTagCount = tagCount
+		}
+
+		for i := 0; i < tagCount; i++ {
+			tagName := strings.TrimSpace(geminiTags[i])
+			if tagName == "" {
+				continue // Boş etiketleri atla
+			}
+
+			// Etiket türünü belirle
+			tagType := "primary"
+			if i >= primaryTagCount {
+				tagType = "auxiliary"
+			}
+
+			// Etiket var mı kontrol et, yoksa oluştur (findOrCreate mantığı)
+			var tag models.Tag
+			if err := tx.Where("name = ?", tagName).FirstOrCreate(&tag, models.Tag{
+				Name:      tagName,
+				Type:      tagType, // Etiket türünü kaydet
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}).Error; err != nil {
+				fmt.Printf("Etiket oluşturulurken hata: %v\n", err)
+				continue // Hata olsa bile diğer etiketlerle devam et
+			}
+
+			// Post ve tag arasında ilişki oluştur
+			postTag := models.PostTag{
+				PostID:    post.ID,
+				TagID:     tag.ID,
+				TagType:   tagType, // İlişkide de etiket türünü kaydet
+				CreatedAt: time.Now(),
+			}
+
+			if err := tx.Create(&postTag).Error; err != nil {
+				fmt.Printf("Post-Tag ilişkisi oluşturulurken hata: %v\n", err)
+				// Hata olsa bile diğer etiketlerle devam et
+			}
+		}
+
+		// Gemini etiketlerini TagsString'e ekle (eğer daha önce kullanıcı eklemediyse)
+		if post.TagsString == "" {
+			post.TagsString = request.GeminiResponse
+			if err := tx.Model(&post).Update("tags_string", post.TagsString).Error; err != nil {
+				fmt.Printf("TagsString güncellenirken hata: %v\n", err)
+			}
+		}
 	}
 
 	// Görselleri işle
@@ -404,9 +469,173 @@ func ToggleLike(c *gin.Context) {
 	// Eğer beğeni varsa kaldır, yoksa ekle
 	if result.Error == nil {
 		// Beğeni var, kaldır
-		database.DB.Delete(&like)
-		database.DB.Model(&post).Update("like_count", post.LikeCount-1)
+		fmt.Printf("===== BEĞENİ KALDIRILIYOR - UserID: %d, PostID: %d =====\n", userID.(uint), postID)
+		
+		// Transaction başlat - tüm işlemlerin ya tamamen başarılı olmasını ya da hiç yapılmamasını sağlar
+		tx := database.DB.Begin()
+		
+		// Beğeni silme işlemi
+		if err := tx.Delete(&like).Error; err != nil {
+			tx.Rollback()
+			fmt.Printf("HATA: Beğeni silinirken hata oluştu: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Beğeni silinirken hata oluştu"})
+			return
+		}
+		
+		// Gönderi like count güncelleme
+		if err := tx.Model(&post).Update("like_count", post.LikeCount-1).Error; err != nil {
+			tx.Rollback()
+			fmt.Printf("HATA: Like count güncellenirken hata oluştu: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Like count güncellenirken hata oluştu"})
+			return
+		}
+		
 		liked = false
+
+		// Beğeni kaldırıldığında kullanıcının etiketlerini güncelle
+		fmt.Printf("Kullanıcı etiketleri beğeni kaldırma sonrası güncelleniyor...\n")
+		
+		// İşlem öncesi kullanıcının mevcut etiketlerini göster
+		var existingTags []models.UserTag
+		if err := tx.Where("user_id = ?", userID).Find(&existingTags).Error; err != nil {
+			fmt.Printf("Mevcut etiketler alınamadı: %v\n", err)
+		} else {
+			fmt.Printf("İşlem öncesi kullanıcının %d etiketi bulunuyor\n", len(existingTags))
+		}
+		
+		var postTags []models.PostTag
+		if err := tx.Where("post_id = ?", post.ID).Find(&postTags).Error; err != nil {
+			fmt.Printf("Gönderi etiketleri alınamadı: %v\n", err)
+			// Etiket güncelleme işlemi başarısız olsa bile beğeni işlemine devam et
+		} else {
+			fmt.Printf("Gönderi ID %v için %d etiket bulundu - Beğeni kaldırma\n", post.ID, len(postTags))
+
+			// Hiç etiket yoksa Post.TagsString'den etiketleri almayı dene
+			if len(postTags) == 0 && post.TagsString != "" {
+				fmt.Printf("PostTags tablosunda etiket yok, ancak post'un tags_string değeri mevcut: %s\n", post.TagsString)
+
+				// Eğer post.Tags dizisi varsa ve dolu ise onları kullan
+				if post.TagsString != "" {
+					// TagsString'i split et ve tags dizisine aktar
+					tags := strings.Split(post.TagsString, ",")
+					// Boşlukları temizle
+					for i, tag := range tags {
+						tags[i] = strings.TrimSpace(tag)
+					}
+					fmt.Printf("TagsString'den %d etiket çıkarıldı\n", len(tags))
+					
+					// Bu etiketleri kullan
+					for _, tagName := range tags {
+						if tagName == "" {
+							continue
+						}
+						
+						fmt.Printf("Etiket işleniyor: %s\n", tagName)
+						var tag models.Tag
+						tagResult := tx.Where("name = ?", tagName).First(&tag)
+						if tagResult.Error == nil {
+							fmt.Printf("Etiket bulundu: %s (ID: %d)\n", tag.Name, tag.ID)
+							
+							// Kullanıcı bu etikete sahip mi?
+							var userTag models.UserTag
+							result := tx.Where("user_id = ? AND tag_id = ?", userID, tag.ID).First(&userTag)
+							if result.Error == nil {
+								fmt.Printf("Kullanıcı etiketi bulundu: %s (Count: %d)\n", tag.Name, userTag.Count)
+								
+								// Etiketi güncelle veya sil
+								if userTag.Count > 1 {
+									// Count değerini azalt
+									newCount := userTag.Count - 1
+									if err := tx.Model(&userTag).Updates(map[string]interface{}{
+										"count":      newCount,
+										"updated_at": time.Now(),
+									}).Error; err != nil {
+										fmt.Printf("Kullanıcı etiketi güncellenemedi: %v\n", err)
+									} else {
+										fmt.Printf("Kullanıcı etiketi güncellendi: %s (yeni count: %d)\n", tag.Name, newCount)
+									}
+								} else {
+									// Count 1 veya daha az ise etiketi sil
+									if err := tx.Unscoped().Delete(&userTag).Error; err != nil {
+										fmt.Printf("Kullanıcı etiketi silinemedi: %v\n", err)
+									} else {
+										fmt.Printf("Kullanıcı etiketi BAŞARIYLA silindi: %s\n", tag.Name)
+									}
+								}
+							} else {
+								fmt.Printf("Kullanıcıda bu etiket bulunamadı: %s\n", tag.Name)
+							}
+						} else {
+							fmt.Printf("Etiket bulunamadı: %s\n", tagName)
+						}
+					}
+				}
+			} else {
+				// PostTag tablosundaki her etiket için
+				fmt.Printf("PostTags tablosundan etiket güncelleme kullanılıyor\n")
+				for _, postTag := range postTags {
+					var tag models.Tag
+					if err := tx.First(&tag, postTag.TagID).Error; err != nil {
+						fmt.Printf("Etiket bilgisi alınamadı (ID: %d): %v\n", postTag.TagID, err)
+						continue
+					}
+					fmt.Printf("Etiket işleniyor: %s (ID: %d)\n", tag.Name, tag.ID)
+					
+					// Kullanıcı bu etikete sahip mi?
+					var userTag models.UserTag
+					result := tx.Where("user_id = ? AND tag_id = ?", userID, tag.ID).First(&userTag)
+					if result.Error == nil {
+						fmt.Printf("Kullanıcı etiketi bulundu: %s (Count: %d)\n", tag.Name, userTag.Count)
+						
+						// Etiketi güncelle veya sil
+						if userTag.Count > 1 {
+							// Count değerini azalt
+							newCount := userTag.Count - 1
+							if err := tx.Model(&userTag).Updates(map[string]interface{}{
+								"count":      newCount,
+								"updated_at": time.Now(),
+							}).Error; err != nil {
+								fmt.Printf("Kullanıcı etiketi güncellenemedi: %v\n", err)
+							} else {
+								fmt.Printf("Kullanıcı etiketi güncellendi: %s (yeni count: %d)\n", tag.Name, newCount)
+							}
+						} else {
+							// Count 1 veya daha az ise etiketi sil
+							if err := tx.Unscoped().Delete(&userTag).Error; err != nil {
+								fmt.Printf("Kullanıcı etiketi silinemedi: %v\n", err)
+							} else {
+								fmt.Printf("Kullanıcı etiketi BAŞARIYLA silindi: %s\n", tag.Name)
+							}
+						}
+					} else {
+						fmt.Printf("Kullanıcıda bu etiket bulunamadı: %s\n", tag.Name)
+					}
+				}
+			}
+			
+			// Transaction'ı commit et
+			if err := tx.Commit().Error; err != nil {
+				fmt.Printf("Transaction commit edilirken hata: %v\n", err)
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "İşlem tamamlanamadı"})
+				return
+			}
+			
+			fmt.Printf("Etiket güncelleme işlemi transaction ile commit edildi!\n")
+			
+			// İşlem sonrası kullanıcının etiketlerini kontrol et
+			var updatedTags []models.UserTag
+			if err := database.DB.Where("user_id = ?", userID).Find(&updatedTags).Error; err != nil {
+				fmt.Printf("Güncellenmiş etiketler alınamadı: %v\n", err)
+			} else {
+				fmt.Printf("İşlem sonrası kullanıcının %d etiketi bulunuyor\n", len(updatedTags))
+			}
+			
+			// Kullanıcının etiket istatistiklerini konsola yazdır
+			PrintUserTagStats(userID.(uint))
+			
+			fmt.Printf("===== BEĞENİ KALDIRMA İŞLEMİ TAMAMLANDI =====\n")
+		}
 	} else {
 		// Beğeni yok, ekle
 		newLike := models.Like{
