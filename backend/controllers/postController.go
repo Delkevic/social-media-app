@@ -9,6 +9,7 @@ import (
 	"social-media-app/backend/database"
 	"social-media-app/backend/models"
 	"social-media-app/backend/services"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,60 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// getUserTagPreferences kullanıcının etiket tercihlerini analiz eder
+func getUserTagPreferences(userID uint) (map[string]int, map[string]int) {
+	var userTags []models.UserTag
+	database.DB.Where("user_id = ?", userID).Find(&userTags)
+
+	primaryTags := make(map[string]int)
+	auxiliaryTags := make(map[string]int)
+
+	for _, userTag := range userTags {
+		if userTag.TagType == "primary" {
+			primaryTags[userTag.TagName] = userTag.Count
+		} else if userTag.TagType == "auxiliary" {
+			auxiliaryTags[userTag.TagName] = userTag.Count
+		}
+	}
+
+	return primaryTags, auxiliaryTags
+}
+
+// calculatePostRelevanceScore gönderi ile kullanıcı tercihleri arasında uyumluluk skoru hesaplar
+func calculatePostRelevanceScore(post models.Post, primaryTags map[string]int, auxiliaryTags map[string]int) int {
+	score := 0
+
+	// Gönderinin etiketlerini al
+	var postTags []string
+	if post.TagsString != "" {
+		postTags = strings.Split(post.TagsString, ",")
+		for i, tag := range postTags {
+			postTags[i] = strings.TrimSpace(tag)
+		}
+	}
+
+	// Primary etiketler için skor hesaplama (ağırlık: 3x)
+	for i, tag := range postTags {
+		if tag == "" {
+			continue
+		}
+
+		// İlk 4 etiket primary kabul ediliyor
+		if i < 4 {
+			if count, exists := primaryTags[tag]; exists {
+				score += count * 3 // Primary etiketler 3x ağırlık
+			}
+		} else {
+			// 5. ve 6. etiketler auxiliary
+			if count, exists := auxiliaryTags[tag]; exists {
+				score += count * 1 // Auxiliary etiketler 1x ağırlık
+			}
+		}
+	}
+
+	return score
+}
 
 // Gönderi listesini getirme
 func GetPosts(c *gin.Context) {
@@ -36,7 +91,7 @@ func GetPosts(c *gin.Context) {
 		// En çok beğeni alan gönderiler - "likes_count" yerine "like_count" kullanıyoruz
 		query = database.DB.Order("like_count DESC, created_at DESC")
 	default: // "general"
-		// Tüm gönderiler
+		// Tüm gönderiler - kullanıcı tercihleri varsa akıllı sıralama yapılacak
 		query = database.DB.Order("created_at DESC")
 	}
 
@@ -48,6 +103,44 @@ func GetPosts(c *gin.Context) {
 			Message: "Gönderiler yüklenirken bir hata oluştu: " + result.Error.Error(),
 		})
 		return
+	}
+
+	// General feed için kullanıcı etiket tercihlerine göre sıralama
+	if feed == "general" && userID != nil {
+		primaryTags, auxiliaryTags := getUserTagPreferences(userID.(uint))
+
+		// Eğer kullanıcının etiket tercihleri varsa, akıllı sıralama yap
+		if len(primaryTags) > 0 || len(auxiliaryTags) > 0 {
+			// Gönderilere relevance score hesapla
+			type PostWithScore struct {
+				Post  models.Post
+				Score int
+			}
+
+			var postsWithScores []PostWithScore
+			for _, post := range posts {
+				score := calculatePostRelevanceScore(post, primaryTags, auxiliaryTags)
+				postsWithScores = append(postsWithScores, PostWithScore{
+					Post:  post,
+					Score: score,
+				})
+			}
+
+			// Skora göre sırala (yüksek skor önce)
+			sort.Slice(postsWithScores, func(i, j int) bool {
+				if postsWithScores[i].Score == postsWithScores[j].Score {
+					// Skor eşitse, tarih sıralaması (yeni önce)
+					return postsWithScores[i].Post.CreatedAt.After(postsWithScores[j].Post.CreatedAt)
+				}
+				return postsWithScores[i].Score > postsWithScores[j].Score
+			})
+
+			// Sıralanmış gönderileri geri al
+			posts = make([]models.Post, len(postsWithScores))
+			for i, pws := range postsWithScores {
+				posts[i] = pws.Post
+			}
+		}
 	}
 
 	// Yanıtı hazırla
@@ -470,10 +563,10 @@ func ToggleLike(c *gin.Context) {
 	if result.Error == nil {
 		// Beğeni var, kaldır
 		fmt.Printf("===== BEĞENİ KALDIRILIYOR - UserID: %d, PostID: %d =====\n", userID.(uint), postID)
-		
+
 		// Transaction başlat - tüm işlemlerin ya tamamen başarılı olmasını ya da hiç yapılmamasını sağlar
 		tx := database.DB.Begin()
-		
+
 		// Beğeni silme işlemi
 		if err := tx.Delete(&like).Error; err != nil {
 			tx.Rollback()
@@ -481,7 +574,7 @@ func ToggleLike(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Beğeni silinirken hata oluştu"})
 			return
 		}
-		
+
 		// Gönderi like count güncelleme
 		if err := tx.Model(&post).Update("like_count", post.LikeCount-1).Error; err != nil {
 			tx.Rollback()
@@ -489,12 +582,12 @@ func ToggleLike(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "Like count güncellenirken hata oluştu"})
 			return
 		}
-		
+
 		liked = false
 
 		// Beğeni kaldırıldığında kullanıcının etiketlerini güncelle
 		fmt.Printf("Kullanıcı etiketleri beğeni kaldırma sonrası güncelleniyor...\n")
-		
+
 		// İşlem öncesi kullanıcının mevcut etiketlerini göster
 		var existingTags []models.UserTag
 		if err := tx.Where("user_id = ?", userID).Find(&existingTags).Error; err != nil {
@@ -502,7 +595,7 @@ func ToggleLike(c *gin.Context) {
 		} else {
 			fmt.Printf("İşlem öncesi kullanıcının %d etiketi bulunuyor\n", len(existingTags))
 		}
-		
+
 		var postTags []models.PostTag
 		if err := tx.Where("post_id = ?", post.ID).Find(&postTags).Error; err != nil {
 			fmt.Printf("Gönderi etiketleri alınamadı: %v\n", err)
@@ -523,25 +616,25 @@ func ToggleLike(c *gin.Context) {
 						tags[i] = strings.TrimSpace(tag)
 					}
 					fmt.Printf("TagsString'den %d etiket çıkarıldı\n", len(tags))
-					
+
 					// Bu etiketleri kullan
 					for _, tagName := range tags {
 						if tagName == "" {
 							continue
 						}
-						
+
 						fmt.Printf("Etiket işleniyor: %s\n", tagName)
 						var tag models.Tag
 						tagResult := tx.Where("name = ?", tagName).First(&tag)
 						if tagResult.Error == nil {
 							fmt.Printf("Etiket bulundu: %s (ID: %d)\n", tag.Name, tag.ID)
-							
+
 							// Kullanıcı bu etikete sahip mi?
 							var userTag models.UserTag
 							result := tx.Where("user_id = ? AND tag_id = ?", userID, tag.ID).First(&userTag)
 							if result.Error == nil {
 								fmt.Printf("Kullanıcı etiketi bulundu: %s (Count: %d)\n", tag.Name, userTag.Count)
-								
+
 								// Etiketi güncelle veya sil
 								if userTag.Count > 1 {
 									// Count değerini azalt
@@ -580,13 +673,13 @@ func ToggleLike(c *gin.Context) {
 						continue
 					}
 					fmt.Printf("Etiket işleniyor: %s (ID: %d)\n", tag.Name, tag.ID)
-					
+
 					// Kullanıcı bu etikete sahip mi?
 					var userTag models.UserTag
 					result := tx.Where("user_id = ? AND tag_id = ?", userID, tag.ID).First(&userTag)
 					if result.Error == nil {
 						fmt.Printf("Kullanıcı etiketi bulundu: %s (Count: %d)\n", tag.Name, userTag.Count)
-						
+
 						// Etiketi güncelle veya sil
 						if userTag.Count > 1 {
 							// Count değerini azalt
@@ -612,7 +705,7 @@ func ToggleLike(c *gin.Context) {
 					}
 				}
 			}
-			
+
 			// Transaction'ı commit et
 			if err := tx.Commit().Error; err != nil {
 				fmt.Printf("Transaction commit edilirken hata: %v\n", err)
@@ -620,9 +713,9 @@ func ToggleLike(c *gin.Context) {
 				c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "İşlem tamamlanamadı"})
 				return
 			}
-			
+
 			fmt.Printf("Etiket güncelleme işlemi transaction ile commit edildi!\n")
-			
+
 			// İşlem sonrası kullanıcının etiketlerini kontrol et
 			var updatedTags []models.UserTag
 			if err := database.DB.Where("user_id = ?", userID).Find(&updatedTags).Error; err != nil {
@@ -630,10 +723,10 @@ func ToggleLike(c *gin.Context) {
 			} else {
 				fmt.Printf("İşlem sonrası kullanıcının %d etiketi bulunuyor\n", len(updatedTags))
 			}
-			
+
 			// Kullanıcının etiket istatistiklerini konsola yazdır
 			PrintUserTagStats(userID.(uint))
-			
+
 			fmt.Printf("===== BEĞENİ KALDIRMA İŞLEMİ TAMAMLANDI =====\n")
 		}
 	} else {
