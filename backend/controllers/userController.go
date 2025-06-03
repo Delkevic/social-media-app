@@ -1042,6 +1042,7 @@ func GetUserProfile(c *gin.Context) {
 				"email":             user.Email,
 				"phone":             user.Phone,
 				"profileImage":      user.ProfileImage,
+				"profile_picture":   user.ProfileImage, // Frontend uyumluluğu için
 				"bio":               user.Bio,
 				"location":          user.Location,
 				"website":           user.Website,
@@ -1129,18 +1130,19 @@ func GetUserByUsername(c *gin.Context) {
 	}
 
 	userData := map[string]interface{}{
-		"id":             user.ID,
-		"username":       user.Username,
-		"fullName":       user.FullName,
-		"profileImage":   user.ProfileImage,
-		"isPrivate":      user.IsPrivate,
-		"isVerified":     user.IsVerified,
-		"followerCount":  followerCount,
-		"followingCount": followingCount,
-		"postCount":      postCount,
-		"followStatus":   followStatus,   // Eklendi: none, following, pending, self
-		"canViewProfile": canViewProfile, // Eklendi: Detayları görebilir mi?
-		"createdAt":      user.CreatedAt,
+		"id":              user.ID,
+		"username":        user.Username,
+		"fullName":        user.FullName,
+		"profileImage":    user.ProfileImage,
+		"profile_picture": user.ProfileImage, // Frontend uyumluluğu için
+		"isPrivate":       user.IsPrivate,
+		"isVerified":      user.IsVerified,
+		"followerCount":   followerCount,
+		"followingCount":  followingCount,
+		"postCount":       postCount,
+		"followStatus":    followStatus,   // Eklendi: none, following, pending, self
+		"canViewProfile":  canViewProfile, // Eklendi: Detayları görebilir mi?
+		"createdAt":       user.CreatedAt,
 	}
 
 	// Eğer profili görebiliyorsa (gizli değilse veya takip ediyorsa veya kendisiyse)
@@ -1290,6 +1292,7 @@ type UpdateProfileRequest struct {
 	Location          string `json:"location"`
 	Website           string `json:"website"`
 	ProfileImage      string `json:"profileImage"`
+	ProfilePicture    string `json:"profile_picture"`   // Frontend'den gelen alan
 	IsPrivate         *bool  `json:"isPrivate"`         // Pointer olarak tanımlandı (nil kontrolü için)
 	CommentPermission string `json:"commentPermission"` // Eklendi
 	TagPermission     string `json:"tagPermission"`     // Eklendi
@@ -1394,6 +1397,10 @@ func UpdateProfile(c *gin.Context) {
 	if request.Phone != "" {
 		updates["Phone"] = request.Phone
 	}
+	// profile_picture alanını da destekle (frontend'den gelen)
+	if request.ProfilePicture != "" {
+		updates["ProfileImage"] = request.ProfilePicture
+	}
 
 	// Güncelleme işlemi
 	if len(updates) > 0 {
@@ -1421,6 +1428,7 @@ func UpdateProfile(c *gin.Context) {
 				"phone":             user.Phone,
 				"fullName":          user.FullName,
 				"profileImage":      user.ProfileImage,
+				"profile_picture":   user.ProfileImage, // Frontend uyumluluğu için
 				"bio":               user.Bio,
 				"location":          user.Location,
 				"website":           user.Website,

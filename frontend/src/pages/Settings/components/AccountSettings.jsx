@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Lock, AlertTriangle, Clock, Loader2 } from 'lucide-react';
+import { User, Mail, Phone, Lock, AlertTriangle, Clock, Loader2, Camera, Upload, X, Check } from 'lucide-react';
 import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 
@@ -49,6 +49,7 @@ const AccountSettings = () => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [profileImage, setProfileImage] = useState(null);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -74,6 +75,7 @@ const AccountSettings = () => {
           setUsername(apiUser.username || '');
           setEmail(apiUser.email || '');
           setPhone(apiUser.phone || '');
+          setProfileImage(apiUser.profile_picture || apiUser.profileImage || null);
         } else {
           setError('Kullanıcı bilgileri alınamadı.');
         }
@@ -103,6 +105,29 @@ const AccountSettings = () => {
   const showStatusMessage = (type, message) => {
     setStatusMessage({ type, message });
     setTimeout(() => setStatusMessage({ type: '', message: '' }), 5000);
+  };
+
+  const handleProfileImageUpdate = (newImageUrl) => {
+    setProfileImage(newImageUrl);
+    
+    // Kullanıcı context'ini güncelle
+    const updatedUser = { ...user, profile_picture: newImageUrl, profileImage: newImageUrl };
+    updateUser(updatedUser);
+    
+    // Local storage'ı güncelle
+    if (localStorage.getItem('user')) {
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+    if (sessionStorage.getItem('user')) {
+      sessionStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+    
+    // Global profil güncelleme event'i gönder
+    window.dispatchEvent(new CustomEvent('profileUpdated', { 
+      detail: { user: updatedUser } 
+    }));
+    
+    showStatusMessage('success', 'Profil resmi başarıyla güncellendi');
   };
 
   const handleUsernameSubmit = async (e) => {
@@ -456,6 +481,232 @@ const AccountSettings = () => {
           </div>
         </div>
       </SettingsSection>
+
+      <SettingsSection title="Profil Resmi" icon={Camera}>
+        <ProfilePictureUpload 
+          currentImage={profileImage}
+          onImageUpdate={handleProfileImageUpdate}
+          disabled={loading}
+        />
+      </SettingsSection>
+    </div>
+  );
+};
+
+// Modern Profil Resmi Upload Bileşeni
+const ProfilePictureUpload = ({ currentImage, onImageUpdate, disabled }) => {
+  const [preview, setPreview] = useState(currentImage);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = async (file) => {
+    if (!file) return;
+
+    // Dosya tipini kontrol et
+    if (!file.type.startsWith('image/')) {
+      alert('Lütfen sadece resim dosyası seçin');
+      return;
+    }
+
+    // Dosya boyutunu kontrol et (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Resim boyutu 5MB\'dan küçük olmalıdır');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      
+      // Önizleme oluştur
+      const previewUrl = URL.createObjectURL(file);
+      setPreview(previewUrl);
+
+      // API'ye yükle
+      const response = await api.uploadImage(file);
+      
+      if (response.success && response.data) {
+        const imageUrl = response.data.url || response.data.fullUrl;
+        
+        // Profil resmini güncelle
+        const updateResponse = await api.user.updateProfile({ 
+          profile_picture: imageUrl 
+        });
+        
+        if (updateResponse.success) {
+          onImageUpdate(imageUrl);
+          
+          // URL'i temizle
+          URL.revokeObjectURL(previewUrl);
+          setPreview(imageUrl);
+        } else {
+          throw new Error(updateResponse.message || 'Profil resmi güncellenemedi');
+        }
+      } else {
+        throw new Error(response.message || 'Resim yüklenemedi');
+      }
+    } catch (error) {
+      console.error('Profil resmi yükleme hatası:', error);
+      alert('Profil resmi yüklenirken bir hata oluştu: ' + error.message);
+      setPreview(currentImage); // Hata durumunda eski resme dön
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileSelect(files[0]);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleClick = () => {
+    if (!disabled && !isUploading) {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const handleFileInputChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+  };
+
+  const removeImage = async () => {
+    try {
+      setIsUploading(true);
+      
+      const response = await api.user.updateProfile({ 
+        profile_picture: null 
+      });
+      
+      if (response.success) {
+        setPreview(null);
+        onImageUpdate(null);
+      } else {
+        throw new Error(response.message || 'Profil resmi kaldırılamadı');
+      }
+    } catch (error) {
+      console.error('Profil resmi kaldırma hatası:', error);
+      alert('Profil resmi kaldırılırken bir hata oluştu: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Mevcut Profil Resmi */}
+      <div className="flex items-center gap-6">
+        <div className="relative">
+          <div className="w-24 h-24 rounded-full overflow-hidden bg-black/60 border-2 border-[#0affd9]/30">
+            {preview ? (
+              <img
+                src={preview}
+                alt="Profil resmi"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <User size={32} className="text-gray-400" />
+              </div>
+            )}
+          </div>
+          
+          {/* Yükleniyor göstergesi */}
+          {isUploading && (
+            <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+              <Loader2 size={20} className="text-[#0affd9] animate-spin" />
+            </div>
+          )}
+        </div>
+        
+        <div className="flex-1">
+          <h4 className="font-medium text-white mb-1">Profil Resmi</h4>
+          <p className="text-sm text-gray-400 mb-3">
+            JPG, PNG veya GIF formatında, maksimum 5MB
+          </p>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={handleClick}
+              disabled={disabled || isUploading}
+              className="px-4 py-2 bg-[#0affd9] text-black rounded-lg hover:bg-[#0affd9]/80 disabled:opacity-50 flex items-center gap-2 text-sm font-medium transition-colors"
+            >
+              <Camera size={16} />
+              {preview ? 'Değiştir' : 'Yükle'}
+            </button>
+            
+            {preview && (
+              <button
+                onClick={removeImage}
+                disabled={disabled || isUploading}
+                className="px-4 py-2 bg-red-600/20 text-red-400 border border-red-600/30 rounded-lg hover:bg-red-600/30 disabled:opacity-50 flex items-center gap-2 text-sm font-medium transition-colors"
+              >
+                <X size={16} />
+                Kaldır
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Drag & Drop Alanı */}
+      <div
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onClick={handleClick}
+        className={`
+          relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all
+          ${isDragOver
+            ? 'border-[#0affd9] bg-[#0affd9]/5'
+            : 'border-[#0affd9]/30 hover:border-[#0affd9]/50 hover:bg-[#0affd9]/5'
+          }
+          ${disabled || isUploading ? 'opacity-50 cursor-not-allowed' : ''}
+        `}
+      >
+        <Upload size={32} className="mx-auto mb-2 text-[#0affd9]/70" />
+        <p className="text-sm text-gray-300 mb-1">
+          Resmi buraya sürükleyin veya <span className="text-[#0affd9]">tıklayın</span>
+        </p>
+        <p className="text-xs text-gray-500">
+          Maksimum boyut: 5MB • Desteklenen formatlar: JPG, PNG, GIF
+        </p>
+        
+        {isUploading && (
+          <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+            <div className="flex items-center gap-2 text-[#0affd9]">
+              <Loader2 size={20} className="animate-spin" />
+              <span className="text-sm">Yükleniyor...</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Gizli dosya input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileInputChange}
+        className="hidden"
+      />
     </div>
   );
 };
