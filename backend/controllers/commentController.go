@@ -96,8 +96,9 @@ func AddComment(c *gin.Context) {
 	}
 
 	// Yorumu oluştur
+	postIDPtr := uint(postID)
 	comment := models.Comment{
-		PostID:  uint(postID),
+		PostID:  &postIDPtr,
 		UserID:  userID.(uint),
 		Content: input.Content,
 	}
@@ -133,7 +134,7 @@ func AddComment(c *gin.Context) {
 	// Oluşturulan yorumu kullanıcı bilgileriyle birlikte döndür
 	responseComment := struct {
 		ID        uint      `json:"id"`
-		PostID    uint      `json:"postID"`
+		PostID    *uint     `json:"postID"`
 		Content   string    `json:"content"`
 		LikeCount int       `json:"likeCount"`
 		CreatedAt time.Time `json:"createdAt"`
@@ -295,8 +296,10 @@ func DeleteComment(c *gin.Context) {
 
 	// Gönderi yorum sayısını azalt
 	var post models.Post
-	if err := database.DB.First(&post, comment.PostID).Error; err == nil && post.CommentCount > 0 {
-		database.DB.Model(&post).Update("comment_count", post.CommentCount-1)
+	if comment.PostID != nil {
+		if err := database.DB.First(&post, *comment.PostID).Error; err == nil && post.CommentCount > 0 {
+			database.DB.Model(&post).Update("comment_count", post.CommentCount-1)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -436,7 +439,7 @@ func ReplyToComment(c *gin.Context) {
 	// Yanıt veren kullanıcının bilgileriyle yanıtı döndür
 	responseReply := struct {
 		ID        uint      `json:"id"`
-		PostID    uint      `json:"postID"`
+		PostID    *uint     `json:"postID"`
 		ParentID  uint      `json:"parentID"`
 		Content   string    `json:"content"`
 		LikeCount int       `json:"likeCount"`

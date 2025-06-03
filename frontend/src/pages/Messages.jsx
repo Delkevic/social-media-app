@@ -37,6 +37,20 @@ import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 
+// Utility function to convert boolean attributes to strings
+const convertBooleanProps = (props) => {
+  const result = { ...props };
+  const attributesToConvert = ['jsx', 'global'];
+  
+  attributesToConvert.forEach(attr => {
+    if (attr in result && typeof result[attr] === 'boolean') {
+      result[attr] = result[attr].toString();
+    }
+  });
+  
+  return result;
+};
+
 // Profil resmi URL'ini tam hale getiren yardımcı fonksiyon
 const getFullImageUrl = (url) => {
   if (!url) return `https://ui-avatars.com/api/?name=U&background=0D1117&color=0AFFD9`;
@@ -53,7 +67,7 @@ const MediaPreview = ({ media, onCancel }) => {
   
   return (
     <div className="relative mb-2 w-full">
-      <div className="rounded-md overflow-hidden border border-[#0affd9]/30 bg-black/30">
+      <div className="rounded-xl overflow-hidden border border-[#0affd9]/30 bg-black/50 backdrop-blur-sm">
         {media.fileType === 'image' ? (
           <img 
             src={mediaUrl} 
@@ -74,7 +88,7 @@ const MediaPreview = ({ media, onCancel }) => {
         )}
       </div>
       <button 
-        className="absolute -top-2 -right-2 rounded-full bg-red-600 hover:bg-red-700 text-white p-1 transition-colors"
+        className="absolute -top-2 -right-2 rounded-full bg-red-600 hover:bg-red-700 text-white p-1 transition-colors shadow-lg"
         onClick={onCancel}
       >
         <X size={16} />
@@ -87,9 +101,9 @@ const MediaPreview = ({ media, onCancel }) => {
 const UploadProgress = ({ progress }) => {
   return (
     <div className="mb-2 w-full px-1">
-      <div className="bg-gray-700/50 rounded-full h-2">
+      <div className="bg-black/50 rounded-full h-2 backdrop-blur-sm border border-[#0affd9]/20">
         <div 
-          className="bg-[#0affd9] h-2 rounded-full transition-all duration-300 ease-out"
+          className="bg-gradient-to-r from-[#0affd9] to-[#00d4aa] h-2 rounded-full transition-all duration-300 ease-out"
           style={{ width: `${progress}%` }}
         ></div>
       </div>
@@ -103,8 +117,8 @@ const UploadProgress = ({ progress }) => {
 // Mesaj baloncuğu bileşeni
 const MessageBubble = ({ message, isCurrentUser }) => {
   const bubbleStyle = isCurrentUser 
-    ? 'bg-blue-500 text-white rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl' 
-    : 'bg-gray-700 text-white rounded-tl-2xl rounded-tr-2xl rounded-br-2xl';
+    ? 'bg-gradient-to-r from-[#0affd9] to-[#00d4aa] text-black rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl shadow-lg' 
+    : 'bg-black/70 backdrop-blur-sm text-white rounded-tl-2xl rounded-tr-2xl rounded-br-2xl border border-[#0affd9]/20';
   
   const formattedTime = message.sentAt 
     ? formatDistanceToNow(new Date(message.sentAt), { addSuffix: true, locale: tr }) 
@@ -118,13 +132,17 @@ const MessageBubble = ({ message, isCurrentUser }) => {
   const isVideo = message.mediaType?.startsWith('video/');
 
   return (
-    <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-4`}>
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} mb-4`}
+    >
       {!isCurrentUser && (
         <div className="mr-2 w-8 h-8">
           <img 
             src={getFullImageUrl(message.senderInfo?.profileImage)} 
             alt="Avatar" 
-            className="rounded-full w-8 h-8" 
+            className="rounded-full w-8 h-8 border-2 border-[#0affd9]/30" 
           />
         </div>
       )}
@@ -151,7 +169,7 @@ const MessageBubble = ({ message, isCurrentUser }) => {
         <div className={`text-xs text-gray-400 mt-1 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
           {formattedTime}
           {isCurrentUser && message.isRead && (
-            <span className="ml-2 text-blue-400">✓✓</span>
+            <span className="ml-2 text-[#0affd9]">✓✓</span>
           )}
         </div>
       </div>
@@ -161,11 +179,11 @@ const MessageBubble = ({ message, isCurrentUser }) => {
           <img 
             src={getFullImageUrl(message.senderInfo?.profileImage)} 
             alt="Avatar" 
-            className="rounded-full w-8 h-8" 
+            className="rounded-full w-8 h-8 border-2 border-[#0affd9]/30" 
           />
         </div>
       )}
-    </div>
+    </motion.div>
   );
 };
 
@@ -176,18 +194,21 @@ const ConversationItem = ({ conversation, isActive, onClick, currentUserId }) =>
   });
   
   return (
-    <div 
-      className={`flex items-center p-3 cursor-pointer border-b border-gray-700 hover:bg-gray-700/40 transition-colors ${isActive ? 'bg-gray-700/60' : ''}`}
+    <motion.div 
+      whileHover={{ scale: 1.02 }}
+      className={`flex items-center p-4 cursor-pointer border-b border-[#0affd9]/10 hover:bg-black/40 transition-all duration-200 backdrop-blur-sm ${
+        isActive ? 'bg-black/60 border-l-4 border-l-[#0affd9]' : ''
+      }`}
       onClick={onClick}
     >
       <div className="relative">
         <img 
           src={getFullImageUrl(conversation.profileImage)} 
           alt={conversation.username} 
-          className="w-12 h-12 rounded-full object-cover" 
+          className="w-12 h-12 rounded-full object-cover border-2 border-[#0affd9]/30" 
         />
         {conversation.unreadCount > 0 && (
-          <div className="absolute -top-1 -right-1 bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center text-xs text-white">
+          <div className="absolute -top-1 -right-1 bg-gradient-to-r from-[#0affd9] to-[#00d4aa] rounded-full w-5 h-5 flex items-center justify-center text-xs text-black font-bold shadow-lg">
             {conversation.unreadCount}
           </div>
         )}
@@ -202,7 +223,7 @@ const ConversationItem = ({ conversation, isActive, onClick, currentUserId }) =>
         </div>
         <p className="text-sm text-gray-300 truncate">{conversation.lastContent}</p>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -210,40 +231,41 @@ const ConversationItem = ({ conversation, isActive, onClick, currentUserId }) =>
 const FollowingSuggestions = ({ users, onSelectUser, currentUserId }) => {
   if (!users || users.length === 0) {
     return (
-      <div className="p-4 text-center text-gray-500">
-        Önerilen kullanıcı bulunamadı
+      <div className="p-6 text-center text-gray-400">
+        <Users size={48} className="mx-auto mb-4 opacity-50" />
+        <p>Önerilen kullanıcı bulunamadı</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg overflow-hidden shadow-sm h-full">
-      <div className="px-4 py-3 border-b border-gray-200">
-        <h3 className="text-sm font-medium text-gray-700">Takip Ettiklerim</h3>
+    <div className="bg-black/70 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg border border-[#0affd9]/20 h-full">
+      <div className="px-6 py-4 border-b border-[#0affd9]/20">
+        <h3 className="text-sm font-medium text-[#0affd9]">Takip Ettiklerim</h3>
       </div>
       <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
         {users.map((user, index) => (
-          <div 
+          <motion.div 
             key={user.id || `user-${index}`} 
-            className="px-4 py-3 hover:bg-gray-50 flex items-center cursor-pointer transition-colors duration-200"
+            whileHover={{ scale: 1.02 }}
+            className="px-6 py-4 hover:bg-black/40 flex items-center cursor-pointer transition-all duration-200"
             onClick={() => onSelectUser(user.id)}
           >
             <div className="relative">
               <img 
                 src={user.profileImage || '/default-avatar.png'} 
                 alt={user.username} 
-                className="h-10 w-10 rounded-full object-cover"
+                className="h-10 w-10 rounded-full object-cover border-2 border-[#0affd9]/30"
               />
-              {/* Çevrimiçi durum göstergesi - şu an için herkesi çevrimiçi gösteriyoruz */}
-              <span className="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-white"></span>
+              <span className="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-black shadow-lg"></span>
             </div>
             <div className="ml-3 flex-1">
               <div className="flex justify-between items-center">
-                <p className="text-sm font-medium text-gray-900">{user.fullName || user.username}</p>
+                <p className="text-sm font-medium text-white">{user.fullName || user.username}</p>
               </div>
-              <p className="text-xs text-gray-500 truncate">@{user.username}</p>
+              <p className="text-xs text-gray-400 truncate">@{user.username}</p>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>
@@ -396,131 +418,147 @@ const NewConversation = ({ onClose, onSelectUser, followingUsers }) => {
 };
 
 const MessageList = React.memo(({ messages, currentUser, formatTime }) => {
+  console.log('🔍 MessageList render edildi - Mesaj sayısı:', messages.length);
+
+  // Basit tarih gruplandırması
   const messageGroups = useMemo(() => {
     const groups = {};
+    
     messages.forEach(message => {
-      let messageDateStr;
+      let messageDateStr = 'Bugün'; // Varsayılan olarak bugün
+      
       try {
-        const dateObj = parseISO(message.sentAt);
-        if (isToday(dateObj)) messageDateStr = 'Bugün';
-        else if (isYesterday(dateObj)) messageDateStr = 'Dün';
-        else messageDateStr = format(dateObj, 'd MMMM yyyy', { locale: tr });
+        if (message.sentAt) {
+          const messageDate = new Date(message.sentAt);
+          const today = new Date();
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          
+          if (messageDate.toDateString() === today.toDateString()) {
+            messageDateStr = 'Bugün';
+          } else if (messageDate.toDateString() === yesterday.toDateString()) {
+            messageDateStr = 'Dün';
+          } else {
+            messageDateStr = messageDate.toLocaleDateString('tr-TR');
+          }
+        }
       } catch (e) {
-        console.warn("Geçersiz tarih formatı:", message.sentAt);
-        messageDateStr = "Belirsiz Zaman";
+        console.warn("Tarih formatlanamadı:", message.sentAt, e);
+        messageDateStr = "Bugün";
       }
+      
       if (!groups[messageDateStr]) {
         groups[messageDateStr] = [];
       }
       groups[messageDateStr].push(message);
     });
+    
+    console.log('📊 Mesaj grupları:', Object.keys(groups), 'Toplam mesaj sayısı:', messages.length);
     return groups;
   }, [messages]);
   
   const sortedDates = Object.keys(messageGroups).sort((a, b) => {
-    const specialDatesOrder = { "Bugün": 0, "Dün": 1 };
-    const aIsSpecial = specialDatesOrder[a] !== undefined;
-    const bIsSpecial = specialDatesOrder[b] !== undefined;
-
-    if (aIsSpecial && bIsSpecial) return specialDatesOrder[a] - specialDatesOrder[b];
-    if (aIsSpecial) return -1;
-    if (bIsSpecial) return 1;
-    
-    try {
-      return parseISO(messages.find(m => format(parseISO(m.sentAt), 'd MMMM yyyy', { locale: tr }) === b || (isToday(parseISO(m.sentAt)) && b === "Bugün") || (isYesterday(parseISO(m.sentAt)) && b === "Dün") ).sentAt) - parseISO(messages.find(m => format(parseISO(m.sentAt), 'd MMMM yyyy', { locale: tr }) === a || (isToday(parseISO(m.sentAt)) && a === "Bugün") || (isYesterday(parseISO(m.sentAt)) && a === "Dün")).sentAt);
-    } catch (e) {
-        return 0;
-    }
+    // Basit sıralama: Bugün en üstte, sonra tarih sırasına göre
+    if (a === 'Bugün') return -1;
+    if (b === 'Bugün') return 1;
+    if (a === 'Dün') return -1;
+    if (b === 'Dün') return 1;
+    return 0; // Diğerleri için sıralama yapmayalım şimdilik
   });
+
+  if (messages.length === 0) {
+    console.log('⚠️ MessageList: Hiç mesaj yok');
+    return <div className="text-center text-gray-400 py-8">Henüz mesaj yok</div>;
+  }
 
   return (
     <div className="space-y-2 px-2 md:px-4 pb-2">
       {sortedDates.map(dateStr => (
-          <div key={dateStr}>
-            <div className="flex justify-center my-3">
-              <span className="text-xs px-3 py-1 rounded-full bg-black/40 text-gray-400 border border-[#0affd9]/20 shadow-sm">
-                {dateStr}
-              </span>
-            </div>
-            
-            <div className="space-y-3">
-              {messageGroups[dateStr].map((message) => {
-                const isCurrentUser = currentUser && message.senderId === currentUser.id;
-                const isTemporary = message.id && message.id.toString().startsWith('temp-');
-                
-                let tickIcon = null;
-                if (isCurrentUser && !isTemporary) {
-                  if (message.isRead) {
-                    tickIcon = <CheckCheck size={16} className="text-[#0affd9]/80" />;
-                  } else if (message.isDelivered) {
-                    tickIcon = <CheckCheck size={16} className="text-gray-500" />;
-                  } else {
-                    tickIcon = <Check size={16} className="text-gray-500" />;
-                  }
+        <div key={dateStr}>
+          <div className="flex justify-center my-3">
+            <span className="text-xs px-3 py-1 rounded-full bg-black/40 text-gray-400 border border-[#0affd9]/20 shadow-sm">
+              {dateStr}
+            </span>
+          </div>
+          
+          <div className="space-y-3">
+            {messageGroups[dateStr].map((message) => {
+              const isCurrentUser = currentUser && message.senderId === currentUser.id;
+              const isTemporary = message.id && message.id.toString().startsWith('temp-');
+              
+              let tickIcon = null;
+              if (isCurrentUser && !isTemporary) {
+                if (message.isRead) {
+                  tickIcon = <CheckCheck size={16} className="text-[#0affd9]/80" />;
+                } else if (message.isDelivered) {
+                  tickIcon = <CheckCheck size={16} className="text-gray-500" />;
+                } else {
+                  tickIcon = <Check size={16} className="text-gray-500" />;
                 }
-                
-                return (
-                  <motion.div 
-                    key={message.id} 
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5, transition: { duration: 0.15 } }}
-                    transition={{ duration: 0.25, ease: "easeOut" }}
-                    className={`flex mb-1 items-end ${isCurrentUser ? 'justify-end pl-10' : 'justify-start pr-10'}`}
+              }
+              
+              return (
+                <motion.div 
+                  key={message.id} 
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5, transition: { duration: 0.15 } }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className={`flex mb-1 items-end ${isCurrentUser ? 'justify-end pl-10' : 'justify-start pr-10'}`}
+                >
+                  {!isCurrentUser && (
+                     <img 
+                      src={getFullImageUrl(message.senderInfo?.profileImage)} 
+                      alt={message.senderInfo?.username || "Avatar"} 
+                      className="w-7 h-7 rounded-full object-cover mr-2 self-start border-2 border-transparent group-hover:border-[#0affd9]/50 transition-all"
+                    />
+                  )}
+                  <div 
+                    className={`relative max-w-[80%] md:max-w-[70%] rounded-2xl px-3.5 py-2 shadow-md group ${ 
+                      isCurrentUser
+                        ? 'bg-gradient-to-br from-[#0AAFFD] to-[#0AFFD9]/90 text-black rounded-br-none'
+                        : 'bg-black/40 text-gray-200 rounded-bl-none border border-[#0affd9]/20'
+                    } ${isTemporary ? 'opacity-70' : ''}`}
                   >
-                    {!isCurrentUser && (
-                       <img 
-                        src={getFullImageUrl(message.senderInfo?.profileImage)} 
-                        alt={message.senderInfo?.username || "Avatar"} 
-                        className="w-7 h-7 rounded-full object-cover mr-2 self-start border-2 border-transparent group-hover:border-[#0affd9]/50 transition-all"
-                      />
-                    )}
-                    <div 
-                      className={`relative max-w-[80%] md:max-w-[70%] rounded-2xl px-3.5 py-2 shadow-md group ${ 
-                        isCurrentUser
-                          ? 'bg-gradient-to-br from-[#0AAFFD] to-[#0AFFD9]/90 text-black rounded-br-none'
-                          : 'bg-black/40 text-gray-200 rounded-bl-none border border-[#0affd9]/20'
-                      } ${isTemporary ? 'opacity-70' : ''}`}
-                    >
-                      {message.mediaUrl && (
-                        <div className="mb-1.5 last:mb-0">
-                           {message.mediaType?.startsWith('image/') ? (
-                            <img src={mediaService.getMediaUrl(message.mediaUrl, 'image')} alt="Medya" className="rounded-lg max-w-xs max-h-60 object-contain cursor-pointer shadow-md" 
-                              onClick={() => window.open(mediaService.getMediaUrl(message.mediaUrl, 'image'), '_blank')} />
-                          ) : message.mediaType?.startsWith('video/') ? (
-                            <video src={mediaService.getMediaUrl(message.mediaUrl, 'video')} controls className="rounded-lg max-w-xs max-h-60 shadow-md" />
-                          ) : (
-                            <a href={mediaService.getMediaUrl(message.mediaUrl, 'file')} target="_blank" rel="noopener noreferrer" className="text-[#0affd9] hover:underline flex items-center bg-black/30 p-2 rounded-md">
-                              <FileIcon size={18} className="mr-2" />
-                              Dosyayı Görüntüle
-                            </a>
-                          )}
-                        </div>
-                      )}
-                      {message.content && <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{message.content}</p>} 
-                      <div className={`text-[11px] mt-1.5 flex items-center ${isCurrentUser ? 'justify-end text-black/60' : 'justify-start text-gray-500/80'}`}>
-                        <span>{formatTime(message.sentAt)}</span>
-                        {isCurrentUser && tickIcon && (
-                          <span className="ml-1.5">
-                            {tickIcon}
-                          </span>
+                    {message.mediaUrl && (
+                      <div className="mb-1.5 last:mb-0">
+                         {message.mediaType?.startsWith('image/') ? (
+                          <img src={mediaService.getMediaUrl(message.mediaUrl, 'image')} alt="Medya" className="rounded-lg max-w-xs max-h-60 object-contain cursor-pointer shadow-md" 
+                            onClick={() => window.open(mediaService.getMediaUrl(message.mediaUrl, 'image'), '_blank')} />
+                        ) : message.mediaType?.startsWith('video/') ? (
+                          <video src={mediaService.getMediaUrl(message.mediaUrl, 'video')} controls className="rounded-lg max-w-xs max-h-60 shadow-md" />
+                        ) : (
+                          <a href={mediaService.getMediaUrl(message.mediaUrl, 'file')} target="_blank" rel="noopener noreferrer" className="text-[#0affd9] hover:underline flex items-center bg-black/30 p-2 rounded-md">
+                            <FileIcon size={18} className="mr-2" />
+                            Dosyayı Görüntüle
+                          </a>
                         )}
                       </div>
-                    </div>
-                     {isCurrentUser && (
-                       <img 
-                        src={getFullImageUrl(currentUser?.profile_picture)}
-                        alt={currentUser?.username || "Avatar"} 
-                        className="w-7 h-7 rounded-full object-cover ml-2 self-start border-2 border-transparent group-hover:border-[#0affd9]/50 transition-all"
-                      />
                     )}
-                  </motion.div>
-                );
-              })}
-            </div>
+                    {message.content && <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{message.content}</p>} 
+                    <div className={`text-[11px] mt-1.5 flex items-center ${isCurrentUser ? 'justify-end text-black/60' : 'justify-start text-gray-500/80'}`}>
+                      <span>{formatTime(message.sentAt)}</span>
+                      {isCurrentUser && tickIcon && (
+                        <span className="ml-1.5">
+                          {tickIcon}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                   {isCurrentUser && (
+                     <img 
+                      src={getFullImageUrl(currentUser?.profile_picture)}
+                      alt={currentUser?.username || "Avatar"} 
+                      className="w-7 h-7 rounded-full object-cover ml-2 self-start border-2 border-transparent group-hover:border-[#0affd9]/50 transition-all"
+                    />
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
-        ))}
+        </div>
+      ))}
     </div>
   );
 });
@@ -618,7 +656,6 @@ const Messages = () => {
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
   
   const [selectedUserId, setSelectedUserId] = useState(null);
-  const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
@@ -1010,35 +1047,52 @@ const Messages = () => {
   const handleSendMessage = async (e) => {
     e?.preventDefault();
     
-    // ⚠️ AGRESIF DEBUG VE FALLBACK ⚠️
-    console.log('🚨 MESAJ GÖNDERME BAŞLADI - AGRESIF DEBUG:', {
+    console.log('🔥 MESAJ GÖNDERME DEBUG BAŞLADI:', {
+      messageInput: messageInput,
+      messageInput_length: messageInput.length,
+      messageInput_trimmed: messageInput.trim(),
+      messageInput_trimmed_length: messageInput.trim().length,
       selectedUserId: selectedUserId,
-      selectedUserId_type: typeof selectedUserId,
       conversationId: conversationId,
-      conversationId_type: typeof conversationId,
       selectedConversation: selectedConversation,
-      user: user,
-      newMessage: newMessage
+      mediaFile: mediaFile,
+      isUploading: isUploading,
+      user: user
     });
     
-    // selectedUserId'yi kontrol et ve gerekirse düzelt
+    // Basit validasyon kontrolü
+    if (!messageInput.trim() && !mediaFile) {
+      console.warn('❌ Mesaj boş veya medya dosyası yok');
+      return;
+    }
+    
+    if (isUploading) {
+      console.warn('❌ Upload devam ediyor');
+      return;
+    }
+    
+    if (!user) {
+      console.error('❌ User undefined');
+      toast.error('Kullanıcı girişi gerekli');
+      return;
+    }
+    
+    // selectedUserId'yi kontrol et ve düzelt
     let actualSelectedUserId = selectedUserId;
     
-    // Eğer selectedUserId undefined ise, conversationId'den al
     if (!actualSelectedUserId && conversationId) {
-      console.log('⚠️ selectedUserId undefined, conversationId\'den alınıyor:', conversationId);
+      console.log('⚠️ selectedUserId undefined, conversationId kullanılıyor:', conversationId);
       actualSelectedUserId = conversationId;
       setSelectedUserId(conversationId);
     }
     
-    // Eğer hala undefined ise selectedConversation'dan al
     if (!actualSelectedUserId && selectedConversation?.sender?.id) {
-      console.log('⚠️ selectedUserId hala undefined, selectedConversation\'dan alınıyor:', selectedConversation.sender.id);
+      console.log('⚠️ selectedUserId hala undefined, selectedConversation kullanılıyor:', selectedConversation.sender.id);
       actualSelectedUserId = selectedConversation.sender.id;
       setSelectedUserId(selectedConversation.sender.id);
     }
     
-    // Son çare: URL'den çıkar
+    // URL'den çıkar (son çare)
     if (!actualSelectedUserId) {
       const urlParts = window.location.pathname.split('/');
       const urlUserId = urlParts[urlParts.length - 1];
@@ -1049,152 +1103,112 @@ const Messages = () => {
       }
     }
     
-    // actualSelectedUserId'yi string'e çevir ve kontrol et
-    if (actualSelectedUserId) {
-      actualSelectedUserId = String(actualSelectedUserId);
+    if (!actualSelectedUserId) {
+      console.error('❌ actualSelectedUserId bulunamadı');
+      toast.error('Alıcı kullanıcı seçilmedi');
+      return;
     }
     
-    console.log('🔥 FİNAL actualSelectedUserId:', {
+    // String'e çevir
+    actualSelectedUserId = String(actualSelectedUserId);
+    
+    console.log('✅ FİNAL KONTROL:', {
       actualSelectedUserId: actualSelectedUserId,
-      type: typeof actualSelectedUserId,
-      length: actualSelectedUserId ? actualSelectedUserId.length : 0,
-      isUndefined: actualSelectedUserId === undefined,
-      isNull: actualSelectedUserId === null,
-      isEmpty: actualSelectedUserId === '',
-      isStringUndefined: actualSelectedUserId === 'undefined'
+      messageContent: messageInput.trim(),
+      userValid: !!user,
+      readyToSend: true
     });
-    
-    if ((!newMessage.trim() && !mediaFile) || isUploading) {
-      console.warn('❌ Mesaj gönderme durduruldu: Boş mesaj veya upload devam ediyor');
-      return;
-    }
-    
-    if (!user || !actualSelectedUserId) {
-      console.error('❌ Kullanıcı veya alıcı seçilmedi:', { 
-        hasUser: !!user, 
-        actualSelectedUserId: actualSelectedUserId,
-        selectedUserId_type: typeof actualSelectedUserId 
-      });
-      toast.error('Kullanıcı veya alıcı seçilmedi');
-      return;
-    }
-    
-    // actualSelectedUserId'nin geçerli olduğundan emin ol
-    if (actualSelectedUserId === 'undefined' || actualSelectedUserId === undefined || actualSelectedUserId === null || actualSelectedUserId.trim() === '') {
-      console.error('❌ actualSelectedUserId geçersiz:', actualSelectedUserId);
-      toast.error('Geçersiz kullanıcı seçildi. Lütfen konuşmayı yeniden başlatın.');
-      return;
-    }
     
     try {
       setIsUploading(true);
       
-      // Mesaj içeriği
-      const messageContent = newMessage.trim();
-      let mediaUrl = null;
-      let mediaType = null;
+      const messageContent = messageInput.trim();
       
-      if (mediaFile) {
-        mediaUrl = mediaFile.preview;
-        mediaType = mediaFile.fileType;
-      }
-
-      // Geçici mesaj ID'si oluştur
-      const tempMessageId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Yeni mesaj objesi oluştur
-      const newMessageObj = {
-        id: tempMessageId,
-        content: messageContent,
-        senderId: user.id,
-        receiverId: actualSelectedUserId,
-        sentAt: new Date().toISOString(),
-        isRead: false,
-        isDelivered: false,
-        mediaUrl,
-        mediaType,
-        senderInfo: {
-          id: user.id,
-          username: user.username,
-          profileImage: user.profile_picture
-        }
-      };
-
       // Input'u hemen temizle
-      setNewMessage('');
+      setMessageInput('');
       setMediaFile(null);
       
-      // ANINDA UI'yi güncelle - En önemli kısım!
-      setMessages(prevMessages => {
-        const updatedMessages = [...prevMessages, newMessageObj];
-        console.log('🔥 Mesaj state\'e eklendi - Anında UI güncellenecek!', {
-          messageCount: updatedMessages.length,
-          newMessage: newMessageObj
-        });
-        return updatedMessages;
+      // Backend'e gönder
+      console.log('📡 Backend\'e gönderiliyor...', {
+        receiverId: actualSelectedUserId,
+        content: messageContent
       });
       
-      // Mesajları otomatik kaydır
-      setTimeout(() => {
-        if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-      }, 50);
+      const response = await api.messages.sendMessage(actualSelectedUserId, {
+        content: messageContent,
+        mediaUrl: mediaFile?.preview || '',
+        mediaType: mediaFile?.fileType || ''
+      });
       
-      // Backend'e gönder (background işlem)
-      try {
-        console.log('📡 Backend\'e mesaj gönderiliyor:', { actualSelectedUserId, messageContent });
-        const response = await api.messages.sendMessage(actualSelectedUserId, {
-          content: messageContent,
-          mediaUrl,
-          mediaType
-        });
+      console.log('📨 Backend response:', response);
+      
+      if (response.success) {
+        console.log('✅ Backend\'e başarıyla gönderildi!');
+        toast.success('Mesaj gönderildi!');
         
-        if (response.success) {
-          // Backend'den gerçek ID gelince güncelle
-          const realMessageId = response.data.id;
-          setMessages(prevMessages => 
-            prevMessages.map(msg => 
-              msg.id === tempMessageId 
-                ? { ...msg, id: realMessageId, isDelivered: true }
-                : msg
-            )
-          );
+        // MESAJLARI YENİDEN YÜKLE!
+        console.log('🔄 Mesajları yeniden yüklüyoruz...');
+        try {
+          const messagesResponse = await api.messages.getConversation(actualSelectedUserId);
+          console.log('🔄 Yeniden yüklenen mesajlar:', messagesResponse);
           
-          console.log('✅ Mesaj backend\'e gönderildi, ID güncellendi:', realMessageId);
-        } else {
-          // Hata durumunda mesajı hata olarak işaretle
-          setMessages(prevMessages => 
-            prevMessages.map(msg => 
-              msg.id === tempMessageId 
-                ? { ...msg, isDelivered: false, error: 'Gönderim başarısız' }
-                : msg
-            )
-          );
-          console.error('❌ Backend mesaj gönderme hatası:', response.message);
+          if (messagesResponse.success && messagesResponse.data && messagesResponse.data.messages) {
+            const apiMessages = messagesResponse.data.messages.map(msg => ({
+              id: msg.id,
+              content: msg.content,
+              senderId: msg.senderId,
+              receiverId: msg.receiverId,
+              sentAt: msg.sentAt || msg.createdAt,
+              isRead: msg.isRead || false,
+              isDelivered: true,
+              mediaUrl: msg.mediaUrl,
+              mediaType: msg.mediaType,
+              senderInfo: {
+                id: msg.senderId,
+                username: msg.senderId === user.id ? user.username : selectedConversation?.sender?.username || 'Kullanıcı',
+                profileImage: msg.senderId === user.id ? user.profile_picture : selectedConversation?.sender?.profileImage
+              }
+            }));
+            
+            // Zaman sırasına göre sırala
+            const sortedMessages = apiMessages.sort((a, b) => 
+              new Date(a.sentAt) - new Date(b.sentAt)
+            );
+            
+            console.log('✅ Mesajlar yeniden yüklendi ve state\'e set edildi:', {
+              previousCount: messages.length,
+              newCount: sortedMessages.length,
+              latestMessage: sortedMessages[sortedMessages.length - 1]
+            });
+            
+            setMessages(sortedMessages);
+            
+            // Scroll to bottom
+            setTimeout(() => {
+              if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+              }
+            }, 100);
+          }
+        } catch (reloadError) {
+          console.error('❌ Mesajları yeniden yükleme hatası:', reloadError);
         }
-      } catch (apiError) {
-        // API hatası durumunda
-        setMessages(prevMessages => 
-          prevMessages.map(msg => 
-            msg.id === tempMessageId 
-              ? { ...msg, isDelivered: false, error: 'Bağlantı hatası' }
-              : msg
-          )
-        );
-        console.error('❌ API çağrısı hatası:', apiError);
-      }
         
+      } else {
+        console.error('❌ Backend hatası:', response.message);
+        toast.error('Mesaj gönderilemedi: ' + response.message);
+        setMessageInput(messageContent); // Input'u geri getir
+      }
+      
     } catch (error) {
-      console.error('Mesaj gönderme hatası:', error);
-      toast.error('Mesaj gönderilemedi. Lütfen tekrar deneyin.');
-      // Hata durumunda input'u geri getir
-      setNewMessage(messageContent || '');
+      console.error('❌ GENEL HATA:', error);
+      toast.error('Mesaj gönderilirken hata oluştu');
+      setMessageInput(messageInput); // Input'u geri getir
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
       
-      // Input alanına odaklan
+      // Input'a tekrar odaklan
       setTimeout(() => {
         if (textareaRef.current) {
           textareaRef.current.focus();
@@ -1373,329 +1387,386 @@ const Messages = () => {
   }, []);
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Realtime Bağlantı Durumu */}
-      {connectionStatus !== 'connected' && (
-        <div className={`fixed top-0 left-0 right-0 z-50 text-white text-center py-2 text-sm ${
-          connectionStatus === 'connecting' ? 'bg-yellow-500' : 
-          connectionStatus === 'error' ? 'bg-red-500' : 'bg-gray-500'
-        }`}>
-          {connectionStatus === 'connecting' && '🔄 Realtime bağlantısı kuruluyor...'}
-          {connectionStatus === 'error' && '❌ Realtime bağlantı hatası - Yeniden deneniyor...'}
-        </div>
-      )}
-      
-      {/* Sol Sidebar - Konuşma Listesi */}
-      <div className={`${
-        isSmallScreen ? (selectedConversation ? 'hidden' : 'w-full') : 'w-1/3'
-      } border-r border-gray-300 bg-white flex flex-col`}>
-        {/* Arama ve Başlık */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-gray-800">Mesajlar</h1>
-            <div className="flex gap-2">
-              {/* Test buton - yakup2 ile sohbet başlat */}
-                  <button 
-                onClick={() => startNewConversation(2)}
-                className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
-                title="yakup2 ile sohbet başlat (test)"
-              >
-                @yakup2
-                  </button>
-              
-                <button 
-                  onClick={() => setShowNewConversation(true)}
-                className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors"
-                title="Yeni sohbet başlat"
-                >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                </button>
-            </div>
-              </div>
-              
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Sohbetleri ara..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-black/50 text-gray-200 placeholder-gray-500 border border-[#0affd9]/30 rounded-lg py-2 pl-9 pr-4 focus:outline-none focus:ring-1 focus:ring-[#0affd9] focus:border-[#0affd9] transition-colors"
-                />
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
-              </div>
-            </div>
-
-            <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-[#0affd9]/40 hover:scrollbar-thumb-[#0affd9]/60 scrollbar-track-transparent scrollbar-thumb-rounded-full pr-1">
-              {loading && conversations.length === 0 ? (
-                <div className="flex justify-center items-center h-40">
-                  <Loader size={28} className="animate-spin text-[#0affd9]/70" />
-                </div>
-              ) : conversations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center text-center p-6 text-gray-500 mt-8">
-                   <MessageSquare className="h-16 w-16 mb-4 opacity-30 text-[#0affd9]/50" />
-                   <p className="text-sm">Henüz bir sohbetiniz yok.</p>
-                   <p className="text-xs mt-1">Yeni bir sohbet başlatarak mesajlaşmaya başlayın.</p>
-                 </div>
-              ) : filteredConversations.length === 0 && search ? (
-                <div className="flex flex-col items-center justify-center text-center p-6 text-gray-500 mt-8">
-                  <Search className="h-16 w-16 mb-4 opacity-30 text-[#0affd9]/50" />
-                  <p className="text-sm">"<span className='font-medium text-gray-300'>{search}</span>" için sonuç bulunamadı.</p>
-                </div>
-              ) : (
-                <div className="p-2 space-y-1.5">
-                  {filteredConversations.map((conversation) => (
-                    <motion.div
-                      key={conversation.sender ? conversation.sender.id : `conversation-${Date.now()}-${Math.random()}`}
-                      layout 
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -5 }}
-                      transition={{ duration: 0.25, ease: "easeInOut" }}
-                      className={`flex items-center p-2.5 rounded-lg cursor-pointer transition-all duration-200 ease-out relative overflow-hidden group ${ 
-                        selectedConversation?.sender?.id === conversation.sender?.id
-                          ? 'bg-gradient-to-r from-[#0AAFFD] to-[#0AFFD9]/90 text-black rounded-br-none'
-                          : 'hover:bg-[#0AAFFD]/10'
-                      }`}
-                      onClick={() => {
-                        selectConversation(conversation);
-                    if (isSmallScreen) setShowMobileChat(true);
-                      }}
-                    >
-                      {selectedConversation?.sender?.id === conversation.sender?.id && (
-                        <motion.div 
-                          layoutId="activeConversationHighlight"
-                          className="absolute left-0 top-0 bottom-0 w-1 bg-[#0AAFFD] rounded-r-full"
-                          initial={false}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.3 }}
-                        />
-                      )}
-
-                      <div className="relative flex-shrink-0 ml-1.5">
-                        <img
-                          src={getFullImageUrl(conversation.sender?.profileImage)}
-                          alt={conversation.sender?.username}
-                          className={`w-11 h-11 rounded-full object-cover border-2 ${selectedConversation?.sender?.id === conversation.sender?.id ? 'border-[#0AAFFD]/70' : 'border-gray-700/50 group-hover:border-[#0AAFFD]/30'} transition-colors`}
-                        />
-                        <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ${conversation.sender?.online ? 'bg-green-400' : 'bg-gray-600'} border-2 border-black/70`}></div>
-                      </div>
-
-                      <div className="ml-3 flex-1 min-w-0">
-                        <div className="flex justify-between items-center">
-                          <span className={`font-semibold text-sm truncate ${selectedConversation?.sender?.id === conversation.sender?.id ? 'text-[#0AAFFD]' : 'text-gray-200 group-hover:text-white'}`}>
-                            {conversation.sender?.fullName || conversation.sender?.username || 'Bilinmeyen Kullanıcı'}
-                          </span>
-                          <span className="text-xs text-gray-500 group-hover:text-gray-400 flex-shrink-0 ml-2">
-                            {conversation.lastTimestamp ? formatMessageTime(conversation.lastTimestamp) : ''}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between mt-0.5">
-                          <p className={`text-xs truncate pr-2 ${conversation.unreadCount > 0 && selectedConversation?.sender?.id !== conversation.sender?.id ? 'text-gray-300 font-medium' : 'text-gray-400 group-hover:text-gray-300'}`}>
-                             {conversation.lastMessage || "..."}
-                          </p>
-                          {conversation.unreadCount > 0 && (
-                            <div className="flex-shrink-0 w-4 h-4 text-[10px] rounded-full bg-[#0AAFFD] text-black flex items-center justify-center font-bold shadow-md">
-                              {conversation.unreadCount}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-      <div className={`${isSmallScreen && !showMobileChat ? 'hidden' : 'flex'} md:flex flex-col w-full flex-1 bg-black/50 h-full`}>
-            {!selectedConversation ? (
-              <div className="flex flex-col items-center justify-center h-full p-6 text-center text-gray-500">
-                <MessageSquare size={64} className="opacity-20 mb-5 text-[#0AAFFD]/40" />
-                <h3 className="text-lg font-medium text-gray-400 mb-1">Sohbet Seç</h3>
-                <p className="max-w-xs text-sm">Başlamak için sol panelden bir sohbet seçin veya yeni bir sohbet başlatın.</p>
-              </div>
-            ) : (
-              <>
-                <div className="p-3 px-4 border-b border-[#0AAFFD]/20 flex items-center flex-shrink-0 bg-black/60 backdrop-blur-sm shadow-sm">
-              {isSmallScreen && (
-                    <button
-                      onClick={handleBackToConversations}
-                      className="mr-3 text-gray-400 hover:text-[#0AAFFD] p-1 rounded-full hover:bg-[#0AAFFD]/10 transition-colors"
-                    >
-                      <ChevronLeft size={22} />
-                    </button>
-                  )}
-                  <div className="flex items-center flex-1 min-w-0">
-                     <img
-                        src={getFullImageUrl(selectedConversation.sender?.profileImage)}
-                        alt={selectedConversation.sender?.username}
-                        className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-[#0AAFFD]/40"
-                      />
-                    <div className="ml-3 overflow-hidden">
-                      <h2 className="font-semibold text-gray-100 truncate text-sm">
-                        {selectedConversation.sender?.fullName || selectedConversation.sender?.username}
-                      </h2>
-                      <span className="text-xs text-gray-400">
-                        {selectedConversation.sender?.online ? <span className="text-green-400">Çevrimiçi</span> : formatLastSeen(selectedConversation.sender?.lastSeen)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-1.5 ml-3">
-                    <button className="p-2 rounded-full text-gray-400 hover:text-[#0AAFFD] hover:bg-[#0AAFFD]/10 transition-colors">
-                      <Phone size={18} />
-                    </button>
-                    <button className="p-2 rounded-full text-gray-400 hover:text-[#0AAFFD] hover:bg-[#0AAFFD]/10 transition-colors">
-                      <Video size={18} />
-                    </button>
-                    <button className="p-2 rounded-full text-gray-400 hover:text-[#0AAFFD] hover:bg-[#0AAFFD]/10 transition-colors">
-                      <MoreVertical size={18} />
-                    </button>
-                  </div>
-                </div>
-                
-                <div ref={messageContainerRef} className="flex-1 overflow-y-auto py-4 scrollbar-thin scrollbar-thumb-[#0AAFFD]/40 hover:scrollbar-thumb-[#0AAFFD]/60 scrollbar-track-transparent scrollbar-thumb-rounded-full">
-                  {loading && messages.length === 0 ? (
-                    <div className="flex justify-center items-center h-full">
-                      <Loader size={28} className="animate-spin text-[#0AAFFD]/70" />
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-500 text-center px-4">
-                       <MessageSquare size={48} className="opacity-20 mb-3 text-[#0AAFFD]/40" />
-                      <p className="text-sm">Henüz mesaj yok. İlk mesajı gönderin!</p>
-                    </div>
-                  ) : (
-                    <AnimatePresence initial={false}>
-                      <MessageList 
-                        key="message-list"
-                        messages={messages} 
-                    currentUser={user} 
-                        formatTime={formatMessageTime} 
-                      />
-                      {isTyping && selectedConversation && (
-                        <TypingIndicator key="typing-indicator" senderInfo={selectedConversation.sender} />
-                      )}
-                      <div key="scroll-end-ref" ref={messagesEndRef} className="h-px" />
-                    </AnimatePresence>
-                  )}
-                </div>
-                
-                <div className="border-t border-[#0AAFFD]/20 p-3 bg-black/60 backdrop-blur-sm">
-                  {mediaFile && !isUploading && (
-                    <MediaPreview 
-                      media={mediaFile} 
-                      onCancel={handleCancelMedia} 
-                    />
-                  )}
-                  {isUploading && <UploadProgress progress={uploadProgress} />}
-                  
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    // 🚨 EMERGENCY FIX: selectedUserId undefined kontrolü
-                    if (!selectedUserId) {
-                      console.log('🚨 EMERGENCY FORM: selectedUserId undefined, URL\'den çıkarılıyor!');
-                      const urlParts = window.location.pathname.split('/');
-                      const urlUserId = urlParts[urlParts.length - 1];
-                      if (urlUserId && urlUserId !== 'messages' && !isNaN(Number(urlUserId))) {
-                        console.log('🚨 EMERGENCY FORM: URL\'den alınan userId:', urlUserId);
-                        setSelectedUserId(urlUserId);
-                        
-                        // 100ms bekle ve sonra mesajı gönder
-                        setTimeout(() => {
-                          handleSendMessage(e);
-                        }, 100);
-                        return;
-                      }
-                    }
-                    
-                    handleSendMessage(e);
-                  }} className="flex items-center gap-2">
-                    <input 
-                      type="file" 
-                      ref={fileInputRef}
-                      className="hidden" 
-                      onChange={handleFileSelect}
-                      accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip,.rar"
-                    />
-                    <button 
-                      type="button" 
-                      className="p-2.5 text-gray-400 hover:text-[#0AAFFD] transition-colors rounded-full hover:bg-[#0AAFFD]/10"
-                      onClick={handleFileButtonClick}
-                      disabled={isUploading}
-                      title="Dosya Ekle"
-                    >
-                      {isUploading ? (
-                        <Loader size={20} className="animate-spin text-[#0AAFFD]" />
-                      ) : (
-                        <Image size={20} />
-                      )}
-                    </button>
-                    
-                    <input
-                      type="text"
-                  ref={textareaRef}
-                      value={newMessage}
-                      onChange={(e) => {
-                        setNewMessage(e.target.value);
-                        setIsTyping(e.target.value.trim() !== '');
-                      }}
-                      placeholder="Mesajınızı yazın..."
-                      className="flex-1 bg-black/40 border border-[#0AAFFD]/25 text-gray-200 placeholder-gray-500 px-4 py-2.5 rounded-full focus:outline-none"
-                      disabled={isUploading}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          // 🚨 EMERGENCY FIX: selectedUserId undefined kontrolü
-                          if (!selectedUserId) {
-                            console.log('🚨 EMERGENCY KEYPRESS: selectedUserId undefined, URL\'den çıkarılıyor!');
-                            const urlParts = window.location.pathname.split('/');
-                            const urlUserId = urlParts[urlParts.length - 1];
-                            if (urlUserId && urlUserId !== 'messages' && !isNaN(Number(urlUserId))) {
-                              console.log('🚨 EMERGENCY KEYPRESS: URL\'den alınan userId:', urlUserId);
-                              setSelectedUserId(urlUserId);
-                              
-                              // 100ms bekle ve sonra mesajı gönder
-                              setTimeout(() => {
-                                handleSendMessage(e);
-                              }, 100);
-                              return;
-                            }
-                          }
-                          
-                          handleSendMessage(e);
-                        }
-                      }}
-                    />
-                    
-                    <button
-                      type="submit"
-                      className={`p-2.5 rounded-full transition-all duration-300 ease-in-out transform ${
-                        (!newMessage.trim() && !mediaFile) || isUploading 
-                        ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
-                        : 'bg-[#0AAFFD] text-black hover:bg-[#0AAFFD]/80 hover:scale-110 shadow-md hover:shadow-[#0AAFFD]/40'
-                      }`}
-                      disabled={(!newMessage.trim() && !mediaFile) || isUploading}
-                      title="Gönder"
-                    >
-                      <Send size={20} />
-                    </button>
-                  </form>
-                </div>
-              </>
-            )}
+    <div className="min-h-screen w-full relative bg-black text-white overflow-hidden">
+      {/* Sparkles arkaplan */}
+      <div className="absolute inset-0 w-full h-full">
+        {convertBooleanProps({
+          component: <SparklesCore
+            id="messagesSparkles"
+            background="transparent"
+            minSize={0.6}
+            maxSize={1.4}
+            particleDensity={30}
+            className="w-full h-full"
+            particleColor="#0affd9"
+            speed={0.2}
+            jsx="true"
+            global="true"
+          />
+        }).component}
       </div>
 
-      {/* Yeni Konuşma Modal'ı */}
-        <AnimatePresence>
-        {showNewConversation && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <NewConversation 
-                onClose={() => setShowNewConversation(false)} 
-                onSelectUser={startNewConversation}
-              followingUsers={followingUsers}
-              />
+      {/* Radyal gradient maskesi */}
+      <div 
+        className="absolute inset-0 w-full h-full bg-black opacity-85 [mask-image:radial-gradient(circle_at_center,transparent_20%,black)]"
+        style={{ backdropFilter: "blur(2px)" }}
+      ></div>
+
+      {/* Ana konteyner */}
+      <div className="relative z-10 h-screen flex">
+        {connectionStatus !== 'connected' && (
+          <div className={`fixed top-0 left-0 right-0 z-50 text-white text-center py-2 text-sm ${
+            connectionStatus === 'connecting' ? 'bg-yellow-500' : 
+            connectionStatus === 'error' ? 'bg-red-500' : 'bg-gray-500'
+          }`}>
+            {connectionStatus === 'connecting' && '🔄 Realtime bağlantısı kuruluyor...'}
+            {connectionStatus === 'error' && '❌ Realtime bağlantı hatası - Yeniden deneniyor...'}
           </div>
-      )}
+        )}
+        
+        {/* Sol Sidebar - Konuşma Listesi */}
+        <div className={`${
+          isSmallScreen ? (selectedConversation ? 'hidden' : 'w-full') : 'w-1/3'
+        } border-r border-[#0affd9]/20 bg-black/70 backdrop-blur-sm flex flex-col relative`}>
+          
+          {/* GlowingEffect */}
+          <GlowingEffect
+            color="#0affd9"
+            spread={30}
+            glow={true}
+            disabled={false}
+            proximity={64}
+            inactiveZone={0.01}
+            borderWidth={1}
+          />
+          
+          {/* Arama ve Başlık */}
+          <div className="p-6 border-b border-[#0affd9]/20">
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-3xl font-bold text-white">
+                <span className="bg-gradient-to-r from-[#0affd9] to-[#00d4aa] bg-clip-text text-transparent">
+                  Mesajlar
+                </span>
+              </h1>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => startNewConversation(2)}
+                  className="bg-gradient-to-r from-green-600 to-green-500 text-white px-4 py-2 rounded-xl text-sm hover:from-green-700 hover:to-green-600 transition-all duration-200 shadow-lg"
+                  title="yakup2 ile sohbet başlat (test)"
+                >
+                  @yakup2
+                </button>
+                
+                <button 
+                  onClick={() => setShowNewConversation(true)}
+                  className="bg-gradient-to-r from-[#0affd9] to-[#00d4aa] text-black p-3 rounded-xl hover:scale-105 transition-all duration-200 shadow-lg"
+                  title="Yeni sohbet başlat"
+                >
+                  <PlusCircle size={20} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Sohbetleri ara..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-black/50 text-gray-200 placeholder-gray-400 border border-[#0affd9]/30 rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-[#0affd9]/50 focus:border-[#0affd9] transition-all duration-200 backdrop-blur-sm"
+              />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+
+          <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-[#0affd9]/40 hover:scrollbar-thumb-[#0affd9]/60 scrollbar-track-transparent scrollbar-thumb-rounded-full pr-1">
+            {loading && conversations.length === 0 ? (
+              <div className="flex justify-center items-center h-40">
+                <Loader size={28} className="animate-spin text-[#0affd9]/70" />
+              </div>
+            ) : conversations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center p-8 text-gray-400 mt-8">
+                 <MessageSquare className="h-20 w-20 mb-6 opacity-30 text-[#0affd9]/50" />
+                 <p className="text-lg mb-2">Henüz bir sohbetiniz yok</p>
+                 <p className="text-sm">Yeni bir sohbet başlatarak mesajlaşmaya başlayın</p>
+               </div>
+            ) : filteredConversations.length === 0 && search ? (
+              <div className="flex flex-col items-center justify-center text-center p-8 text-gray-400 mt-8">
+                <Search className="h-20 w-20 mb-6 opacity-30 text-[#0affd9]/50" />
+                <p className="text-lg mb-2">"<span className='font-medium text-gray-300'>{search}</span>" için sonuç bulunamadı</p>
+              </div>
+            ) : (
+              <div className="p-4 space-y-2">
+                {filteredConversations.map((conversation) => (
+                  <motion.div
+                    key={conversation.sender ? conversation.sender.id : `conversation-${Date.now()}-${Math.random()}`}
+                    layout 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -5 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className={`flex items-center p-4 rounded-xl cursor-pointer transition-all duration-200 ease-out relative overflow-hidden group ${ 
+                      selectedConversation?.sender?.id === conversation.sender?.id
+                        ? 'bg-gradient-to-r from-[#0affd9]/20 to-[#00d4aa]/20 border border-[#0affd9]/40 shadow-lg'
+                        : 'hover:bg-black/40 backdrop-blur-sm border border-transparent hover:border-[#0affd9]/20'
+                    }`}
+                    onClick={() => {
+                      selectConversation(conversation);
+                      if (isSmallScreen) setShowMobileChat(true);
+                    }}
+                  >
+                    <div className="relative flex-shrink-0">
+                      <img
+                        src={getFullImageUrl(conversation.sender?.profileImage)}
+                        alt={conversation.sender?.username}
+                        className={`w-12 h-12 rounded-full object-cover border-2 ${
+                          selectedConversation?.sender?.id === conversation.sender?.id 
+                            ? 'border-[#0affd9]' 
+                            : 'border-[#0affd9]/30 group-hover:border-[#0affd9]/50'
+                        } transition-colors`}
+                      />
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full ${
+                        conversation.sender?.online ? 'bg-green-400' : 'bg-gray-600'
+                      } border-2 border-black shadow-lg`}></div>
+                    </div>
+
+                    <div className="ml-4 flex-1 min-w-0">
+                      <div className="flex justify-between items-center">
+                        <span className={`font-semibold text-sm truncate ${
+                          selectedConversation?.sender?.id === conversation.sender?.id 
+                            ? 'text-[#0affd9]' 
+                            : 'text-gray-200 group-hover:text-white'
+                        }`}>
+                          {conversation.sender?.fullName || conversation.sender?.username || 'Bilinmeyen Kullanıcı'}
+                        </span>
+                        <span className="text-xs text-gray-400 group-hover:text-gray-300 flex-shrink-0 ml-2">
+                          {conversation.lastTimestamp ? formatMessageTime(conversation.lastTimestamp) : ''}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <p className={`text-xs truncate pr-2 ${
+                          conversation.unreadCount > 0 && selectedConversation?.sender?.id !== conversation.sender?.id 
+                            ? 'text-gray-200 font-medium' 
+                            : 'text-gray-400 group-hover:text-gray-300'
+                        }`}>
+                           {conversation.lastMessage || "..."}
+                        </p>
+                        {conversation.unreadCount > 0 && (
+                          <div className="flex-shrink-0 w-5 h-5 text-[10px] rounded-full bg-gradient-to-r from-[#0affd9] to-[#00d4aa] text-black flex items-center justify-center font-bold shadow-lg">
+                            {conversation.unreadCount}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Sağ taraf - Mesaj alanı */}
+        <div className={`${isSmallScreen && !showMobileChat ? 'hidden' : 'flex'} md:flex flex-col w-full flex-1 bg-black/70 backdrop-blur-sm h-full relative`}>
+          
+          {/* GlowingEffect */}
+          <GlowingEffect
+            color="#0affd9"
+            spread={20}
+            glow={true}
+            disabled={false}
+            proximity={64}
+            inactiveZone={0.01}
+            borderWidth={1}
+          />
+          
+          {!selectedConversation ? (
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center text-gray-400">
+              <MessageSquare size={80} className="opacity-20 mb-8 text-[#0affd9]/40" />
+              <h3 className="text-2xl font-medium text-gray-300 mb-3">Sohbet Seç</h3>
+              <p className="max-w-md text-gray-400">Başlamak için sol panelden bir sohbet seçin veya yeni bir sohbet başlatın.</p>
+            </div>
+          ) : (
+            <>
+              {/* Chat Header */}
+              <div className="p-4 border-b border-[#0affd9]/20 flex items-center flex-shrink-0 bg-black/60 backdrop-blur-sm">
+                {isSmallScreen && (
+                  <button
+                    onClick={handleBackToConversations}
+                    className="mr-4 text-gray-400 hover:text-[#0affd9] p-2 rounded-full hover:bg-[#0affd9]/10 transition-all duration-200"
+                  >
+                    <ChevronLeft size={22} />
+                  </button>
+                )}
+                <div className="flex items-center flex-1 min-w-0">
+                   <img
+                      src={getFullImageUrl(selectedConversation.sender?.profileImage)}
+                      alt={selectedConversation.sender?.username}
+                      className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-[#0affd9]/40"
+                    />
+                  <div className="ml-4 overflow-hidden">
+                    <h2 className="font-semibold text-gray-100 truncate text-lg">
+                      {selectedConversation.sender?.fullName || selectedConversation.sender?.username}
+                    </h2>
+                    <span className="text-sm text-gray-400">
+                      {selectedConversation.sender?.online ? 
+                        <span className="text-green-400">Çevrimiçi</span> : 
+                        formatLastSeen(selectedConversation.sender?.lastSeen)
+                      }
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2 ml-4">
+                  <button className="p-3 rounded-full text-gray-400 hover:text-[#0affd9] hover:bg-[#0affd9]/10 transition-all duration-200">
+                    <Phone size={20} />
+                  </button>
+                  <button className="p-3 rounded-full text-gray-400 hover:text-[#0affd9] hover:bg-[#0affd9]/10 transition-all duration-200">
+                    <Video size={20} />
+                  </button>
+                  <button className="p-3 rounded-full text-gray-400 hover:text-[#0affd9] hover:bg-[#0affd9]/10 transition-all duration-200">
+                    <MoreVertical size={20} />
+                  </button>
+                </div>
+              </div>
+              
+              {/* Messages Container */}
+              <div ref={messageContainerRef} className="flex-1 overflow-y-auto py-6 px-4 scrollbar-thin scrollbar-thumb-[#0affd9]/40 hover:scrollbar-thumb-[#0affd9]/60 scrollbar-track-transparent scrollbar-thumb-rounded-full">
+                {loading ? (
+                  <div className="flex justify-center items-center h-full">
+                    <Loader size={32} className="animate-spin text-[#0affd9]/70" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400 text-center px-4">
+                     <MessageSquare size={64} className="opacity-20 mb-6 text-[#0affd9]/40" />
+                    <p className="text-lg mb-2">Henüz mesaj yok</p>
+                    <p className="text-gray-500">İlk mesajı gönderin!</p>
+                  </div>
+                ) : (
+                  <AnimatePresence initial={false}>
+                    <MessageList 
+                      key="message-list"
+                      messages={messages} 
+                      currentUser={user} 
+                      formatTime={formatMessageTime} 
+                    />
+                    {isTyping && selectedConversation && (
+                      <TypingIndicator key="typing-indicator" senderInfo={selectedConversation.sender} />
+                    )}
+                    <div key="scroll-end-ref" ref={messagesEndRef} className="h-px" />
+                  </AnimatePresence>
+                )}
+              </div>
+              
+              {/* Message Input */}
+              <div className="border-t border-[#0affd9]/20 p-4 bg-black/60 backdrop-blur-sm">
+                {mediaFile && !isUploading && (
+                  <MediaPreview 
+                    media={mediaFile} 
+                    onCancel={handleCancelMedia} 
+                  />
+                )}
+                {isUploading && <UploadProgress progress={uploadProgress} />}
+                
+                <form onSubmit={(e) => {
+                  console.log('🔥 FORM SUBMIT TETIKLENDI!');
+                  handleSendMessage(e);
+                }} className="flex items-center gap-3">
+                  <input 
+                    type="file" 
+                    ref={fileInputRef}
+                    className="hidden" 
+                    onChange={handleFileSelect}
+                    accept="image/*,video/*,.pdf,.doc,.docx,.txt,.zip,.rar"
+                  />
+                  <button 
+                    type="button" 
+                    className="p-3 text-gray-400 hover:text-[#0affd9] transition-all duration-200 rounded-xl hover:bg-[#0affd9]/10"
+                    onClick={() => {
+                      console.log('📎 File button clicked');
+                      handleFileButtonClick();
+                    }}
+                    disabled={isUploading}
+                    title="Dosya Ekle"
+                  >
+                    <Image size={20} />
+                  </button>
+                  
+                  <div className="flex-1 relative">
+                    <textarea
+                      ref={textareaRef}
+                      value={messageInput}
+                      onChange={(e) => {
+                        setMessageInput(e.target.value);
+                      }}
+                      onKeyDown={(e) => {
+                        console.log('⌨️ Key pressed:', e.key);
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          console.log('🔥 ENTER PRESSED!');
+                          e.preventDefault();
+                          if (messageInput.trim() || mediaFile) {
+                            handleSendMessage(e);
+                          }
+                        }
+                      }}
+                      placeholder="Mesajınızı yazın..."
+                      className="w-full bg-black/50 text-gray-200 placeholder-gray-400 border border-[#0affd9]/30 rounded-xl py-3 px-4 pr-12 focus:outline-none focus:ring-2 focus:ring-[#0affd9]/50 focus:border-[#0affd9] transition-all duration-200 backdrop-blur-sm resize-none max-h-32"
+                      rows={1}
+                      disabled={isUploading}
+                    />
+                  </div>
+                  
+                  <button
+                    type="submit"
+                    disabled={(!messageInput.trim() && !mediaFile) || isUploading}
+                    onClick={() => {
+                      console.log('🔥 SUBMIT BUTTON CLICKED!');
+                    }}
+                    className="p-3 rounded-xl bg-gradient-to-r from-[#0affd9] to-[#00d4aa] text-black hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 transition-all duration-200 shadow-lg disabled:cursor-not-allowed"
+                    title="Mesaj Gönder"
+                  >
+                    <Send size={20} />
+                  </button>
+                </form>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* NewConversation Modal */}
+      <AnimatePresence>
+        {showNewConversation && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+            onClick={() => setShowNewConversation(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-black/70 backdrop-blur-sm rounded-2xl border border-[#0affd9]/20 p-6 w-full max-w-md mx-4 relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GlowingEffect
+                color="#0affd9"
+                spread={30}
+                glow={true}
+                disabled={false}
+                proximity={64}
+                inactiveZone={0.01}
+                borderWidth={1}
+              />
+              
+              <NewConversation 
+                onClose={() => setShowNewConversation(false)}
+                onSelectUser={startNewConversation}
+                followingUsers={followingUsers}
+              />
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

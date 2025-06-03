@@ -90,40 +90,6 @@ const FALLBACK_REELS = [
   },
 ];
 
-// Örnek yorum verileri
-const SAMPLE_COMMENTS = [
-  {
-    id: 1,
-    user: {
-      username: 'AhmetArslan-j5m',
-      profileImage: 'https://randomuser.me/api/portraits/men/32.jpg',
-    },
-    text: 'Yanlışım varsa düzeltin ama manwa\'da da durum böyleydi parkta izleyip, yer değiş tekniği ile gidiyordu. Novel\'i okumadım bilmiyorum.',
-    likeCount: 15,
-    timestamp: '8 saat önce'
-  },
-  {
-    id: 2,
-    user: {
-      username: 'ramiznifteliyev6083',
-      profileImage: 'https://randomuser.me/api/portraits/men/43.jpg',
-    },
-    text: 'Benim bildiğim kadarıyla gölgeleri kamera gibi kullanma özelliğini sonradan kazanıyordu, hatta bu özelliği test ederken Cha Hae in\'i banyo yaparken yakalamıştı',
-    likeCount: 13,
-    timestamp: '8 saat önce (düzenlendi)'
-  },
-  {
-    id: 3,
-    user: {
-      username: 'ahmetbro4890',
-      profileImage: 'https://randomuser.me/api/portraits/men/55.jpg',
-    },
-    text: 'Animedeki çok daha mantıklı olmuş gerçekten',
-    likeCount: 0,
-    timestamp: '5 saat önce'
-  }
-];
-
 // Mesaj çubuğu bileşeni
 const AuthRequiredBanner = ({ onLogin }) => (
   <motion.div

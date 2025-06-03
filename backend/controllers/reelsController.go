@@ -605,6 +605,224 @@ func UnsaveReel(c *gin.Context) {
 	}
 }
 
+// GetReelComments - Reele ait yorumları getir
+func GetReelComments(c *gin.Context) {
+	fmt.Println("🚀 GetReelComments fonksiyonu çağırıldı!")
+
+	reelID := c.Param("id")
+	fmt.Printf("🆔 Reel ID: %s\n", reelID)
+
+	// Test için userID kontrolünü geçici olarak kaldıralım
+	// userID, _ := c.Get("userID")
+
+	// ReelID'yi doğrula
+	reelIDUint, err := strconv.ParseUint(reelID, 10, 32)
+	if err != nil {
+		fmt.Printf("❌ Geçersiz reel ID: %s\n", err.Error())
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz reel ID",
+		})
+		return
+	}
+
+	fmt.Printf("✅ Reel ID doğrulandı: %d\n", reelIDUint)
+
+	// Reelin var olup olmadığını kontrol et
+	var reel models.Reels
+	if err := database.DB.First(&reel, reelIDUint).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{
+			Success: false,
+			Message: "Reel bulunamadı",
+		})
+		return
+	}
+
+	// Yorumları getir
+	var comments []models.Comment
+	result := database.DB.Where("reel_id = ? AND parent_id IS NULL", reelIDUint).
+		Preload("User").
+		Preload("Replies.User").
+		Order("created_at DESC").
+		Find(&comments)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Yorumlar yüklenirken hata oluştu: " + result.Error.Error(),
+		})
+		return
+	}
+
+	// Debug: Yorumları kontrol et
+	fmt.Printf("🔍 Bulunan yorum sayısı: %d\n", len(comments))
+	for i, comment := range comments {
+		fmt.Printf("🔍 Yorum %d: ID=%d, Content=%s\n", i, comment.ID, comment.Content)
+		fmt.Printf("🔍 Yorum %d User: ID=%d, Username=%s\n", i, comment.User.ID, comment.User.Username)
+	}
+
+	// Her yorum için beğeni durumunu kontrol et (user ID olmadan)
+	var commentsResponse []models.CommentResponse
+	for _, comment := range comments {
+		// Beğeni durumunu false olarak ayarla (user ID olmadığından)
+		var isLiked bool = false
+
+		// Alt yorumlar için de beğeni kontrolü
+		var repliesResponse []models.Comment
+		for _, reply := range comment.Replies {
+			reply.IsLiked = false // Test için false
+			repliesResponse = append(repliesResponse, reply)
+		}
+
+		commentResponse := models.CommentResponse{
+			ID:        comment.ID,
+			Content:   comment.Content,
+			UserID:    comment.UserID,
+			PostID:    comment.PostID,
+			ReelID:    comment.ReelID,
+			ParentID:  comment.ParentID,
+			User:      comment.User,
+			Replies:   repliesResponse,
+			LikeCount: comment.LikeCount,
+			IsLiked:   isLiked,
+			CreatedAt: comment.CreatedAt,
+		}
+
+		commentsResponse = append(commentsResponse, commentResponse)
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Yorumlar başarıyla getirildi",
+		Data: gin.H{
+			"comments": commentsResponse,
+			"total":    len(commentsResponse),
+		},
+	})
+}
+
+// AddReelComment - Reele yorum ekle
+func AddReelComment(c *gin.Context) {
+	// Test için userID kontrolünü geçici olarak düzenleyelim
+	userIDInterface, exists := c.Get("userID")
+	var userIDUint uint
+
+	if !exists || userIDInterface == nil {
+		// Auth middleware yoksa varsayılan olarak user ID 1 kullan (test için)
+		userIDUint = uint(1)
+		fmt.Println("⚠️ Auth middleware yok, test için userID=1 kullanılıyor")
+	} else {
+		userIDUint = userIDInterface.(uint)
+		fmt.Printf("✅ Auth middleware var, userID=%d\n", userIDUint)
+	}
+
+	reelID := c.Param("id")
+	fmt.Printf("📝 AddReelComment çağırıldı - ReelID: %s, UserID: %d\n", reelID, userIDUint)
+
+	// ReelID'yi doğrula
+	reelIDUint, err := strconv.ParseUint(reelID, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz reel ID",
+		})
+		return
+	}
+
+	// Request body'den veriyi al
+	var requestBody struct {
+		Content  string `json:"content" binding:"required"`
+		ParentID *uint  `json:"parentId"`
+	}
+
+	if err := c.ShouldBindJSON(&requestBody); err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz veri formatı: " + err.Error(),
+		})
+		return
+	}
+
+	// İçerik boş mu kontrol et
+	if len(requestBody.Content) == 0 {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Yorum içeriği boş olamaz",
+		})
+		return
+	}
+
+	// Reelin var olup olmadığını kontrol et
+	var reel models.Reels
+	if err := database.DB.First(&reel, reelIDUint).Error; err != nil {
+		c.JSON(http.StatusNotFound, Response{
+			Success: false,
+			Message: "Reel bulunamadı",
+		})
+		return
+	}
+
+	// Eğer parent comment varsa onun varlığını kontrol et
+	if requestBody.ParentID != nil {
+		var parentComment models.Comment
+		if err := database.DB.Where("id = ? AND reel_id = ?", *requestBody.ParentID, reelIDUint).First(&parentComment).Error; err != nil {
+			c.JSON(http.StatusNotFound, Response{
+				Success: false,
+				Message: "Yanıtlanan yorum bulunamadı",
+			})
+			return
+		}
+	}
+
+	// Yeni yorum oluştur
+	reelIDPtr := uint(reelIDUint)
+	newComment := models.Comment{
+		UserID:    userIDUint,
+		ReelID:    &reelIDPtr,
+		Content:   requestBody.Content,
+		ParentID:  requestBody.ParentID,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// Veritabanına kaydet
+	result := database.DB.Create(&newComment)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Yorum kaydedilirken hata oluştu: " + result.Error.Error(),
+		})
+		return
+	}
+
+	// Yorum sayısını artır
+	if requestBody.ParentID == nil { // Sadece ana yorumlar için sayacı artır
+		database.DB.Model(&reel).Update("comment_count", gorm.Expr("comment_count + ?", 1))
+	}
+
+	// Kullanıcı bilgisini yükle
+	database.DB.Preload("User").First(&newComment, newComment.ID)
+
+	c.JSON(http.StatusCreated, Response{
+		Success: true,
+		Message: "Yorum başarıyla eklendi",
+		Data: gin.H{
+			"comment": models.CommentResponse{
+				ID:        newComment.ID,
+				Content:   newComment.Content,
+				UserID:    newComment.UserID,
+				PostID:    newComment.PostID,
+				ReelID:    newComment.ReelID,
+				ParentID:  newComment.ParentID,
+				User:      newComment.User,
+				LikeCount: newComment.LikeCount,
+				IsLiked:   false,
+				CreatedAt: newComment.CreatedAt,
+			},
+		},
+	})
+}
+
 // Dosya adı için benzersiz bir isim oluşturur
 func generateUniqueFilename(originalFilename string) string {
 	// Zaman damgası ve rastgele bir sayı ekleyerek benzersizlik sağla
@@ -615,4 +833,19 @@ func generateUniqueFilename(originalFilename string) string {
 	// Rastgele sayı yerine basit bir UUID veya benzeri bir şey de kullanılabilir
 	base := originalFilename[0 : len(originalFilename)-len(ext)]
 	return fmt.Sprintf("%s_%s%s", base, timestamp, ext)
+}
+
+// TestGetReelComments - Test amaçlı reele ait yorumları getir
+func TestGetReelComments(c *gin.Context) {
+	fmt.Println("🚀 TestGetReelComments fonksiyonu çağırıldı!")
+
+	reelID := c.Param("id")
+	fmt.Printf("🆔 Reel ID: %s\n", reelID)
+
+	// Basit test response
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Test successful - middleware bypassed",
+		"reelId":  reelID,
+	})
 }

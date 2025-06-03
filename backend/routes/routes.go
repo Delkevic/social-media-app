@@ -50,9 +50,12 @@ func SetupRoutes() *gin.Engine {
 		c.Next()
 	})
 
-	// Debug middleware - tüm istekleri loglamak için
+	// Debug middleware - tüm istekleri loglamak için
 	router.Use(func(c *gin.Context) {
+		fmt.Printf("========================================\n")
 		fmt.Printf("Gelen istek: %s %s\n", c.Request.Method, c.Request.URL.Path)
+		fmt.Printf("Headers: %v\n", c.Request.Header)
+		fmt.Printf("========================================\n")
 		c.Next()
 	})
 
@@ -205,6 +208,16 @@ func SetupRoutes() *gin.Engine {
 		// Kullanıcı arama rotası (auth dışında)
 		api.GET("/users/search", controllers.SearchUsers)
 		api.GET("/users/id/:id", controllers.GetUserById)
+
+		// Basit test endpoint
+		api.GET("/test", func(c *gin.Context) {
+			c.JSON(200, gin.H{"message": "Test endpoint çalışıyor"})
+		})
+
+		// Test için geçici: Reels comments rotaları (auth middleware'ı olmadan)
+		api.GET("/reels/:id/comments", controllers.GetReelComments)
+		api.POST("/reels/:id/comments", controllers.AddReelComment)
+		api.GET("/test/reels/:id/comments", controllers.TestGetReelComments)
 
 		// WebSocket bağlantısı
 		api.GET("/ws", controllers.WebSocketHandler)

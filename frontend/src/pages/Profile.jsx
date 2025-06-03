@@ -38,6 +38,7 @@ const Profile = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedReel, setSelectedReel] = useState(null);
   const [isReelModalOpen, setIsReelModalOpen] = useState(false);
+  const [selectedReelIndex, setSelectedReelIndex] = useState(0);
   
   const navigate = useNavigate();
   const { username } = useParams();
@@ -692,8 +693,27 @@ const Profile = () => {
     }
   };
 
+  // Reel gezinme fonksiyonları
+  const navigateToNextReel = () => {
+    if (selectedReelIndex < reels.length - 1) {
+      const nextReel = reels[selectedReelIndex + 1];
+      handleReelClick(nextReel);
+    }
+  };
+  
+  const navigateToPreviousReel = () => {
+    if (selectedReelIndex > 0) {
+      const prevReel = reels[selectedReelIndex - 1];
+      handleReelClick(prevReel);
+    }
+  };
+
   const handleReelClick = (reel) => {
     console.log("Tıklanan reel:", reel);
+    
+    // Reel indexini bul
+    const reelIndex = reels.findIndex(r => r.id === reel.id);
+    setSelectedReelIndex(reelIndex !== -1 ? reelIndex : 0);
     
     // Oluşturulan thumbnail varsa onu da reele ekleyelim
     let thumbnailToUse = reel.thumbnail;
@@ -1419,7 +1439,15 @@ const Profile = () => {
       
       {/* Reel Modal'ı */}
       {isReelModalOpen && selectedReel && (
-        <MiniReelsPlayer reel={selectedReel} onClose={closeReelModal} />
+        <ReelShow 
+          reel={selectedReel} 
+          reels={reels}
+          isOpen={isReelModalOpen}
+          onClose={closeReelModal} 
+          profileUser={user}
+          onNext={selectedReelIndex < reels.length - 1 ? navigateToNextReel : null}
+          onPrevious={selectedReelIndex > 0 ? navigateToPreviousReel : null}
+        />
       )}
 
       {/* Takipçi/Takip Edilen Listesi Modal'ı */}

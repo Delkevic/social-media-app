@@ -8,20 +8,20 @@ import (
 
 // Comment - Yorum modeli
 type Comment struct {
-	ID        uint `gorm:"primaryKey"`
-	UserID    uint `gorm:"not null"`
-	User      User `gorm:"foreignKey:UserID"`
-	PostID    uint
-	ReelID    uint // Reels için yorum desteği
-	Content   string
-	LikeCount int       `gorm:"default:0"`
-	Likes     []User    `gorm:"many2many:comment_likes;"`
-	ParentID  *uint     // Üst yorumun ID'si (yanıt yorumlar için)
-	Replies   []Comment `gorm:"foreignKey:ParentID"` // Alt yorumlar
-	IsLiked   bool      `gorm:"-"`                   // Geçici alan, veritabanında saklanmaz
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	UserID    uint           `gorm:"not null" json:"userId"`
+	User      User           `gorm:"foreignKey:UserID" json:"user"`
+	PostID    *uint          `json:"postId,omitempty"` // Post için yorum (nullable)
+	ReelID    *uint          `json:"reelId,omitempty"` // Reels için yorum (nullable)
+	Content   string         `json:"content"`
+	LikeCount int            `gorm:"default:0" json:"likeCount"`
+	Likes     []User         `gorm:"many2many:comment_likes;" json:"-"`
+	ParentID  *uint          `json:"parentId,omitempty"`                           // Üst yorumun ID'si (yanıt yorumlar için)
+	Replies   []Comment      `gorm:"foreignKey:ParentID" json:"replies,omitempty"` // Alt yorumlar
+	IsLiked   bool           `gorm:"-" json:"isLiked"`                             // Geçici alan, veritabanında saklanmaz
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // CommentResponse - API yanıtı için yorum yapısı
@@ -29,7 +29,8 @@ type CommentResponse struct {
 	ID        uint      `json:"id"`
 	Content   string    `json:"content"`
 	UserID    uint      `json:"userId"`
-	PostID    uint      `json:"postId"`
+	PostID    *uint     `json:"postId,omitempty"`
+	ReelID    *uint     `json:"reelId,omitempty"`
 	ParentID  *uint     `json:"parentId,omitempty"`
 	User      User      `json:"user"`
 	Replies   []Comment `json:"replies,omitempty"`
