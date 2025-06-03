@@ -3,6 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, Lock, AlertTriangle, Clock, Loader2, Camera, Upload, X, Check } from 'lucide-react';
 import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
+import { API_BASE_URL } from '../../../config/constants';
+
+// Profil resmi URL'ini tam hale getiren yardımcı fonksiyon
+const getFullImageUrl = (url) => {
+  if (!url) return `https://ui-avatars.com/api/?name=U&background=0D1117&color=0AFFD9`;
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return `${API_BASE_URL}${url}`;
+  return `${API_BASE_URL}/${url}`;
+};
 
 // Genel Ayar Bileşeni Stili
 const SettingsSection = ({ title, icon: Icon, children }) => (
@@ -617,7 +626,7 @@ const ProfilePictureUpload = ({ currentImage, onImageUpdate, disabled }) => {
           <div className="w-24 h-24 rounded-full overflow-hidden bg-black/60 border-2 border-[#0affd9]/30">
             {preview ? (
               <img
-                src={preview}
+                src={getFullImageUrl(preview)}
                 alt="Profil resmi"
                 className="w-full h-full object-cover"
               />

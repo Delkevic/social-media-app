@@ -557,65 +557,11 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
   };
 
   // Görsel URL'lerini tam adrese dönüştürme yardımcı fonksiyonu
-  const getFullImageUrl = (imageUrl) => {
-    if (!imageUrl) {
-      console.log("Boş görsel URL'i, varsayılan görüntü döndürülüyor");
-      return DEFAULT_PLACEHOLDER_IMAGE; // Varsayılan resim
-    }
-    
-    try {
-      // Eğer URL bir obje ise (API yanıtı bazen böyle olabilir)
-      if (typeof imageUrl === 'object') {
-        if (imageUrl.url) {
-          imageUrl = imageUrl.url;
-        } else if (imageUrl.path) {
-          imageUrl = imageUrl.path;
-        } else {
-          console.error("Nesne türünde görsel URL'i beklenmeyen formatta:", imageUrl);
-          return DEFAULT_PLACEHOLDER_IMAGE; // Varsayılan resim
-        }
-      }
-      
-      // URL string olmalı
-      if (typeof imageUrl !== 'string') {
-        console.error("Görsel URL'i string değil:", typeof imageUrl, imageUrl);
-        return DEFAULT_PLACEHOLDER_IMAGE; // Varsayılan resim
-      }
-      
-      // URL zaten HTTP/HTTPS ile başlıyorsa doğrudan kullan
-      if (imageUrl.startsWith('http')) {
-        return imageUrl;
-      }
-      
-      // Backend'in uploads klasörünü kontrol et
-      if (imageUrl.includes('uploads/')) {
-        // Eğer path zaten "uploads/" içeriyorsa, başındaki slash'ı kontrol et
-        return imageUrl.startsWith('/') 
-          ? `${API_BASE_URL}${imageUrl}`
-          : `${API_BASE_URL}/${imageUrl}`;
-      }
-      
-      // URL en başta slash ile başlıyorsa doğru şekilde birleştir
-      if (imageUrl.startsWith('/')) {
-        // Eğer URL /uploads/ ile başlamıyorsa, kontrol et
-        if (!imageUrl.startsWith('/uploads/')) {
-          // Uploads klasörünü ekle
-          return `${API_BASE_URL}/uploads${imageUrl}`;
-        }
-        return `${API_BASE_URL}${imageUrl}`; 
-      }
-      
-      // Diğer durumlar için /uploads/ klasörünü ekle
-      if (!imageUrl.startsWith('uploads/')) {
-        return `${API_BASE_URL}/uploads/${imageUrl}`;
-      }
-      
-      // Son durum: URL uploads/ ile başlıyor
-      return `${API_BASE_URL}/${imageUrl}`;
-    } catch (error) {
-      console.error("URL oluşturma hatası:", error, "Orijinal URL:", imageUrl);
-      return DEFAULT_PLACEHOLDER_IMAGE; // Varsayılan resim
-    }
+  const getFullImageUrl = (url) => {
+    if (!url) return `https://ui-avatars.com/api/?name=U&background=0D1117&color=0AFFD9`;
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('/')) return `${API_BASE_URL}${url}`;
+    return `${API_BASE_URL}/${url}`;
   };
 
   // Menüyü kapatmak için dışarı tıklama kontrolü
@@ -993,7 +939,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
         <div className="flex">
           <Link to={`/profile/${comment.user?.username}`} className="flex-shrink-0 mr-3">
             <img 
-              src={comment.user?.profile_picture || DEFAULT_AVATAR_URL} 
+              src={getFullImageUrl(comment.user?.profile_picture || comment.user?.profileImage)} 
               alt={comment.user?.username || 'Kullanıcı'} 
               className="w-8 h-8 rounded-full object-cover border border-[#0affd9]/20"
               onError={handleImageError}
@@ -1051,7 +997,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
         <Link to={`/profile/${post.user?.username || post.username}`} className="flex items-center flex-1 min-w-0">
           <div className="relative w-11 h-11 rounded-full overflow-hidden border-2 border-[#0affd9]/30">
             <img 
-              src={post.user?.profile_picture || post.user?.profileImage || post.profileImage || DEFAULT_AVATAR_URL}
+              src={getFullImageUrl(post.user?.profile_picture || post.user?.profileImage || post.profileImage || post.user?.profileImage)}
               alt={post.user?.username || post.username || 'Kullanıcı'}
               className="w-full h-full object-cover"
               onError={handleImageError}
@@ -1260,7 +1206,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
           <form onSubmit={handleSubmitComment} className="mt-4">
             <div className="flex items-start space-x-3">
               <img 
-                src={currentUser?.profile_picture || DEFAULT_AVATAR_URL}
+                src={getFullImageUrl(currentUser?.profile_picture || DEFAULT_AVATAR_URL)}
                 alt={currentUser?.username || 'Kullanıcı'} 
                 className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[#0affd9]/20"
                 onError={handleImageError}
