@@ -754,12 +754,13 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
     console.log('Gönderi tıklandı, modal açılıyor');
   };
 
-  // Yorum butonuna tıklandığında modal açılacak yeni fonksiyon
+  // Yorum butonuna tıklandığında modal açılacak fonksiyon
   const handleCommentClick = (e) => {
+    e.preventDefault();
     e.stopPropagation(); // Event propagation'ı durdur
-    setShowPostModal(true);
-    setSelectedPost(post);
     console.log('Yorum butonu tıklandı, modal açılıyor');
+    setSelectedPost(post);
+    setShowPostModal(true);
   };
 
   // Gönderi silme işleyicisi - hem normal silme hem de modal üzerinden silme için
@@ -801,20 +802,16 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
 
   // ---- YORUM BİLEŞENİ ----
   const Comment = ({ comment, onReply, currentUser, setComments }) => {
-    const [replyText, setReplyText] = useState('');
-    const [showReplyInput, setShowReplyInput] = useState(false);
-    const [isReplying, setIsReplying] = useState(false); // Yanıt gönderirken yüklenme durumu
-    const [replyError, setReplyError] = useState(null);
-    const [isLikingComment, setIsLikingComment] = useState(false);
-    const [isDeletingComment, setIsDeletingComment] = useState(false);
-    const [commentMenuVisible, setCommentMenuVisible] = useState(false);
-    const commentMenuRef = useRef(null);
+    const [showReplyForm, setShowReplyForm] = useState(false);
+    const [replyContent, setReplyContent] = useState('');
+    const [showMenu, setShowMenu] = useState(false);
+    const menuRef = useRef(null);
 
     // Yorum menüsünü kapatmak için dışarı tıklma
     useEffect(() => {
       const handleClickOutside = (event) => {
-        if (commentMenuRef.current && !commentMenuRef.current.contains(event.target)) {
-          setCommentMenuVisible(false);
+        if (menuRef.current && !menuRef.current.contains(event.target)) {
+          setShowMenu(false);
         }
       };
       document.addEventListener('mousedown', handleClickOutside);
@@ -833,7 +830,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
 
     const handleReplySubmit = async (e) => {
       e.preventDefault();
-      if (!replyText.trim() || isReplying) return;
+      if (!replyContent.trim() || isReplying) return;
 
       setIsReplying(true);
       setReplyError(null);
@@ -862,10 +859,10 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
           safeCommentId: safeCommentId
         });
         
-        const response = await api.posts.addComment(safePostId, replyText, safeCommentId); // parentId olarak yorumu ID'sini ver
+        const response = await api.posts.addComment(safePostId, replyContent, safeCommentId); // parentId olarak yorumu ID'sini ver
         if (response.success) {
-          setReplyText('');
-          setShowReplyInput(false);
+          setReplyContent('');
+          setShowReplyForm(false);
           fetchComments(); // Ana post yorumlarını yeniden çekerek yanıtı da göster
         } else {
           throw new Error(response.message || 'Yanıt gönderilemedi');
@@ -990,421 +987,312 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
     };
 
     return (
-      <div className="flex space-x-3 py-2">
-        {/* Yorum Yapan Kullanıcı Avatarı */}
-        <Link to={`/profile/${comment.user?.username}`} className="flex-shrink-0">
-          {commentUserProfileImageUrl ? (
-            <img src={commentUserProfileImageUrl} alt={comment.user?.username} className="w-8 h-8 rounded-full object-cover bg-gray-700" onError={handleImageError} />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold">
-              {getInitial(comment.user?.username)}
-            </div>
-          )}
-        </Link>
-        
-        <div className="flex-1">
-          {/* Kullanıcı Adı ve Yorum İçeriği */}
-          <div className="bg-gray-800/50 rounded-lg p-2">
-            <div className="flex justify-between items-start">
-              <div>
-                <Link to={`/profile/${comment.user?.username}`} className="font-medium text-sm text-white hover:text-[#0affd9] transition-colors">
-                  {comment.user?.username}
-                  </Link>
-                <p className="text-sm text-gray-300 mt-1">{comment.content}</p>
-                </div>
-              {/* Yorum Menüsü Butonu */}   
-              {(currentUser?.id === comment.user?.id || currentUser?.isAdmin) && (
-                 <div className="relative" ref={commentMenuRef}>
-                    <button 
-                      onClick={() => setCommentMenuVisible(!commentMenuVisible)} 
-                      className="text-gray-500 hover:text-[#0affd9] p-1 rounded-full transition-colors"
-                    >
-                      <MoreHorizontal size={16} />
-                    </button>
-                    {commentMenuVisible && (
-                      <div className="absolute right-0 mt-1 w-32 bg-gray-900 border border-[#0affd9]/20 rounded-lg shadow-lg z-20 py-1">
-                         {currentUser?.id === comment.user?.id && (
-                        <button
-                              onClick={handleDeleteComment}
-                              disabled={isDeletingComment}
-                              className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-red-600/20 disabled:opacity-50 transition-colors flex items-center"
-                            >
-                               <Trash2 size={14} className="mr-2"/> Sil {isDeletingComment && '...'}
-                             </button>
-                          )}
-                           <button 
-                             onClick={handleReportComment}
-                             className="w-full text-left px-3 py-1.5 text-sm text-yellow-400 hover:bg-yellow-600/20 transition-colors flex items-center"
-                           >
-                             <AlertCircle size={14} className="mr-2"/> Bildir
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+      <div className="mb-4 last:mb-0 group">
+        <div className="flex">
+          <Link to={`/profile/${comment.user?.username}`} className="flex-shrink-0 mr-3">
+            <img 
+              src={comment.user?.profile_picture || DEFAULT_AVATAR_URL} 
+              alt={comment.user?.username || 'Kullanıcı'} 
+              className="w-8 h-8 rounded-full object-cover border border-[#0affd9]/20"
+              onError={handleImageError}
+            />
+          </Link>
+          
+          <div className="flex-1 bg-black/40 rounded-2xl px-4 py-3 border border-[#0affd9]/10">
+            <div className="flex justify-between items-start mb-1">
+              <Link to={`/profile/${comment.user?.username}`} className="font-medium text-[#0affd9]/90 text-sm hover:underline">
+                {comment.user?.username || 'Kullanıcı'}
+              </Link>
+              <div className="flex items-center text-gray-400 text-xs">
+                <span className="mr-2">{formatDate(comment.createdAt)}</span>
+                <button 
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="p-1 hover:text-white transition-colors rounded-full hover:bg-black/30"
+                >
+                  <MoreHorizontal size={14} />
+                </button>
               </div>
             </div>
             
-          {/* Yorum Alt Bilgisi (Tarih, Beğen, Yanıtla) */}
-          <div className="flex items-center space-x-3 mt-1 text-xs text-gray-500">
-            <span>{formatDate(comment.createdAt)}</span>
+            <p className="text-sm text-gray-200 mb-2">{comment.content}</p>
+            
+            <div className="flex items-center text-xs text-gray-400 space-x-4">
               <button 
                 onClick={handleCommentLike}
-               disabled={isLikingComment}
-               className={`font-medium flex items-center transition-colors ${comment.isLiked ? 'text-[#0affd9]' : 'hover:text-gray-300'}`}
-            >
-               <Heart size={12} className={`mr-1 ${comment.isLiked ? 'fill-current' : ''}`} /> {comment.likeCount || 0} Beğen
-              </button>
-              <button 
-              onClick={() => setShowReplyInput(!showReplyInput)} 
-              className="font-medium hover:text-gray-300 transition-colors"
+                className={`flex items-center hover:text-[#0affd9] transition-colors ${comment.isLiked ? 'text-[#0affd9]' : ''}`}
               >
-                Yanıtla
+                <Heart size={14} className={`${comment.isLiked ? 'fill-[#0affd9]' : ''} mr-1`} />
+                <span>{comment.likeCount || 0}</span>
+              </button>
+              
+              <button 
+                onClick={() => setShowReplyForm(!showReplyForm)}
+                className="flex items-center hover:text-[#0affd9] transition-colors"
+              >
+                <MessageCircle size={14} className="mr-1" />
+                <span>Yanıtla</span>
               </button>
             </div>
-            
-          {/* Yanıt Yazma Alanı */}
-          {showReplyInput && (
-            <form onSubmit={handleReplySubmit} className="mt-2 flex space-x-2 items-start">
-              <Link to={`/profile/${currentUser?.username}`} className="flex-shrink-0">
-                 {currentUserProfileImageUrl ? (
-                   <img src={currentUserProfileImageUrl} alt={currentUser?.username} className="w-6 h-6 rounded-full object-cover bg-gray-700" onError={handleImageError} />
-                 ) : (
-                   <div className="w-6 h-6 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] text-xs font-bold">
-                     {getInitial(currentUser?.username)}
-                   </div>
-                 )}
-               </Link>
-               <div className="flex-1 relative">
-                <input
-                  type="text"
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    placeholder={`${comment.user?.username || 'Kullanıcı'} adlı kişiye yanıt ver...`}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-full py-1.5 px-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0affd9] focus:border-[#0affd9] pr-10"
-                />
-                <button
-                  type="submit"
-                     disabled={!replyText.trim() || isReplying}
-                     className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[#0affd9] disabled:text-gray-600 hover:text-white disabled:hover:text-gray-600 transition-colors p-1 rounded-full"
-                   >
-                     {isReplying ? <div className="w-4 h-4 border-2 border-t-[#0affd9] border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div> : <Send size={16} />}
-                </button>
-               </div>
-              </form>
-            )}
-           {replyError && <p className="text-xs text-red-400 mt-1">{replyError}</p>}
-          
-          {/* Yorumun Yanıtları */}
-          {comment.replies && comment.replies.length > 0 && (
-            <div className="mt-2 pl-6 border-l border-gray-700">
-              {comment.replies.map(reply => (
-                 <Comment key={reply.id} comment={reply} onReply={onReply} currentUser={currentUser} setComments={setComments} />
-              ))}
           </div>
-        )}
         </div>
+
+        {/* ... existing code ... */}
       </div>
     );
   };
   // ---- YORUM BİLEŞENİ SONU ----
 
   return (
-    <div className="bg-black/60 rounded-xl overflow-hidden border border-[#0affd9]/10">
-      {/* Gemini yanıtı (varsa) */}
-      {geminiResponse && showGeminiResponse && (
-        <div className="mx-4 mt-3 p-3 rounded-lg bg-[#0affd9]/10 border border-[#0affd9]/30">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-[#0affd9] mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 16h2v-2h-2v2zm2.07-7.75-.9.92C11.45 11.9 11 12.5 11 14h2v-.5c0-1.1.45-1.67 1.17-2.42l.9-.92c.57-.58.83-1.17.83-1.66 0-1.1-.9-2-2-2s-2 .9-2 2h2c0-.55.45-1 1-1s1 .45 1 1c0 .48-.2.67-.73 1.22z"/>
-            </svg>
-            <span className="font-medium text-[#0affd9]">Yapay Zeka Yorumu</span>
-            <button 
-              onClick={() => setShowGeminiResponse(false)} 
-              className="ml-auto text-gray-400 hover:text-white p-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+    <div className="bg-black/50 backdrop-blur-md rounded-2xl overflow-hidden border border-[#0affd9]/20 hover:border-[#0affd9]/30 transition-all shadow-lg hover:shadow-xl hover:shadow-[#0affd9]/5">
+      {/* Header - kullanıcı bilgileri */}
+      <div className="flex items-center justify-between p-4">
+        <Link to={`/profile/${post.user?.username || post.username}`} className="flex items-center flex-1 min-w-0">
+          <div className="relative w-11 h-11 rounded-full overflow-hidden border-2 border-[#0affd9]/30">
+            <img 
+              src={post.user?.profile_picture || post.user?.profileImage || post.profileImage || DEFAULT_AVATAR_URL}
+              alt={post.user?.username || post.username || 'Kullanıcı'}
+              className="w-full h-full object-cover"
+              onError={handleImageError}
+            />
           </div>
-          <p className="mt-1 text-white">{geminiResponse}</p>
-        </div>
-      )}
-      
-      {/* Post başlık kısmı */}
-      <div className="flex items-center p-4">
-        <Link to={`/profile/${post.user?.username || post.username}`} className="flex items-center">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#0affd9] to-blue-500 flex items-center justify-center text-white font-bold overflow-hidden">
-            {post.user?.profile_picture || post.user?.profileImage ? (
-              <img 
-                src={getFullImageUrl(post.user?.profile_picture || post.user?.profileImage)} 
-                alt={post.user?.username || post.username}
-                className="w-full h-full object-cover"
-                onError={handleImageError}
-              />
-            ) : (
-              (post.user?.username || post.username || "?").charAt(0).toUpperCase()
-            )}
-          </div>
-          <div className="ml-3">
-            <div className="font-semibold text-white">
-              {post.user?.username || post.username || "İsimsiz Kullanıcı"}
+          
+          <div className="ml-3 min-w-0">
+            <div className="font-semibold text-white text-sm truncate">
+              {post.user?.username || post.username || 'Kullanıcı'}
             </div>
-            <div className="text-xs text-gray-400">
-              {formatDate(post.created_at || post.createdAt)}
+            <div className="text-xs text-gray-400 truncate">
+              {formatDate(post.createdAt || post.created_at)}
             </div>
           </div>
         </Link>
         
-        <div className="flex items-center space-x-2">
-          {/* Debug Butonu - Shift tuşuna basıldığında görünür */}
-          {showDebug && (
-            <button
-              onClick={handleCreateTestPost}
-              className="text-yellow-500 hover:text-yellow-400 p-1 rounded-full transition-colors"
-              title="Yeni test gönderisi oluştur"
-            >
-              <Bug size={18} />
-            </button>
-          )}
+        <div className="relative z-10">
+          <button 
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-2 hover:bg-[#0affd9]/10 rounded-full transition-colors"
+          >
+            <MoreHorizontal size={20} className="text-gray-400 hover:text-white" />
+          </button>
           
-          {/* Seçenekler Menüsü */} 
-          {(currentUser?.id === post.user?.id || currentUser?.isAdmin) && (
-            <div className="relative" ref={menuRef}>
-            <button 
-              onClick={() => setShowMenu(!showMenu)}
-                className="text-gray-500 hover:text-[#0affd9] p-1 rounded-full transition-colors"
+          {/* Post menu dropdown */}
+          {showMenu && (
+            <div 
+              ref={menuRef}
+              className="absolute right-0 mt-1 w-48 py-2 bg-black/90 border border-[#0affd9]/20 rounded-xl shadow-lg backdrop-blur-md z-20"
             >
-                <MoreHorizontal size={20} />
-            </button>
-            {showMenu && (
-                <div className="absolute right-0 mt-2 w-40 bg-gray-900 border border-[#0affd9]/20 rounded-lg shadow-lg z-10 py-1">
-                  {currentUser?.id === post.user?.id && (
-                  <button
-                    onClick={handlePostDelete}
-                    disabled={isDeleting}
-                      className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-red-600/20 disabled:opacity-50 transition-colors flex items-center"
-                  >
-                      <Trash2 size={14} className="mr-2" /> Sil {isDeleting && '...'}
-                  </button>
-                )}
+              {currentUser && (post.user_id === currentUser.id || post.userId === currentUser.id) && (
                 <button
-                  onClick={handleReport}
-                    className="w-full text-left px-3 py-1.5 text-sm text-yellow-400 hover:bg-yellow-600/20 transition-colors flex items-center"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-[#0affd9]/10 transition-colors flex items-center"
                 >
-                   <AlertCircle size={14} className="mr-2"/> Bildir
+                  <Trash2 size={16} className="mr-2.5" />
+                  {isDeleting ? 'Siliniyor...' : 'Gönderiyi Sil'}
                 </button>
-              </div>
-            )}
-          </div>
+              )}
+              
+              <button
+                onClick={handleReport}
+                className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-[#0affd9]/10 transition-colors flex items-center"
+              >
+                <AlertCircle size={16} className="mr-2.5" />
+                Gönderiyi Şikayet Et
+              </button>
+              
+              {/* Debug mod için test butonu */}
+              {showDebug && ( 
+                <button
+                  onClick={handleCreateTestPost}
+                  className="w-full text-left px-4 py-2.5 text-sm text-yellow-500 hover:bg-[#0affd9]/10 transition-colors flex items-center"
+                >
+                  <Bug size={16} className="mr-2.5" />
+                  Test Gönderi Oluştur
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
-      
-      {/* Debug Bilgisi Alanı - Shift tuşu basılıyken görünür */}
-      {showDebug && (
-        <div className="p-2 text-xs bg-yellow-500/20 border-t border-b border-yellow-500/30 text-yellow-300">
-          <p>
-            <strong>DEBUG:</strong> Post ID: {post.id} ({typeof post.id}), 
-            Keys: {Object.keys(post).join(', ')}
-          </p>
-        </div>
-      )}
       
       {/* Post içeriği */}
-      <div className="mb-4" onClick={handlePostClick}>
-        <p className="text-white whitespace-pre-wrap break-words">{post.content}</p>
-      </div>
-      
-      {/* Gönderi Medyası (Resim veya Video) */} 
-      {(() => {
-        // Görsel veya video içerik olup olmadığını kontrol et
-        const hasImageUrls = post.imageUrls && post.imageUrls.length > 0;
-        const hasImages = post.images && post.images.length > 0;
-        const hasSingleImage = post.image; // Tekil image alanı
-        const hasMedia = post.media && post.media.length > 0;
-        const hasVideoUrl = post.videoUrl;
-        
-        // Kullanılacak resim dizisini belirle
-        let imagesToUse = null;
-        if (hasImageUrls) {
-          imagesToUse = post.imageUrls;
-        } else if (hasImages) {
-          imagesToUse = post.images;
-        } else if (hasMedia) {
-          imagesToUse = post.media;
-        } else if (hasSingleImage) {
-          imagesToUse = [post.image];
-        }
-        
-        // Herhangi bir medya içeriği yoksa, null döndür
-        if (!imagesToUse && !hasVideoUrl) {
-          return null;
-                }
-                
-                return (
-          <div className="relative mb-4 rounded-xl overflow-hidden" onClick={handlePostClick}>
-            <div 
-              className="aspect-[4/3] bg-black" 
-            >
-              <img 
-                src={getFullImageUrl(imagesToUse[currentImageIndex])}
-                alt="Post content"
-                className="w-full h-full object-contain"
-                onError={handleImageError}
-              />
-            </div>
+      <div onClick={handlePostClick} className="cursor-pointer">
+        {/* Post resimleri */}
+        {getImageArray().length > 0 ? (
+          <div className="relative">
+            <img 
+              src={getImageArray()[currentImageIndex]} 
+              alt="Gönderi" 
+              className="w-full h-auto max-h-[600px] object-contain bg-black/60"
+              onError={handleImageError}
+            />
             
-            {hasVideoUrl && (
-              <video
-                src={getFullImageUrl(post.videoUrl)} 
-                controls
-                className="w-full h-auto max-h-[70vh] object-contain"
-                preload="metadata"
-                onError={(e) => {
-                  console.error("Video yükleme hatası:", e.target.src);
-                }}
-              >
-                Tarayıcınız video etiketini desteklemiyor.
-              </video>
-            )}
-            
-            {/* Resimler arası geçiş butonları */} 
-            {imagesToUse && imagesToUse.length > 1 && (
-              <>
-                  <button
-                  onClick={prevImage} 
-                  className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white p-1.5 rounded-full hover:bg-black/80 transition-opacity opacity-70 hover:opacity-100"
-                  aria-label="Önceki resim"
-                  >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
-                  </button>
-                    <button
-                  onClick={nextImage} 
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white p-1.5 rounded-full hover:bg-black/80 transition-opacity opacity-70 hover:opacity-100"
-                  aria-label="Sonraki resim"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
-                </button>
-                {/* Resim göstergesi */} 
-                <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1.5">
-                  {imagesToUse.map((_, index) => (
-                    <div 
-                      key={index} 
-                      className={`w-1.5 h-1.5 rounded-full ${index === currentImageIndex ? 'bg-white' : 'bg-white/50'}`}
-                    />
+            {/* Çoklu resim navigasyonu */}
+            {getImageArray().length > 1 && (
+              <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+                <div className="flex space-x-1.5 px-2 py-1 bg-black/60 rounded-full">
+                  {getImageArray().map((_, index) => (
+                    <button 
+                      key={index}
+                      className={`w-2 h-2 rounded-full ${currentImageIndex === index ? 'bg-[#0affd9]' : 'bg-gray-400'}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentImageIndex(index);
+                      }}
+                    ></button>
                   ))}
                 </div>
+              </div>
+            )}
+            
+            {/* Önceki/sonraki resim butonları */}
+            {getImageArray().length > 1 && (
+              <>
+                {/* Sol ok */}
+                <button 
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition-all opacity-75 hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    prevImage();
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                
+                {/* Sağ ok */}
+                <button 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition-all opacity-75 hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    nextImage();
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                  </svg>
+                </button>
               </>
             )}
           </div>
-        );
-      })()}
-      
-      {/* Etkileşim Butonları */} 
-      <div className="flex justify-between items-center mb-2">
-        <div className="flex space-x-4">
-          <button 
-            className={`flex items-center space-x-1 ${isLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'}`}
-            onClick={handleLike}
-          >
-            <Heart className={`h-5 w-5 ${isLiked ? 'fill-red-500' : ''}`} />
-            <span>{likeCount}</span>
-          </button>
-          
-          <button 
-            className="flex items-center space-x-1 text-gray-400 hover:text-[#0affd9]"
-            onClick={handleCommentClick}
-          >
-            <MessageCircle className="h-5 w-5" />
-            <span>{commentCount}</span>
-          </button>
-          
-          {/* Gönder Butonu (Paylaşım için placeholder) */} 
-          <button 
-             className="text-gray-400 hover:text-white transition-colors"
-             aria-label="Gönder"
-           >
-             <Send size={22} />
-           </button>
-         </div>
-         
-        {/* Kaydet Butonu */} 
-         <button 
-          onClick={handleSave}
-           className={`transition-colors ${post.saved ? 'text-[#0affd9]' : 'text-gray-400 hover:text-white'}`}
-           aria-label={post.saved ? 'Kaydedileni kaldır' : 'Kaydet'}
-         >
-           <Bookmark size={22} className={`${post.saved ? 'fill-current' : ''}`} />
-        </button>
+        ) : null}
       </div>
       
-      {/* Hata Mesajı Alanı */} 
-       {error && (
-         <div className="px-3 pb-2 text-xs text-red-400">
-           {error}
-         </div>
-       )}
-       
-      {/* Yorumlar Bölümü */} 
-      {showComments && (
-         <div className="p-3 border-t border-[#0affd9]/20">
-           {/* Yorum Yazma Alanı */} 
-           <form onSubmit={handleSubmitComment} className="flex items-center space-x-2 mb-4">
-             <Link to={`/profile/${currentUser?.username}`} className="flex-shrink-0">
-               {currentUserProfileImageUrl ? (
-                 <img src={currentUserProfileImageUrl} alt={currentUser?.username} className="w-8 h-8 rounded-full object-cover bg-gray-700" onError={handleImageError} />
-               ) : (
-                 <div className="w-8 h-8 rounded-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold">
-                   {currentUser?.username ? currentUser.username[0].toUpperCase() : 'U'}
-                 </div>
-               )}
-             </Link>
-             <div className="flex-1 relative">
-            <input
-              type="text"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-                 placeholder="Yorum ekle..."
-                 className="w-full bg-gray-800 border border-gray-700 rounded-full py-2 px-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0affd9] focus:border-[#0affd9] pr-10"
-            />
-            <button
-              type="submit"
-              disabled={!comment.trim()}
-                 className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[#0affd9] disabled:text-gray-600 hover:text-white disabled:hover:text-gray-600 transition-colors p-1 rounded-full"
-            >
-                 <Send size={18} />
-            </button>
-             </div>
-          </form>
+      {/* Post metni */}
+      <div className="px-5 py-3.5">
+        <p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">
+          {post.caption || post.content || ''}
+        </p>
+      </div>
+      
+      {/* Post etkileşimleri */}
+      <div className="flex items-center justify-between px-5 py-3.5 border-t border-[#0affd9]/10">
+        <div className="flex items-center space-x-5">
+          <button 
+            onClick={handleLike}
+            disabled={isLiking}
+            className={`flex items-center space-x-1.5 group ${isLiked ? 'text-[#0affd9]' : 'text-gray-400 hover:text-[#0affd9]'}`}
+          >
+            <Heart size={20} className={`transition-all ${isLiked ? 'fill-[#0affd9] scale-110' : 'group-hover:scale-110'}`} />
+            <span className="text-sm font-medium">{likeCount || 0}</span>
+          </button>
           
-           {/* Mevcut Yorumlar */} 
+          <button 
+            onClick={handleCommentClick}
+            className="flex items-center space-x-1.5 text-gray-400 hover:text-[#0affd9] group"
+          >
+            <MessageCircle size={20} className="group-hover:scale-110 transition-all" />
+            <span className="text-sm font-medium">{commentCount || 0}</span>
+          </button>
+          
+          <button className="flex items-center space-x-1.5 text-gray-400 hover:text-[#0affd9] group">
+            <Send size={20} className="group-hover:scale-110 transition-all" />
+          </button>
+        </div>
+        
+        <div>
+          <button 
+            onClick={handleSave}
+            className={`flex items-center group ${post.saved ? 'text-[#0affd9]' : 'text-gray-400 hover:text-[#0affd9]'}`}
+          >
+            <Bookmark size={20} className={`transition-all group-hover:scale-110 ${post.saved ? 'fill-[#0affd9]' : ''}`} />
+          </button>
+        </div>
+      </div>
+      
+      {/* Yorumlar bölümü */}
+      {showComments && (
+        <div className="border-t border-[#0affd9]/10 px-4 py-4">
+          <h4 className="text-sm font-medium text-white mb-3">Yorumlar</h4>
+          
+          {error && (
+            <div className="bg-red-600/10 border border-red-600/30 rounded-lg p-3 mb-4">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+          
           {loadingComments ? (
-             <div className="text-center py-4">
-               <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-[#0affd9]"></div>
-               <p className="mt-2 text-sm text-gray-400">Yorumlar yükleniyor...</p>
-             </div>
-           ) : comments.length > 0 ? (
-             <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-               {comments.map(commentData => (
-                 <Comment key={commentData.id} comment={commentData} onReply={handleSubmitComment} currentUser={currentUser} setComments={setComments} />
-               ))}
+            <div className="py-6 text-center">
+              <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#0affd9]"></div>
+              <p className="mt-2 text-sm text-gray-400">Yorumlar yükleniyor...</p>
+            </div>
+          ) : comments.length === 0 ? (
+            <div className="py-6 text-center">
+              <p className="text-gray-400">Henüz yorum yok</p>
             </div>
           ) : (
-             <p className="text-center text-sm text-gray-500 py-4">Henüz yorum yok.</p>
+            <div className="space-y-4">
+              {comments.map(comment => (
+                <Comment 
+                  key={comment.id} 
+                  comment={comment} 
+                  onReply={fetchComments}
+                  currentUser={currentUser}
+                  setComments={setComments}
+                />
+              ))}
+            </div>
           )}
+          
+          {/* Yorum formu */}
+          <form onSubmit={handleSubmitComment} className="mt-4">
+            <div className="flex items-start space-x-3">
+              <img 
+                src={currentUser?.profile_picture || DEFAULT_AVATAR_URL}
+                alt={currentUser?.username || 'Kullanıcı'} 
+                className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[#0affd9]/20"
+                onError={handleImageError}
+              />
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="Yorum ekle..."
+                  className="w-full bg-black/40 border border-[#0affd9]/20 rounded-full py-2.5 px-4 pr-12 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0affd9] focus:border-[#0affd9]"
+                />
+                <button 
+                  type="submit"
+                  disabled={!comment.trim()}
+                  className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${
+                    comment.trim() ? 'text-[#0affd9]' : 'text-gray-600 cursor-not-allowed'
+                  }`}
+                >
+                  <Send size={18} />
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       )}
       
-      {/* PostShow Modalı */}
-      <PostShow 
-        post={selectedPost || post}
-        isOpen={showPostModal}
-        onClose={() => setShowPostModal(false)}
-        profileUser={post.user}
-        onPostDelete={handlePostDelete}
-      />
+      {/* Post modal */}
+      {showPostModal && (
+        <PostShow
+          post={selectedPost}
+          onClose={() => setShowPostModal(false)}
+        />
+      )}
     </div>
   );
 };

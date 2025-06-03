@@ -88,6 +88,7 @@ func ConnectDatabase() {
 		&models.SupportTicket{},
 		&models.SupportMessage{},
 		&models.TwoFactorAuth{},
+		&models.Message{},
 
 		&models.Follow{},
 		&models.Notification{},

@@ -1530,59 +1530,58 @@ func DeleteAccount(c *gin.Context) {
 
 // SearchUsers kullanıcı adı veya tam adına göre kullanıcıları arar
 func SearchUsers(c *gin.Context) {
-	// Sorgu parametresini al
+	// Gelen query parametresini al
 	query := c.Query("query")
+	currentUserID := c.Query("currentUserId")
+
+	// Mevcut kullanıcı ID'sini integer'a çevir
+	var currentUserIDInt uint
+	if currentUserID != "" {
+		if id, err := strconv.ParseUint(currentUserID, 10, 32); err == nil {
+			currentUserIDInt = uint(id)
+		}
+	}
+
+	fmt.Printf("Gelen istek: GET %s\n", c.Request.URL.Path)
+	fmt.Printf("Filtrelenecek kullanıcı ID: %d\n", currentUserIDInt)
+
 	if query == "" {
 		c.JSON(http.StatusBadRequest, Response{
 			Success: false,
-			Message: "Arama sorgusu boş olamaz",
+			Message: "Arama terimi gerekli",
 		})
 		return
 	}
 
-	// URL parametresinden gelen kullanıcı ID'sini al
-	currentUserIdParam := c.Query("currentUserId")
-	var currentUserID uint
-	if currentUserIdParam != "" {
-		id, err := strconv.ParseUint(currentUserIdParam, 10, 32)
-		if err == nil {
-			currentUserID = uint(id)
-			fmt.Printf("Filtrelenecek kullanıcı ID: %d\n", currentUserID)
-		}
-	}
+	fmt.Printf("Kullanıcı araması yapılıyor. Sorgu: %s, Filtreleme ID: %d\n", query, currentUserIDInt)
 
-	// Debug için logla
-	fmt.Printf("Kullanıcı araması yapılıyor. Sorgu: %s, Filtreleme ID: %d\n", query, currentUserID)
-
-	// Arama sorgusunu hazırla
-	searchQuery := "%" + query + "%"
 	var users []models.User
+	searchPattern := "%" + query + "%"
 
-	// Kullanıcı adı veya tam ada göre arama yap
-	result := database.DB.
-		Where("username LIKE ? OR full_name LIKE ?", searchQuery, searchQuery).
-		Select("id, username, full_name, profile_image, bio").
-		Limit(20).
-		Find(&users)
-
-	if result.Error != nil {
+	if err := database.DB.Select("id, username, full_name, profile_image, bio").
+		Where("(username LIKE ? OR full_name LIKE ?) AND deleted_at IS NULL", searchPattern, searchPattern).
+		Limit(20).Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, Response{
 			Success: false,
-			Message: "Kullanıcılar aranırken bir hata oluştu: " + result.Error.Error(),
+			Message: "Arama sırasında bir hata oluştu",
 		})
 		return
 	}
 
-	// Sonuçları hazırla
-	var userResults []map[string]interface{}
+	// Mevcut kullanıcıyı sonuçlardan filtrele
+	var filteredUsers []models.User
 	for _, user := range users {
-		// Kullanıcı kendisiyse, sonuçlara ekleme
-		if currentUserID > 0 && user.ID == currentUserID {
+		if user.ID != currentUserIDInt {
+			filteredUsers = append(filteredUsers, user)
+		} else {
 			fmt.Printf("Kullanıcı kendisi filtreleniyor: %d\n", user.ID)
-			continue
 		}
+	}
 
-		userResults = append(userResults, map[string]interface{}{
+	// Yanıt formatını düzenle
+	var responseData []map[string]interface{}
+	for _, user := range filteredUsers {
+		responseData = append(responseData, map[string]interface{}{
 			"id":           user.ID,
 			"username":     user.Username,
 			"fullName":     user.FullName,
@@ -1591,12 +1590,70 @@ func SearchUsers(c *gin.Context) {
 		})
 	}
 
-	// Yanıt döndür
-	fmt.Printf("Arama tamamlandı. %d sonuç bulundu.\n", len(userResults))
+	fmt.Printf("Arama tamamlandı. %d sonuç bulundu.\n", len(responseData))
+
 	c.JSON(http.StatusOK, Response{
 		Success: true,
 		Message: "Kullanıcılar başarıyla arandı",
-		Data:    userResults,
+		Data:    responseData,
+	})
+}
+
+// GetUserById ID'ye göre kullanıcı getir
+func GetUserById(c *gin.Context) {
+	// URL'den user ID'yi al
+	userIDStr := c.Param("id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz kullanıcı ID'si",
+		})
+		return
+	}
+
+	fmt.Printf("Gelen istek: GET %s\n", c.Request.URL.Path)
+	fmt.Printf("Aranan kullanıcı ID: %d\n", userID)
+
+	var user models.User
+	if err := database.DB.Select("id, username, full_name, profile_image, bio, email, is_private").
+		Where("id = ? AND deleted_at IS NULL", uint(userID)).
+		First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, Response{
+				Success: false,
+				Message: "Kullanıcı bulunamadı",
+			})
+			return
+		}
+
+		fmt.Printf("Kullanıcı arama hatası: %v\n", err)
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Kullanıcı bilgileri alınırken hata oluştu",
+		})
+		return
+	}
+
+	// Yanıt formatını düzenle
+	responseData := map[string]interface{}{
+		"id":              user.ID,
+		"username":        user.Username,
+		"full_name":       user.FullName,
+		"fullName":        user.FullName,
+		"profile_picture": user.ProfileImage,
+		"profileImage":    user.ProfileImage,
+		"bio":             user.Bio,
+		"email":           user.Email,
+		"is_private":      user.IsPrivate,
+	}
+
+	fmt.Printf("Kullanıcı bulundu: %s (ID: %d)\n", user.Username, user.ID)
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: "Kullanıcı başarıyla bulundu",
+		Data:    responseData,
 	})
 }
 
@@ -1862,29 +1919,6 @@ func UpdatePrivacy(c *gin.Context) {
 
 	fmt.Printf("[DEBUG] UpdatePrivacy - Güncelleme başarılı (UserID: %v) - Yeni değer: isPrivate=%v\n", userID, request.IsPrivate)
 
-	// Güncellenmiş kullanıcı bilgilerini tekrar al
-	if err := database.DB.First(&user, userID).Error; err != nil {
-		fmt.Printf("[DEBUG] UpdatePrivacy - Güncellenmiş kullanıcı bilgileri alınamadı (UserID: %v): %v\n", userID, err)
-	} else {
-		fmt.Printf("[DEBUG] UpdatePrivacy - Güncelleme sonrası kontrol (UserID: %v) - IsPrivate=%v\n", userID, user.IsPrivate)
-
-		// Eğer veritabanındaki değer beklediğimiz gibi değilse ek bir güncelleme dene
-		if user.IsPrivate != request.IsPrivate {
-			fmt.Printf("[DEBUG] UpdatePrivacy - Veritabanı değeri beklenen değerle eşleşmiyor, alternatif güncelleme deneniyor\n")
-
-			// Direkt SQL sorgusu ile güncelleme dene
-			updateSQL := "UPDATE users SET is_private = ? WHERE id = ?"
-			if err := database.DB.Exec(updateSQL, request.IsPrivate, userID).Error; err != nil {
-				fmt.Printf("[DEBUG] UpdatePrivacy - Alternatif güncelleme başarısız: %v\n", err)
-			} else {
-				fmt.Printf("[DEBUG] UpdatePrivacy - Alternatif güncelleme başarılı oldu\n")
-				// Tekrar kontrol et
-				database.DB.First(&user, userID)
-				fmt.Printf("[DEBUG] UpdatePrivacy - Alternatif güncelleme sonrası: IsPrivate=%v\n", user.IsPrivate)
-			}
-		}
-	}
-
 	// Response yapısını kullanarak cevap gönder
 	c.JSON(http.StatusOK, Response{
 		Success: true,
@@ -1893,7 +1927,7 @@ func UpdatePrivacy(c *gin.Context) {
 			"user": map[string]interface{}{
 				"id":        user.ID,
 				"username":  user.Username,
-				"isPrivate": user.IsPrivate, // Veritabanından okunan değeri kullan
+				"isPrivate": request.IsPrivate, // Güncellenen değeri kullan
 			},
 		},
 	})

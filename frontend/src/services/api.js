@@ -249,11 +249,94 @@ const api = {
   delete: (endpoint) => fetchWithAuth(endpoint, {
     method: 'DELETE',
   }),
+  patch: (endpoint, data) => fetchWithAuth(endpoint, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }),
+  
+  // WebSocket endpoint'i devre dışı (artık polling kullanıyoruz)
+  ws: {
+    endpoint: null, // Önceki API_URL + '/ws' değeriydi
+    getUrl: () => null // WebSocket URL'ini alma fonksiyonu devre dışı
+  },
   
   // Kullanıcı ile ilgili işlemler
   user: {
     getProfile: () => fetchWithAuth('/user'),
-    getUserById: (userId) => fetchWithAuth(`/users/id/${userId}`),
+    getUserById: async (id) => {
+      console.log('getUserById çağrıldı:', id);
+      
+      // Önce direkt endpoint'i dene
+      try {
+        const directResponse = await fetchWithAuth(`/users/id/${id}`);
+        if (directResponse.success) {
+          return directResponse;
+        }
+      } catch (error) {
+        console.log('Direkt endpoint başarısız, alternatif yöntem deneniyor...');
+      }
+      
+      // Alternatif: Search endpoint'ini kullan
+      try {
+        console.log('Search endpoint ile kullanıcı aranıyor, ID:', id);
+        const searchResponse = await fetchWithAuth(`/users/search?query=${id}`);
+        
+        if (searchResponse.success && searchResponse.data && Array.isArray(searchResponse.data)) {
+          // ID'ye göre kullanıcıyı bul
+          const user = searchResponse.data.find(u => String(u.id) === String(id));
+          
+          if (user) {
+            console.log('Kullanıcı search ile bulundu:', user);
+            return {
+              success: true,
+              data: user
+            };
+          }
+        }
+        
+        // Son çare: Mevcut kullanıcı verilerinden kontrol et
+        const userRaw = sessionStorage.getItem('user') || localStorage.getItem('user');
+        if (userRaw) {
+          try {
+            const currentUser = JSON.parse(userRaw);
+            if (String(currentUser.id) === String(id)) {
+              return {
+                success: true,
+                data: currentUser
+              };
+            }
+          } catch (e) {
+            console.error('Kullanıcı verisi parse edilemedi:', e);
+          }
+        }
+        
+        console.warn('Kullanıcı bulunamadı, varsayılan veri döndürülüyor');
+        return { 
+          success: false, 
+          data: {
+            id: id,
+            username: `user_${id}`,
+            full_name: `Kullanıcı ${id}`,
+            fullName: `Kullanıcı ${id}`,
+            profile_picture: null,
+            profileImage: null
+          }
+        };
+      } catch (error) {
+        console.error('getUserById alternatif yöntem hatası:', error);
+        return { 
+          success: false, 
+          data: {
+            id: id,
+            username: `user_${id}`,
+            full_name: `Kullanıcı ${id}`,
+            fullName: `Kullanıcı ${id}`,
+            profile_picture: null,
+            profileImage: null
+          }
+        };
+      }
+    },
     getProfileByUsername: (username) => fetchWithAuth(`/profile/${username}`),
     updateProfile: (data) => fetchWithAuth('/user/profile', {
       method: 'PUT',
@@ -292,8 +375,56 @@ const api = {
       
       return fetchWithAuth(`/users/search?query=${encodeURIComponent(query)}&currentUserId=${currentUserId}`);
     },
-    getFollowing: () => fetchWithAuth('/user/following'),
-    getFollowers: () => fetchWithAuth('/user/followers'),
+    getFollowing: () => {
+      // Oturum açmış kullanıcının kendi username'ini al
+      const userRaw = sessionStorage.getItem('user') || localStorage.getItem('user');
+      let username = '';
+      
+      if (userRaw) {
+        try {
+          const userData = JSON.parse(userRaw);
+          username = userData.username || '';
+          console.log('getFollowing: username bulundu:', username);
+        } catch (e) {
+          console.error('Kullanıcı verisi parse edilemedi:', e);
+          return Promise.reject(new Error('Kullanıcı bilgisi alınamadı'));
+        }
+      }
+      
+      if (!username) {
+        console.warn('getFollowing: Username bulunamadı');
+        return Promise.resolve({ success: true, data: { users: [] } }); // Boş liste döndür
+      }
+      
+      console.log('getFollowing: API çağrısı yapılıyor:', `/profile/${username}/following`);
+      return fetchWithAuth(`/profile/${username}/following`)
+        .catch(error => {
+          console.warn('getFollowing API hatası:', error);
+          // Hata durumunda boş liste döndür, uygulama çalışmaya devam etsin
+          return { success: true, data: { users: [] } };
+        });
+    },
+    getFollowers: () => {
+      // Oturum açmış kullanıcının kendi username'ini al  
+      const userRaw = sessionStorage.getItem('user') || localStorage.getItem('user');
+      let username = '';
+      
+      if (userRaw) {
+        try {
+          const userData = JSON.parse(userRaw);
+          username = userData.username || '';
+        } catch (e) {
+          console.error('Kullanıcı verisi parse edilemedi:', e);
+          return Promise.reject(new Error('Kullanıcı bilgisi alınamadı'));
+        }
+      }
+      
+      if (!username) {
+        return Promise.reject(new Error('Kullanıcı adı bulunamadı'));
+      }
+      
+      return fetchWithAuth(`/profile/${username}/followers`);
+    },
     getFollowersByUsername: (username) => fetchWithAuth(`/profile/${username}/followers`),
     getFollowingByUsername: (username) => fetchWithAuth(`/profile/${username}/following`),
     follow: async (username) => {
@@ -544,13 +675,24 @@ const api = {
     getPreviousChats: async () => {
       return await fetchWithAuth('/messages/previous-chats');
     },
-    sendMessage: async (message) => {
-      return await fetchWithAuth(`/messages/${message.receiverId}`, {
+    sendMessage: async (userId, messageData) => {
+      console.log('🚨 API.JS: sendMessage çağrıldı:', { userId, messageData });
+      
+      // userId'nin geçerli olduğundan emin ol
+      if (!userId || userId === 'undefined' || userId === undefined || userId === null) {
+        console.error('🚨 API.JS: Geçersiz userId:', userId);
+        throw new Error('Geçersiz kullanıcı ID');
+      }
+      
+      const userIdStr = String(userId);
+      console.log('🚨 API.JS: Final userId:', userIdStr);
+      
+      return await fetchWithAuth(`/messages/${userIdStr}`, {
         method: 'POST',
         body: JSON.stringify({
-          content: message.content,
-          mediaUrl: message.mediaUrl,
-          mediaType: message.mediaType
+          content: messageData.content,
+          mediaUrl: messageData.mediaUrl,
+          mediaType: messageData.mediaType
         })
       });
     },
@@ -561,253 +703,10 @@ const api = {
     markAsRead: (messageId) => fetchWithAuth(`/messages/read/${messageId}`, {
       method: 'POST',
     }),
-    // WebSocket bağlantısı oluştur
-    createWebSocketConnection: () => {
-      const token = getToken();
-      if (!token) {
-        console.error("WebSocket bağlantısı için token bulunamadı.");
-        return null;
-      }
-      
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-      
-      console.log("WebSocket bağlantısı oluşturuluyor...");
-      
-      // API URL yapısını kontrol et
-      let host = window.location.hostname;
-      let port = '8080'; // Backend portu
-      
-      const wsUrl = `${wsProtocol}${host}:${port}/api/ws`;
-      
-      console.log("WebSocket URL:", wsUrl);
-      
-      let ws;
-      try {
-        ws = new WebSocket(wsUrl);
-      } catch (error) {
-        console.error("WebSocket oluşturma hatası:", error);
-        return null;
-      }
-
-      // WebSocket için retry mekanizması
-      let authSent = false;
-      let authRetries = 0;
-      const MAX_AUTH_RETRIES = 5;
-      const retryIntervals = [50, 100, 200, 300, 500]; // Daha kısa gecikme süreleri
-      let authTimeoutId = null;
-      let connectionCheckInterval = null;
-      
-      // Auth mesajını gönderme fonksiyonu
-      const sendAuthMessage = () => {
-        if (authSent) return true; // Zaten gönderilmişse tekrar gönderme
-        
-        try {
-          // Token'ı göndermek için auth mesajı oluştur
-          const authMessage = JSON.stringify({ 
-            type: 'auth', 
-            token: token 
-          });
-          
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(authMessage);
-            console.log('Auth mesajı gönderildi:', authMessage);
-            authSent = true;
-            
-            // Auth mesajı gönderildikten sonra timeout'u temizle
-            if (authTimeoutId) {
-              clearTimeout(authTimeoutId);
-              authTimeoutId = null;
-            }
-            return true; // Başarıyla gönderildi
-          } else {
-            console.warn('WebSocket bağlantısı hazır değil, readyState:', ws.readyState);
-            return false; // Gönderme başarısız
-          }
-        } catch (err) {
-          console.error('Auth mesajı gönderilirken hata:', err);
-          return false; // Gönderme başarısız
-        }
-      };
-      
-      // Auth mesajını yeniden gönderme işlemi
-      const retryAuthMessage = () => {
-        if (authSent || authRetries >= MAX_AUTH_RETRIES) return;
-        
-        const delay = retryIntervals[authRetries] || 500;
-        console.log(`Auth mesajı ${authRetries+1}. deneme, ${delay}ms sonra...`);
-        
-        authTimeoutId = setTimeout(() => {
-          if (!authSent) {
-            if (ws.readyState === WebSocket.OPEN) {
-              if (sendAuthMessage()) {
-                console.log(`Auth mesajı ${authRetries+1}. denemede başarıyla gönderildi`);
-              } else {
-                authRetries++;
-                retryAuthMessage(); // Başarısız olursa tekrar dene
-              }
-            } else if (ws.readyState === WebSocket.CONNECTING) {
-              console.log("WebSocket hala bağlanıyor, auth mesajı için bekleniyor...");
-              authRetries++;
-              retryAuthMessage();
-            } else {
-              console.error("WebSocket bağlantısı kapandı, auth mesajı gönderilemedi.");
-            }
-          }
-        }, delay);
-      };
-      
-      // Bağlantı açıldıktan sonra auth mesajını göndermeyi garantilemek için Promise döndüren fonksiyon
-      const ensureAuthSent = () => {
-        return new Promise((resolve, reject) => {
-          // Önce bağlantının açık olup olmadığını kontrol et
-          if (ws.readyState === WebSocket.OPEN) {
-            // Bağlantı açıksa auth mesajını gönder
-            if (sendAuthMessage()) {
-              resolve(true);
-            } else {
-              // İlk deneme başarısız olursa, yeniden deneme mekanizmasını başlat
-              authRetries++;
-              retryAuthMessage();
-              
-              // Maksimum 1 saniye bekle
-              setTimeout(() => {
-                resolve(authSent);
-              }, 1000);
-            }
-          } else if (ws.readyState === WebSocket.CONNECTING) {
-            // Bağlantı kurulana kadar bekle
-            const checkInterval = setInterval(() => {
-              if (ws.readyState === WebSocket.OPEN) {
-                clearInterval(checkInterval);
-                if (sendAuthMessage()) {
-                  resolve(true);
-                } else {
-                  authRetries++;
-                  retryAuthMessage();
-                  setTimeout(() => resolve(authSent), 1000);
-                }
-              } else if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-                clearInterval(checkInterval);
-                reject(new Error("WebSocket bağlantısı kapatıldı."));
-              }
-            }, 100);
-            
-            // Maksimum 3 saniye bekle
-            setTimeout(() => {
-              clearInterval(checkInterval);
-              if (!authSent) {
-                reject(new Error("WebSocket auth zaman aşımı"));
-              } else {
-                resolve(true);
-              }
-            }, 3000);
-          } else {
-            // Bağlantı kapalı veya kapanıyor
-            reject(new Error("WebSocket bağlantısı hazır değil: " + ws.readyState));
-          }
-        });
-      };
-      
-      // WebSocket nesnesine ensureAuthSent fonksiyonunu ekle
-      ws.ensureAuthSent = ensureAuthSent;
-      
-      // Bağlantı durum kontrolü için periyodik kontrol
-      connectionCheckInterval = setInterval(() => {
-        if (!authSent && ws.readyState === WebSocket.OPEN) {
-          console.log("Bağlantı açık ama auth gönderilmemiş, hemen gönderiliyor...");
-          if (sendAuthMessage()) {
-            console.log("Auth mesajı periyodik kontrolde başarıyla gönderildi");
-            clearInterval(connectionCheckInterval);
-          }
-        } else if (authSent) {
-          console.log("Auth gönderildi, periyodik kontrol durduruluyor");
-          clearInterval(connectionCheckInterval);
-        }
-      }, 300);
-      
-      // WebSocket açıldığında token ile kimlik doğrulama yap
-      ws.onopen = () => {
-        console.log('WebSocket bağlantısı kuruldu (onopen tetiklendi)');
-        
-        // 20ms bekle ve sonra göndermeyi dene
-        setTimeout(() => {
-          if (!sendAuthMessage()) {
-            console.log("Auth mesajı açılışta gönderilemedi, yeniden deneme başlatılıyor...");
-            authRetries++;
-            retryAuthMessage();
-          }
-        }, 20);
-      };
-      
-      // Normal mesaj işleme için onmessage
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          // Auth başarılı mesajı
-          if (data.type === 'auth_success') {
-            console.log('WebSocket kimlik doğrulama başarılı:', data);
-            authSent = true; // Auth başarıyla tamamlandı
-            // Tüm zamanlayıcıları temizle
-            if (authTimeoutId) {
-              clearTimeout(authTimeoutId);
-              authTimeoutId = null;
-            }
-            if (connectionCheckInterval) {
-              clearInterval(connectionCheckInterval);
-              connectionCheckInterval = null;
-            }
-          }
-          
-          // Auth başarısız mesajı - token yenileme dene
-          if (data.type === 'auth_error' && data.error && data.error.includes('expired')) {
-            console.log('Token süresi dolmuş, yenileme deneniyor...');
-            
-            refreshToken().then(refreshed => {
-              if (refreshed.success) {
-                console.log('Token yenilendi, auth yeniden gönderiliyor');
-                sendAuthMessage();
-              } else {
-                console.error('Token yenilenemedi, bağlantı kapatılıyor');
-                ws.close();
-              }
-            });
-            return;
-          }
-          
-          // Ping mesajlarına otomatik cevap ver
-          if (data.type === 'ping') {
-            if (ws.readyState === WebSocket.OPEN) {
-              try {
-                ws.send(JSON.stringify({ type: 'pong' }));
-                console.log('Ping alındı, pong gönderildi');
-              } catch (error) {
-                console.error('Pong gönderirken hata:', error);
-              }
-            }
-          }
-        } catch (error) {
-          console.warn('WebSocket mesajı işlenirken hata:', error);
-        }
-      };
-      
-      // WebSocket kapandığında
-      ws.onclose = (event) => {
-        console.log('WebSocket bağlantısı kapandı:', event);
-        
-        // Zamanlayıcıları temizle
-        if (authTimeoutId) {
-          clearTimeout(authTimeoutId);
-          authTimeoutId = null;
-        }
-        if (connectionCheckInterval) {
-          clearInterval(connectionCheckInterval);
-          connectionCheckInterval = null;
-        }
-      };
-      
-      return ws;
-    },
+    getUnreadCount: () => fetchWithAuth('/messages/unread-count'),
+    markAllAsRead: (userId) => fetchWithAuth(`/messages/read-all/${userId}`, {
+      method: 'POST',
+    }),
   },
 
   // Görsel yükleme

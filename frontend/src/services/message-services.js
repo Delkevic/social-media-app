@@ -1,173 +1,280 @@
 // message-service.js
 import api from './api';
-import { API_URL } from '../config/constants';
+import { API_BASE_URL, APP_CONSTANTS } from '../config/constants';
 import websocketService from './websocket-service';
 
 // Tüm konuşmaları getiren fonksiyon
 export const getConversations = async () => {
   try {
-    const response = await api.messages.getConversations();
-    if (response.success) {
-      return response.data || [];
+    // Gerçek API'den konuşmaları getir
+    const response = await fetch(`${API_BASE_URL}/api/messages`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Konuşmalar alınamadı');
     }
-    throw new Error(response.message || 'Konuşmaları getirme hatası');
+
+    const data = await response.json();
+    console.log('Gerçek API konuşma verileri:', data);
+    
+    if (data.success) {
+      return data.data || [];
+    }
+    throw new Error(data.message || 'Konuşmaları getirme hatası');
   } catch (error) {
     console.error("Konuşmaları getirme hatası:", error);
     throw error;
   }
 };
 
-// Belirli bir konuşmanın mesajlarını getiren fonksiyon
-export const getMessages = async (userId) => {
+// Belirli bir konuşmanın mesajlarını getiren fonksiyon (getMessages alias)
+export const getMessages = async (conversationId) => {
+  return fetchMessages(conversationId);
+};
+
+// Belirli bir konuşmanın mesajlarını getir
+export const fetchMessages = async (conversationId) => {
   try {
-    const response = await api.messages.getConversation(userId);
-    
-    if (response.success) {
-      return response.data;
+    // Konuşma ID'sinden kullanıcı ID'sini çıkar
+    // conversationId formatı: user1_user2 şeklinde (örn: 1_2)
+    const userIds = conversationId.split('_');
+    if (userIds.length !== 2) {
+      throw new Error('Geçersiz konuşma ID');
     }
-    throw new Error(response.message || 'Mesajları getirme hatası');
+    
+    // Şu anki kullanıcı ID'sini al
+    const currentUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user'));
+    if (!currentUser || !currentUser.id) {
+      throw new Error('Kullanıcı oturumu bulunamadı');
+    }
+    
+    // Diğer kullanıcı ID'sini bul
+    const otherUserId = userIds[0] == currentUser.id ? userIds[1] : userIds[0];
+    
+    // Gerçek API'den mesajları getir
+    const response = await fetch(`${API_BASE_URL}/api/messages/${otherUserId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Mesajlar alınamadı: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log(`[Tek seferlik] Gerçek API mesajları alındı:`, data);
+    
+    if (data.success) {
+      // Backend'den gelen mesaj formatını düzenleme
+      return data.data?.messages || [];
+    }
+    throw new Error(data.message || 'Mesajlar alınamadı');
   } catch (error) {
-    console.error("Mesajları getirme hatası:", error);
-    throw error;
+    console.error('Mesajları getirme hatası:', error);
+    return [];
+  }
+};
+
+// Okunmamış mesajları okundu olarak işaretle
+export const markMessagesAsRead = async (conversationId) => {
+  try {
+    // Konuşma ID'sinden kullanıcı ID'sini çıkar
+    const userIds = conversationId.split('_');
+    if (userIds.length !== 2) {
+      throw new Error('Geçersiz konuşma ID');
+    }
+    
+    // Şu anki kullanıcı ID'sini al
+    const currentUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user'));
+    if (!currentUser || !currentUser.id) {
+      throw new Error('Kullanıcı oturumu bulunamadı');
+    }
+    
+    // Diğer kullanıcı ID'sini bul
+    const otherUserId = userIds[0] == currentUser.id ? userIds[1] : userIds[0];
+    
+    // Gerçek API ile mesajları okundu olarak işaretle
+    const response = await fetch(`${API_BASE_URL}/api/messages/read-all/${otherUserId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Mesajlar okundu olarak işaretlenemedi');
+    }
+
+    const data = await response.json();
+    
+    // WebSocket üzerinden okundu durumunu bildir - sadece açık ise
+    if (websocketService && websocketService.getStatus() === 'OPEN') {
+      websocketService.sendMessage({
+        type: 'mark_read',
+        conversationId: conversationId
+      });
+    }
+    
+    return {
+      success: data.success
+    };
+  } catch (error) {
+    console.error('Mesajları okundu olarak işaretleme hatası:', error);
+    return {
+      success: false
+    };
+  }
+};
+
+// Aktif konuşmaları getir
+export const fetchConversations = async () => {
+  try {
+    // Gerçek API ile uyumlu endpoint - backend'de /api/conversations yoksa /api/messages kullan
+    const response = await fetch(`${API_BASE_URL}/api/messages`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Konuşmalar alınamadı: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('Konuşmalar alındı:', data);
+    
+    // Tüm konuşmaları döndür
+    if (data.success && Array.isArray(data.data)) {
+      // Backend'den gelen konuşma formatını düzenleyerek döndür
+      return data.data.map(conv => ({
+        id: createConversationId(conv.userId),
+        participants: [getCurrentUserId(), conv.userId],
+        lastMessage: conv.lastContent || '',
+        lastTimestamp: conv.lastTimestamp,
+        unreadCount: conv.unreadCount || 0,
+        sender: {
+          id: conv.userId,
+          username: conv.username,
+          fullName: conv.fullName,
+          profileImage: conv.profileImage
+        }
+      }));
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Konuşmaları getirme hatası:', error);
+    return [];
   }
 };
 
 // Yeni mesaj gönderen fonksiyon
-export const sendMessage = async (userId, content, mediaUrl = null) => {
+export const sendMessage = async (conversationId, content, mediaFile = null) => {
   try {
-    const messageData = {
-      content,
-      mediaUrl
-    };
-    
-    const response = await api.messages.sendMessage({
-      receiverId: userId,
-      content: content,
-      mediaUrl: mediaUrl
-    });
-    
-    if (response.success) {
-      return response.data;
+    // Önce medya varsa yükle
+    let mediaUrl = null;
+    let mediaType = null;
+
+    if (mediaFile) {
+      const formData = new FormData();
+      formData.append('file', mediaFile);
+      
+      const mediaResponse = await fetch(`${API_BASE_URL}/api/media/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
+        },
+        body: formData
+      });
+      
+      if (!mediaResponse.ok) {
+        throw new Error('Medya yüklenemedi');
+      }
+      
+      const mediaData = await mediaResponse.json();
+      mediaUrl = mediaData.url;
+      mediaType = mediaFile.type;
     }
-    throw new Error(response.message || 'Mesaj gönderme hatası');
-  } catch (error) {
-    console.error("Mesaj gönderme hatası:", error);
-    throw error;
-  }
-};
 
-// Mesajı okundu olarak işaretle
-export const markMessageAsRead = async (messageId) => {
-  try {
-    const response = await api.messages.markAsRead(messageId);
-    return response.success;
-  } catch (error) {
-    console.error("Mesajı okundu olarak işaretleme hatası:", error);
-    throw error;
-  }
-};
-
-// Yazıyor durumu gönder
-export const sendTypingStatus = async (userId, isTyping) => {
-  try {
-    // WebSocket bağlantısı varsa kullan
-    if (websocketService.getStatus() === 'OPEN') {
-      return websocketService.sendTypingStatus(userId, isTyping);
-    } 
+    // Konuşma ID'sinden kullanıcı ID'sini çıkar
+    const userIds = conversationId.split('_');
+    if (userIds.length !== 2) {
+      throw new Error('Geçersiz konuşma ID');
+    }
     
-    // WebSocket yoksa veya kapalıysa HTTP isteği yap
-    const response = await fetch(`${API_URL}/messages/${userId}/typing`, {
+    // Şu anki kullanıcı ID'sini al
+    const currentUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user'));
+    if (!currentUser || !currentUser.id) {
+      throw new Error('Kullanıcı oturumu bulunamadı');
+    }
+    
+    // Diğer kullanıcı ID'sini bul
+    const otherUserId = userIds[0] == currentUser.id ? userIds[1] : userIds[0];
+    
+    // Gerçek API ile mesaj gönder
+    const response = await fetch(`${API_BASE_URL}/api/messages/${otherUserId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${sessionStorage.getItem('token') || localStorage.getItem('token')}`
+        'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`
       },
-      body: JSON.stringify({ isTyping })
+      body: JSON.stringify({
+        content,
+        mediaUrl,
+        mediaType
+      })
     });
-    
-    return response.ok;
-  } catch (error) {
-    console.error("Yazıyor durumu gönderme hatası:", error);
-    return false;
-  }
-};
 
-// Önceki sohbetleri getir
-export const getPreviousChats = async () => {
-  try {
-    const response = await api.messages.getPreviousChats();
-    if (response.success) {
-      return response.data || [];
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Mesaj gönderilemedi: ${errorData}`);
     }
-    throw new Error(response.message || 'Önceki sohbetleri getirme hatası');
+
+    const data = await response.json();
+    return {
+      success: data.success,
+      message: data.message || 'Mesaj gönderildi',
+      data: data.data
+    };
   } catch (error) {
-    console.error("Önceki sohbetleri getirme hatası:", error);
-    throw error;
+    console.error('Mesaj gönderme hatası:', error);
+    return {
+      success: false,
+      message: error.message || 'Mesaj gönderilemedi',
+    };
   }
 };
 
-// WebSocket bağlantısını başlat
-export const initializeWebSocket = (token) => {
-  return websocketService.connect(token);
-};
+// Yardımcı fonksiyonlar
+function getCurrentUserId() {
+  const currentUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user'));
+  return currentUser?.id;
+}
 
-// WebSocket bağlantısını yenile
-export const refreshWebSocketConnection = async () => {
-  const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-  return websocketService.connect(token, true);
-};
-
-// WebSocket'i getir
-export const getWebSocket = () => {
-  return websocketService.getWebSocket();
-};
-
-// WebSocket mesaj dinleyicisi ekle
-export const addMessageListener = (callback) => {
-  websocketService.addMessageListener(callback);
-};
-
-// WebSocket yazıyor durumu dinleyicisi ekle
-export const addTypingListener = (callback) => {
-  websocketService.addTypingListener(callback);
-};
-
-// WebSocket bağlantı dinleyicisi ekle
-export const addConnectListener = (callback) => {
-  websocketService.addConnectListener(callback);
-};
-
-// WebSocket bağlantı kesme dinleyicisi ekle
-export const addDisconnectListener = (callback) => {
-  websocketService.addDisconnectListener(callback);
-};
-
-// WebSocket hata dinleyicisi ekle
-export const addErrorListener = (callback) => {
-  websocketService.addErrorListener(callback);
-};
-
-// WebSocket dinleyici kaldır
-export const removeMessageListener = (callback) => {
-  websocketService.removeMessageListener(callback);
-};
-
-// WebSocket dinleyici kaldır
-export const removeTypingListener = (callback) => {
-  websocketService.removeTypingListener(callback);
-};
-
-// WebSocket dinleyici kaldır
-export const removeConnectListener = (callback) => {
-  websocketService.removeConnectListener(callback);
-};
-
-// WebSocket dinleyici kaldır
-export const removeDisconnectListener = (callback) => {
-  websocketService.removeDisconnectListener(callback);
-};
-
-// WebSocket dinleyici kaldır
-export const removeErrorListener = (callback) => {
-  websocketService.removeErrorListener(callback);
+// Konuşma ID'si oluştur
+export const createConversationId = (userId1, userId2 = null) => {
+  // Eğer tek parametre geldiyse, mevcut kullanıcı ID'si ile kombine et
+  if (userId2 === null) {
+    userId2 = getCurrentUserId();
+  }
+  
+  // Kullanıcı ID'leri string olmayabilir
+  const user1 = String(userId1);
+  const user2 = String(userId2);
+  
+  // ID'leri sıralayıp birleştir (konuşma ID'si her iki kullanıcı için de aynı olsun)
+  return [user1, user2].sort().join('_');
 };

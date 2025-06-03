@@ -203,6 +203,66 @@ export const NotificationProvider = ({ children }) => {
     };
   }, [fetchNotifications, showNotificationToast, normalizeNotification]); // dependency array'e normalizeNotification'ı da ekle
 
+  // Bildirime tıklanınca yönlendirme
+  const handleNotificationClick = useCallback(async (notification) => {
+    // Bildirimi okundu olarak işaretle
+    try {
+      await notificationService.markAsRead(notification.id);
+      
+      // Bildirimi state'de okundu olarak işaretle
+      setNotifications(prev => 
+        prev.map(notif => 
+          notif.id === notification.id 
+            ? { ...notif, isRead: true } 
+            : notif
+        )
+      );
+      
+      // Okunmamış sayısını güncelle
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      
+      // Bildirim panelini kapat
+      closePanel();
+      
+      // Global navigation handler'ı kullan (window.navigationHandler)
+      if (window.navigationHandler) {
+        // Bildirim tipine göre yönlendir
+        switch (notification.type) {
+          case 'like':
+          case 'comment':
+            // Post ID'ye göre yönlendirme
+            if (notification.referenceId) {
+              window.navigationHandler(`/post/${notification.referenceId}`);
+            }
+            break;
+          case 'follow':
+          case 'follow_request':
+          case 'follow_accept':
+            // Kullanıcı profiline yönlendirme
+            if (notification.actorUsername) {
+              window.navigationHandler(`/profile/${notification.actorUsername}`);
+            }
+            break;
+          case 'message':
+            // Mesaj sayfasına yönlendirme
+            if (notification.fromUserId || notification.actorId) {
+              window.navigationHandler(`/messages/${notification.fromUserId || notification.actorId}`);
+            }
+            break;
+          default:
+            // Varsayılan olarak ana sayfaya yönlendir
+            window.navigationHandler('/');
+        }
+      } else {
+        console.warn('Yönlendirme işleyicisi ayarlanmamış, yönlendirme yapılamıyor!');
+      }
+      
+    } catch (err) {
+      console.error("Bildirim okundu olarak işaretlenirken hata:", err);
+    }
+    
+  }, [closePanel]);
+
   const value = {
     isPanelOpen,
     openPanel,
@@ -216,6 +276,7 @@ export const NotificationProvider = ({ children }) => {
     markNotificationRead,
     markAllNotificationsRead,
     lastNotification, // Son bildirimi de paylaş
+    handleNotificationClick,
   };
 
   return (

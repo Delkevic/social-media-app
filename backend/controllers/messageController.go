@@ -2,9 +2,6 @@
 package controllers
 
 import (
-	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,12 +10,9 @@ import (
 	"social-media-app/backend/models"
 	"social-media-app/backend/services"
 	"strconv"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 )
 
 // Message yapısı istemcilerden gelen mesaj formatı
@@ -28,8 +22,6 @@ type Message struct {
 	Content    string `json:"content"`
 	MediaURL   string `json:"mediaUrl"`
 	MediaType  string `json:"mediaType"`
-	Type       string `json:"type,omitempty"`     // Mesaj tipi: "message", "typing" vb.
-	IsTyping   bool   `json:"isTyping,omitempty"` // Yazma durumu için
 }
 
 // MessageResponse yapısı istemcilere gönderilen mesaj formatı
@@ -53,467 +45,13 @@ type UserInfo struct {
 	ProfileImage string `json:"profileImage"`
 }
 
-// WebSocket bağlantılarını saklamak için global değişkenler
-var (
-	connections = make(map[uint]*websocket.Conn) // userID -> WebSocket conn
-	connMutex   = &sync.Mutex{}                  // connections map için thread-safe erişim
-	upgrader    = websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-	}
-	// Notification servisi
-	notifService *services.NotificationService
-)
+// Notification servisi
+var notifService *services.NotificationService
 
 // SetNotificationService - Notification servisini controller seviyesinde ayarlar
 func SetNotificationService(service *services.NotificationService) {
 	notifService = service
 	log.Println("MessageController: Notification servisi ayarlandı")
-}
-
-// WebSocketHandler gerçek zamanlı mesajlaşma için WebSocket bağlantıları yönetir
-func WebSocketHandler(c *gin.Context) {
-	fmt.Println("WebSocket bağlantı isteği alındı")
-	fmt.Printf("Bağlantı detayları: URL:%s, Headers:%v\n", c.Request.URL.String(), c.Request.Header)
-
-	// WebSocket bağlantısını yükselt
-	upgrader.CheckOrigin = func(r *http.Request) bool { return true } // CORS kontrolünü devre dışı bırak
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		fmt.Println("WebSocket yükseltme hatası:", err)
-		return // Yükseltme başarısız olursa fonksiyondan çık
-	}
-	fmt.Println("WebSocket bağlantısı başarıyla yükseltildi.")
-
-	// Bağlantıyı kapatma işlemi (defer)
-	defer func() {
-		fmt.Println("WebSocket defer kapatma fonksiyonu çağrıldı.")
-		conn.Close()
-		fmt.Println("WebSocket bağlantısı defer ile kapatıldı.")
-	}()
-
-	// Auth mesajı için zamanaşımı ayarla (10 saniye)
-	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-
-	// İlk mesajı bekle (token doğrulama için)
-	fmt.Println("İlk auth mesajı bekleniyor...")
-	messageType, p, err := conn.ReadMessage()
-	if err != nil {
-		// Hatanın nedenini logla
-		fmt.Printf("İlk mesaj okuma hatası (ReadMessage): %v\n", err)
-		// Hata durumunda istemciye de bilgi gönderelim (eğer bağlantı hala açıksa)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "İlk mesaj okunamadı veya bağlantı kapandı"}`))
-		return // Hata varsa fonksiyondan çık
-	}
-
-	// Timeout'u kaldır
-	conn.SetReadDeadline(time.Time{})
-
-	fmt.Printf("İlk mesaj alındı. Tip: %d, İçerik: %s\n", messageType, string(p))
-
-	// Auth mesajını parse et
-	var authMessage struct {
-		Type  string `json:"type"`
-		Token string `json:"token"`
-	}
-
-	// JSON'ı ayrıştır
-	if err := json.Unmarshal(p, &authMessage); err != nil {
-		fmt.Printf("Auth mesajı ayrıştırma hatası: %v, Alınan mesaj: %s\n", err, string(p))
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","error":"Auth mesajı geçersiz format"}`))
-		return
-	}
-
-	fmt.Printf("Auth mesajı alındı. Tip: %s, Token uzunluğu: %d\n", authMessage.Type, len(authMessage.Token))
-
-	// Gerekli alanları kontrol et
-	if authMessage.Type != "auth" || authMessage.Token == "" {
-		fmt.Println("Geçersiz auth mesajı: Tip veya token eksik")
-		// Geçersiz mesaj durumunda istemciye hata gönder
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"Geçersiz auth mesajı formatı"}`))
-		return // Hata varsa fonksiyondan çık
-	}
-	fmt.Println("Auth mesajı tipi ve token varlığı doğrulandı.")
-
-	// Tokeni doğrula ve kullanıcı ID'yi al
-	userID, tokenErr := auth.VerifyToken(authMessage.Token)
-
-	// Token süresi dolmuş olsa bile JWT içinden kullanıcı ID'yi çıkarmaya çalış
-	if tokenErr != nil {
-		// Token ayrıştırma hatası varsa, JWT'nin yapısını manuel olarak parse etmeyi deneyelim
-		isTokenExpired := strings.Contains(tokenErr.Error(), "expired")
-
-		// Eğer token süresi dolmuşsa client'a özel hata gönderelim,
-		// böylece frontend yenileme mekanizmasını çalıştırabilir
-		if isTokenExpired {
-			fmt.Println("Token doğrulama hatası:", tokenErr)
-
-			// Token'dan kullanıcı ID'yi çıkarmak için manuel parsing
-			var extractedUserID uint
-			jwtParts := strings.Split(authMessage.Token, ".")
-			if len(jwtParts) != 3 {
-				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"token is expired and format invalid"}`))
-				return
-			}
-
-			// Base64 decoding yaparak claims kısmını çıkar
-			claimBytes, err := base64.RawURLEncoding.DecodeString(jwtParts[1])
-			if err != nil {
-				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"token is expired and cannot be decoded"}`))
-				return
-			}
-
-			// JSON parse et
-			var claims map[string]interface{}
-			if err := json.Unmarshal(claimBytes, &claims); err != nil {
-				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"token is expired and cannot be parsed"}`))
-				return
-			}
-
-			// user_id field'ını bul
-			userIDFloat, ok := claims["user_id"].(float64)
-			if !ok {
-				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"token is expired and user_id not found"}`))
-				return
-			}
-
-			extractedUserID = uint(userIDFloat)
-
-			// Token süresi dolduğunu bildiren hata mesajı gönder
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"token is expired", "userId": `+fmt.Sprintf("%d", extractedUserID)+`}`))
-			return
-		}
-
-		// Diğer token hatalarında normal hata mesajı gönder
-		fmt.Println("Token doğrulama hatası:", tokenErr)
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"auth_error","error":"`+tokenErr.Error()+`"}`))
-		return
-	}
-
-	fmt.Printf("Token başarıyla doğrulandı. Kullanıcı ID: %d\n", userID)
-
-	// Kullanıcının önceden açık bir bağlantısı varsa kapat
-	if existingConn, ok := connections[userID]; ok {
-		fmt.Printf("Kullanıcı %d için mevcut bağlantı bulundu, kapatılıyor...\n", userID)
-		existingConn.Close()
-		delete(connections, userID) // Eski bağlantıyı haritadan sil
-		fmt.Printf("Kullanıcı %d için eski bağlantı kapatıldı ve silindi.\n", userID)
-	}
-
-	// Mutex kilitle - connections haritasına yazma sırasında
-	connMutex.Lock()
-	// Yeni bağlantıyı havuza ekle
-	connections[userID] = conn
-	connMutex.Unlock()
-
-	fmt.Printf("Kullanıcı %d yeni WebSocket bağlantısı havuza eklendi\n", userID)
-
-	// Bildirim sistemine de aynı bağlantıyı ekle
-	if notifService != nil {
-		// userID'yi string'e çevir (notification service string ID kullanıyor)
-		userIDStr := fmt.Sprintf("%d", userID)
-		notifService.RegisterClient(userIDStr, conn)
-
-		// Bağlantı kapandığında bildirim servisi kayıtlarını da temizle
-		defer func() {
-			notifService.UnregisterClient(userIDStr, conn)
-			fmt.Printf("Kullanıcı %s bildirim servisi WebSocket bağlantısı temizlendi.\n", userIDStr)
-		}()
-
-		fmt.Printf("Kullanıcı %s bildirim servisi WebSocket bağlantısı kaydedildi.\n", userIDStr)
-
-		// Test amaçlı bildirim gönder
-		go func() {
-			time.Sleep(5 * time.Second)
-
-			// Basit bir bildirim oluştur
-			notification := services.Notification{
-				ID:                fmt.Sprintf("test-%d", time.Now().Unix()),
-				UserID:            userIDStr,
-				ActorID:           "system",
-				ActorName:         "Sistem",
-				ActorUsername:     "sistem",
-				ActorProfileImage: "",
-				Type:              "system",
-				Content:           "Bu bir test bildirimidir.",
-				IsRead:            false,
-				CreatedAt:         time.Now(),
-			}
-
-			// Bildirimi gönder
-			err := notifService.SendNotification(context.Background(), notification)
-			if err != nil {
-				fmt.Printf("Test bildirimi gönderme hatası: %v\n", err)
-			} else {
-				fmt.Printf("Test bildirimi gönderildi: Kullanıcı: %s\n", userIDStr)
-			}
-		}()
-	} else {
-		fmt.Println("UYARI: Bildirim servisi bulunamadı, bildirimler için WebSocket kaydı yapılamadı.")
-	}
-
-	// Bağlantı sonlandığında temizle
-	defer func() {
-		fmt.Printf("Kullanıcı %d için defer bağlantı temizleme fonksiyonu çağrıldı.\n", userID)
-		connMutex.Lock()
-		if currentConn, ok := connections[userID]; ok && currentConn == conn {
-			delete(connections, userID)
-			fmt.Printf("Kullanıcı %d WebSocket bağlantısı havuzdan temizlendi.\n", userID)
-		} else {
-			fmt.Printf("Kullanıcı %d için temizlenecek bağlantı bulunamadı veya farklı bir bağlantı mevcut.\n", userID)
-		}
-		connMutex.Unlock()
-	}()
-
-	// Ping-Pong ile bağlantıyı canlı tut
-	conn.SetPingHandler(func(data string) error {
-		fmt.Printf("Ping mesajı alındı, pong gönderiliyor... (Kullanıcı: %d)\n", userID)
-		err := conn.WriteControl(websocket.PongMessage, []byte(data), time.Now().Add(time.Second))
-		if err != nil {
-			fmt.Printf("Pong gönderme hatası: %v (Kullanıcı: %d)\n", err, userID)
-		}
-		return nil
-	})
-
-	// Pong mesajlarını işlemek için yeni handler
-	conn.SetPongHandler(func(data string) error {
-		fmt.Printf("Pong mesajı alındı (Kullanıcı: %d)\n", userID)
-		// Pong alındığında read deadline'ı güncelle
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
-	})
-
-	// Bağlantı başarılı mesajı gönder
-	if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"success": true, "message": "WebSocket bağlantısı kuruldu"}`)); err != nil {
-		fmt.Printf("Başarı mesajı gönderme hatası: %v\n", err)
-		return // Başarı mesajı gönderilemezse devam etmenin anlamı yok
-	}
-	fmt.Printf("Kullanıcı %d için başarı mesajı gönderildi.\n", userID)
-
-	// Kullanıcıya bekleyen mesajlar varsa bildirim gönder
-	go sendPendingNotifications(userID, conn)
-
-	// Periyodik ping gönderme (her 30 saniyede bir)
-	stopPing := make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				// Ping mesajı gönder
-				err := conn.WriteControl(websocket.PingMessage, []byte("ping"), time.Now().Add(5*time.Second))
-				if err != nil {
-					fmt.Printf("Ping gönderme hatası: %v (Kullanıcı: %d)\n", err, userID)
-					// Hata durumunda döngüden çık
-					return
-				}
-
-				// Ayrıca keep-alive mesajı da gönderelim
-				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"ping"}`)); err != nil {
-					fmt.Printf("Keep-alive mesajı gönderme hatası: %v (Kullanıcı: %d)\n", err, userID)
-					return
-				}
-			case <-stopPing:
-				return
-			}
-		}
-	}()
-
-	// Mesajları dinle
-	fmt.Printf("Kullanıcı %d için mesaj döngüsü başlatılıyor...\n", userID)
-
-	// Bu fonksiyon sonlandığında ping döngüsünü de sonlandır
-	defer func() {
-		close(stopPing)
-	}()
-
-	// Her mesaj için max okuma süresi belirle (30 dakika)
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-
-	for {
-		messageType, p, err := conn.ReadMessage()
-
-		// Her mesaj alımından sonra deadline'ı güncelle
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-
-		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNoStatusReceived) {
-				fmt.Printf("WebSocket okuma hatası (döngü içi): %v\n", err)
-			} else {
-				// Beklenen kapanma durumları (örneğin, tarayıcı sekmesi kapatıldı)
-				fmt.Printf("WebSocket bağlantısı normal şekilde kapandı (döngü içi): %v\n", err)
-			}
-			break // Döngüden çık
-		}
-		fmt.Printf("Kullanıcı %d tarafından mesaj alındı. Tip: %d\n", userID, messageType)
-
-		// Gelen mesajı işle (ping/pong veya metin)
-		if messageType == websocket.TextMessage {
-			// Önce ping/pong işlemi olabilir mi kontrol et
-			var pingMessage struct {
-				Type string `json:"type"`
-			}
-
-			if err := json.Unmarshal(p, &pingMessage); err == nil && pingMessage.Type == "ping" {
-				// Ping mesajına pong ile yanıt ver
-				if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"pong"}`)); err != nil {
-					fmt.Printf("Pong yanıtı gönderme hatası: %v\n", err)
-				}
-				continue // Sonraki mesaja geç
-			}
-
-			// Ping/pong değilse normal mesaj olarak işle
-			var message Message
-			if err := json.Unmarshal(p, &message); err != nil {
-				fmt.Printf("Mesaj ayrıştırma hatası (döngü içi): %v\n", err)
-				// Hatalı mesajı istemciye bildirebiliriz
-				conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"error": "Alınan mesaj ayrıştırılamadı: %v"}`, err)))
-				continue // Sonraki mesajı bekle
-			}
-
-			// Eğer typing mesajı ise
-			if message.Type == "typing" {
-				// Yazma durumunu alıcıya ilet
-				if receiverConn, ok := connections[message.ReceiverID]; ok {
-					typingMsg := map[string]interface{}{
-						"type":     "typing",
-						"senderId": message.SenderID,
-						"isTyping": message.IsTyping,
-					}
-					typingJSON, _ := json.Marshal(typingMsg)
-					receiverConn.WriteMessage(websocket.TextMessage, typingJSON)
-				}
-				continue // Sonraki mesajı bekle
-			}
-
-			// Gönderen ID'sini doğrula
-			if message.SenderID != userID {
-				fmt.Printf("Kimlik doğrulama hatası (döngü içi): Gönderen ID'si (%d) oturum ID'si (%d) ile eşleşmiyor\n", message.SenderID, userID)
-				conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "Mesajdaki gönderen ID token ile eşleşmiyor"}`))
-				continue
-			}
-
-			// Mesajı veritabanına kaydet
-			newMessage := models.Message{
-				SenderID:   message.SenderID,
-				ReceiverID: message.ReceiverID,
-				Content:    message.Content,
-				MediaURL:   message.MediaURL,
-				MediaType:  message.MediaType,
-				SentAt:     time.Now(),
-				IsRead:     false,
-			}
-
-			result := database.DB.Create(&newMessage)
-			if result.Error != nil {
-				fmt.Printf("Mesaj kaydetme hatası (döngü içi): %v\n", result.Error)
-				// İstemciye hata bildirimi
-				conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"error": "Mesaj veritabanına kaydedilemedi: %v"}`, result.Error)))
-				continue
-			}
-
-			// Mesajı yanıt olarak formatla
-			var sender models.User
-			database.DB.Select("id, username, full_name, profile_image").First(&sender, message.SenderID)
-
-			messageResponse := MessageResponse{
-				ID:         newMessage.ID,
-				SenderID:   newMessage.SenderID,
-				ReceiverID: newMessage.ReceiverID,
-				Content:    newMessage.Content,
-				MediaURL:   newMessage.MediaURL,
-				MediaType:  newMessage.MediaType,
-				SentAt:     newMessage.SentAt,
-				IsRead:     newMessage.IsRead,
-				SenderInfo: UserInfo{
-					ID:           sender.ID,
-					Username:     sender.Username,
-					FullName:     sender.FullName,
-					ProfileImage: sender.ProfileImage,
-				},
-			}
-
-			// Yanıtı JSON'a dönüştür
-			responseJSON, err := json.Marshal(messageResponse)
-			if err != nil {
-				fmt.Printf("JSON dönüştürme hatası (döngü içi): %v\n", err)
-				continue
-			}
-
-			// Mesajı gönderene ilet (kendi gönderdiği mesajın onayını alır)
-			if err := conn.WriteMessage(websocket.TextMessage, responseJSON); err != nil {
-				fmt.Printf("Gönderene ileti hatası (döngü içi): %v\n", err)
-				// Bağlantı kopmuş olabilir, döngüden çıkmayı düşünebiliriz
-				// break
-			}
-
-			// Alıcı çevrimiçiyse mesajı ona da ilet
-			connMutex.Lock()
-			if receiverConn, ok := connections[message.ReceiverID]; ok {
-				fmt.Printf("Mesaj kullanıcı %d tarafından kullanıcı %d'ye iletiliyor...\n", userID, message.ReceiverID)
-				if err := receiverConn.WriteMessage(websocket.TextMessage, responseJSON); err != nil {
-					fmt.Printf("Alıcıya ileti hatası (döngü içi): %v\n", err)
-					// Alıcının bağlantısı kopmuş olabilir
-				} else {
-					// Mesaj başarıyla teslim edildi
-					database.DB.Model(&models.Message{}).Where("id = ?", newMessage.ID).Update("is_delivered", true)
-					fmt.Printf("Mesaj kullanıcı %d'ye başarıyla teslim edildi ve is_delivered olarak işaretlendi.\n", message.ReceiverID)
-				}
-			} else {
-				fmt.Printf("Alıcı %d çevrimdışı, mesaj iletilemedi.\n", message.ReceiverID)
-			}
-			connMutex.Unlock()
-
-			// Bildirim oluştur (Bu zaten REST API üzerinden de yapılıyor olabilir, kontrol et)
-			notification := models.Notification{
-				ToUserID:   message.ReceiverID,
-				FromUserID: message.SenderID,
-				Type:       "message",
-				Message:    message.Content,
-				IsRead:     false,
-				CreatedAt:  time.Now(),
-			}
-			database.DB.Create(&notification)
-
-		} else if messageType == websocket.BinaryMessage {
-			fmt.Printf("Binary mesaj alındı, desteklenmiyor: %d\n", messageType)
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "Binary mesajlar desteklenmiyor"}`))
-		} else {
-			fmt.Printf("Alınan mesaj tipi metin değil: %d\n", messageType)
-		}
-	}
-	fmt.Printf("Kullanıcı %d için mesaj döngüsü sonlandı.\n", userID)
-}
-
-// Yeni eklenen yardımcı fonksiyon - kullanıcıya bekleyen mesajlarınını bildirir
-func sendPendingNotifications(userID uint, conn *websocket.Conn) {
-	// Okunmamış mesajların sayısını getir
-	var unreadCount int64
-	if err := database.DB.Model(&models.Message{}).Where("receiver_id = ? AND is_read = ?", userID, false).Count(&unreadCount).Error; err != nil {
-		fmt.Printf("Okunmamış mesaj sayısı getirilirken hata: %v\n", err)
-		return
-	}
-
-	// Okunmamış bildirim sayısını getir
-	var unreadNotificationCount int64
-	if err := database.DB.Model(&models.Notification{}).Where("to_user_id = ? AND is_read = ?", userID, false).Count(&unreadNotificationCount).Error; err != nil {
-		fmt.Printf("Okunmamış bildirim sayısı getirilirken hata: %v\n", err)
-		return
-	}
-
-	// Bildirim gönder
-	notificationMsg := map[string]interface{}{
-		"type":                    "notification_count",
-		"unreadMessageCount":      unreadCount,
-		"unreadNotificationCount": unreadNotificationCount,
-	}
-
-	notificationJSON, _ := json.Marshal(notificationMsg)
-	if err := conn.WriteMessage(websocket.TextMessage, notificationJSON); err != nil {
-		fmt.Printf("Bildirim mesajı gönderme hatası: %v\n", err)
-	}
 }
 
 // GetConversations kullanıcının konuşmalarını listeler
@@ -682,7 +220,7 @@ func GetConversation(c *gin.Context) {
 	})
 }
 
-// SendMessage mesaj gönderir (WebSocket için yedek olarak REST API)
+// SendMessage mesaj gönderir (HTTP REST API üzerinden)
 func SendMessage(c *gin.Context) {
 	// Kullanıcı kimliğini doğrula
 	userID, exists := c.Get("userID")
@@ -773,17 +311,6 @@ func SendMessage(c *gin.Context) {
 		},
 	}
 
-	// WebSocket üzerinden mesajı hedef kullanıcıya ilet
-	if receiverConn, ok := connections[uint(targetID)]; ok {
-		responseJSON, _ := json.Marshal(response)
-		if err := receiverConn.WriteMessage(websocket.TextMessage, responseJSON); err != nil {
-			fmt.Printf("WebSocket mesaj gönderme hatası: %v\n", err)
-		} else {
-			// Mesaj başarıyla gönderildi, database'de teslim edildi olarak işaretle
-			database.DB.Model(&models.Message{}).Where("id = ?", message.ID).Update("is_delivered", true)
-		}
-	}
-
 	c.JSON(http.StatusOK, Response{
 		Success: true,
 		Data:    response,
@@ -793,7 +320,7 @@ func SendMessage(c *gin.Context) {
 // SendTypingStatus yazma durumunu karşı tarafa bildirir
 func SendTypingStatus(c *gin.Context) {
 	// Kullanıcı kimliğini doğrula
-	userID, exists := c.Get("userID")
+	_, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, Response{
 			Success: false,
@@ -804,7 +331,7 @@ func SendTypingStatus(c *gin.Context) {
 
 	// Hedef kullanıcı ID'sini al
 	targetIDStr := c.Param("userId")
-	targetID, err := strconv.ParseUint(targetIDStr, 10, 32)
+	_, err := strconv.ParseUint(targetIDStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, Response{
 			Success: false,
@@ -826,22 +353,10 @@ func SendTypingStatus(c *gin.Context) {
 		return
 	}
 
-	// WebSocket üzerinden yazma durumunu hedef kullanıcıya ilet
-	if receiverConn, ok := connections[uint(targetID)]; ok {
-		typingStatus := map[string]interface{}{
-			"type":     "typing",
-			"senderId": userID,
-			"isTyping": input.IsTyping,
-		}
-		responseJSON, _ := json.Marshal(typingStatus)
-		if err := receiverConn.WriteMessage(websocket.TextMessage, responseJSON); err != nil {
-			fmt.Printf("WebSocket yazma durumu gönderme hatası: %v\n", err)
-		}
-	}
-
+	// WebSocket üzerinden gönderim olmadığından başarılı yanıt ver
 	c.JSON(http.StatusOK, Response{
 		Success: true,
-		Message: "Yazma durumu gönderildi",
+		Message: "Yazma durumu kaydedildi",
 	})
 }
 
@@ -972,5 +487,80 @@ func GetPreviousChats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    users,
+	})
+}
+
+// GetUnreadMessageCount okunmamış mesaj sayısını döndürür
+func GetUnreadMessageCount(c *gin.Context) {
+	// Kullanıcı kimliğini doğrula
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Oturum açık değil",
+		})
+		return
+	}
+
+	// Okunmamış mesaj sayısını getir
+	var unreadCount int64
+	if err := database.DB.Model(&models.Message{}).Where("receiver_id = ? AND is_read = ?", userID, false).Count(&unreadCount).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Okunmamış mesaj sayısı alınırken hata oluştu: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Data: map[string]interface{}{
+			"unreadCount": unreadCount,
+		},
+	})
+}
+
+// MarkAllMessagesAsRead belirli bir gönderenden gelen tüm mesajları okundu olarak işaretler
+func MarkAllMessagesAsRead(c *gin.Context) {
+	// Kullanıcı kimliğini doğrula
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, Response{
+			Success: false,
+			Message: "Oturum açık değil",
+		})
+		return
+	}
+
+	// Gönderen kullanıcı ID'sini al
+	senderIDStr := c.Param("userId")
+	senderID, err := strconv.ParseUint(senderIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Response{
+			Success: false,
+			Message: "Geçersiz kullanıcı ID",
+		})
+		return
+	}
+
+	// Bu gönderenden gelen tüm okunmamış mesajları okundu olarak işaretle
+	result := database.DB.Model(&models.Message{}).
+		Where("sender_id = ? AND receiver_id = ? AND is_read = ?", senderID, userID, false).
+		Update("is_read", true)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, Response{
+			Success: false,
+			Message: "Mesajlar okundu olarak işaretlenirken hata oluştu: " + result.Error.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Message: fmt.Sprintf("%d mesaj okundu olarak işaretlendi", result.RowsAffected),
+		Data: map[string]int64{
+			"updatedCount": result.RowsAffected,
+		},
 	})
 }

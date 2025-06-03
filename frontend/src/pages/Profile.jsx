@@ -12,7 +12,6 @@ import { useAuth } from "../context/AuthContext"; // useAuth eklendi
 import { Lock, LogOut, UserMinus, UserPlus, Clock, Loader2, Heart, MessageCircle } from 'lucide-react'; // Heart ve MessageCircle ikonları eklendi
 import { toast } from 'react-hot-toast'; // toast eklendi
 import { GlowingEffect } from '../components/ui/GlowingEffect'; // GlowingEffect import edildi
-import websocketService from "../services/websocket-service"; // WebSocket servisini import et
 
 const Profile = () => {
   const [user, setUser] = useState(null);
@@ -1260,14 +1259,18 @@ const Profile = () => {
                                 <div className="flex space-x-6 text-white">
                                   <span className="flex items-center gap-1.5">
                                     <Heart className="h-5 w-5 text-[#0affd9] filter drop-shadow-glow" fill="#0affd9" strokeWidth={0} /> 
-                                    <span className="font-semibold text-white">{post.like_count || 0}</span>
-                                        </span>
+                                    <span className="font-semibold text-white">
+                                      {parseInt(post.likeCount || post.likes || post.like_count || post.LikeCount || '0')}
+                                    </span>
+                                  </span>
                                   <span className="flex items-center gap-1.5">
                                     <MessageCircle className="h-5 w-5 text-[#0affd9] filter drop-shadow-glow" fill="transparent" /> 
-                                    <span className="font-semibold text-white">{post.comment_count || 0}</span>
-                                        </span>
-                                      </div>
-                                    </div>
+                                    <span className="font-semibold text-white">
+                                      {parseInt(post.commentCount || post.comments || post.comment_count || post.CommentCount || '0')}
+                                    </span>
+                                  </span>
+                                </div>
+                              </div>
 
                               {/* Gönderi bilgisi - Instagram benzeri alt bilgi */}
                               <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center px-2">
@@ -1337,10 +1340,12 @@ const Profile = () => {
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                                 <div className="flex flex-col items-center text-white space-y-1">
                                   <span className="flex items-center">
-                                    <Heart size={16} className="mr-1 text-[#0affd9]" /> {reel.likeCount || 0}
+                                    <Heart size={16} className="mr-1 text-[#0affd9]" /> 
+                                    {parseInt(reel.likeCount || reel.likes || reel.like_count || reel.LikeCount || '0')}
                                   </span>
                                   <span className="flex items-center">
-                                    <MessageCircle size={16} className="mr-1 text-[#0affd9]" /> {reel.commentCount || 0}
+                                    <MessageCircle size={16} className="mr-1 text-[#0affd9]" /> 
+                                    {parseInt(reel.commentCount || reel.comments || reel.comment_count || reel.CommentCount || '0')}
                                   </span>
                                 </div>
                               </div>
@@ -1368,14 +1373,16 @@ const Profile = () => {
                             <div className="text-xs text-gray-500 mt-2 flex justify-between items-center">
                               <span>{new Date(post.created_at).toLocaleString()}</span>
                               <div className="flex space-x-3">
-                                      <span className="flex items-center">
-                                    <Heart size={14} className="mr-1 text-[#0affd9]" /> {post.like_count || 0}
-                                      </span>
-                                      <span className="flex items-center">
-                                    <MessageCircle size={14} className="mr-1 text-[#0affd9]" /> {post.comment_count || 0}
-                                      </span>
-                                    </div>
-                                  </div>
+                                <span className="flex items-center">
+                                  <Heart size={14} className="mr-1 text-[#0affd9]" /> 
+                                  {parseInt(post.likeCount || post.likes || post.like_count || post.LikeCount || '0')}
+                                </span>
+                                <span className="flex items-center">
+                                  <MessageCircle size={14} className="mr-1 text-[#0affd9]" /> 
+                                  {parseInt(post.commentCount || post.comments || post.comment_count || post.CommentCount || '0')}
+                                </span>
+                              </div>
+                            </div>
                                 </div>
                         ))
                           ) : (

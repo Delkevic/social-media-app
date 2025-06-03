@@ -25,8 +25,8 @@ class WebSocketService {
   }
 
   /**
-   * WebSocket bağlantısını başlat
-   * @param {string} token - Kullanıcı kimlik doğrulama token'ı
+   * WebSocket bağlantısını başlatır
+   * @param {string} token - Kullanıcı token'ı
    * @param {boolean} reconnect - Yeniden bağlanma işlemi mi?
    * @returns {WebSocket} - WebSocket bağlantısı
    */
@@ -38,9 +38,13 @@ class WebSocketService {
 
     try {
       this.token = token;
-      const wsUrl = API_URL.replace('http', 'ws').replace('https', 'wss');
-      console.log('WebSocket bağlantısı URL:', wsUrl + '/ws'); // Debug için URL'yi göster
-      this.ws = new WebSocket(`${wsUrl}/ws`);
+      // wsUrl oluşturulurken host ve port bilgisini doğru şekilde al
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const apiHost = API_URL.replace(/^https?:\/\//, '').split('/')[0]; // Sadece host kısmını al (port dahil)
+      const wsUrl = `${wsProtocol}//${apiHost}`;
+      
+      console.log('WebSocket bağlantısı URL:', wsUrl + '/api/ws'); // Debug için URL'yi göster
+      this.ws = new WebSocket(`${wsUrl}/api/ws`);
       
       this.ws.onopen = this.handleOpen.bind(this);
       this.ws.onclose = this.handleClose.bind(this);
@@ -319,37 +323,28 @@ class WebSocketService {
   }
 
   /**
-   * Mesaj gönder
-   * @param {Object} message - Gönderilecek mesaj
-   * @returns {boolean} - Mesajın gönderilip gönderilmediği
+   * WebSocket üzerinden mesaj gönderir
+   * @param {Object} message - Gönderilecek mesaj 
    */
   sendMessage(message) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      try {
-        this.ws.send(JSON.stringify(message));
-        return true;
-      } catch (error) {
-        console.error('Mesaj gönderilirken hata:', error);
-        
-        // Mesaj gönderme hatası bildir
-        const messageError = createWebSocketError(
-          'WEBSOCKET_MESSAGE', 
-          'Mesaj gönderilemedi: ' + error.message
-        );
-        this.notifyErrorListeners(messageError);
-        return false;
-      }
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.error('WebSocket bağlantısı açık değil, mesaj gönderilemedi');
+      return false;
     }
     
-    console.warn('WebSocket bağlantısı açık değil, mesaj gönderilemedi');
-    
-    // WebSocket bağlantısı açık değilse hata bildir
-    const connectionError = createWebSocketError(
-      'WEBSOCKET_CONNECTION', 
-      'WebSocket bağlantısı açık değil, mesaj gönderilemedi'
-    );
-    this.notifyErrorListeners(connectionError);
-    return false;
+    try {
+      // Mesaj nesnesine kimlik bilgisi ekle
+      if (this.token && !message.token) {
+        message.token = this.token;
+      }
+      
+      // Mesajı gönder
+      this.ws.send(JSON.stringify(message));
+      return true;
+    } catch (error) {
+      console.error('WebSocket mesaj gönderme hatası:', error);
+      return false;
+    }
   }
 
   /**
@@ -383,10 +378,13 @@ class WebSocketService {
   }
 
   /**
-   * WebSocket durumunu getir
+   * WebSocket bağlantı durumunu döndürür
+   * @returns {string} - Bağlantı durumu
    */
   getStatus() {
-    if (!this.ws) return 'CLOSED';
+    if (!this.ws) {
+      return 'CLOSED';
+    }
     
     switch (this.ws.readyState) {
       case WebSocket.CONNECTING:
@@ -396,9 +394,8 @@ class WebSocketService {
       case WebSocket.CLOSING:
         return 'CLOSING';
       case WebSocket.CLOSED:
-        return 'CLOSED';
       default:
-        return 'UNKNOWN';
+        return 'CLOSED';
     }
   }
 

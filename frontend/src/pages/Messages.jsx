@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
-import { API_BASE_URL } from '../config/constants';
+import { API_BASE_URL, APP_CONSTANTS } from '../config/constants';
 import { SparklesCore } from '../components/ui/sparkles';
 import { GlowingEffect } from '../components/ui/GlowingEffect';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, isSameDay, isYesterday, isToday, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import * as messageService from '../services/message-services';
 import * as mediaService from '../services/media-service';
+import { resetMockData } from '../services/mock-api';
+import { getRealtimeMessageService, clearMessageStorage } from '../services/realtimeMessageService';
 import { 
   Send, 
   Search, 
@@ -27,11 +28,14 @@ import {
   Check,
   CheckCheck,
   FileIcon,
-  Loader
+  Loader,
+  AlertTriangle,
+  WifiOff
 } from 'lucide-react';
 import { FaPaperPlane, FaImage, FaSmile, FaEllipsisV } from 'react-icons/fa';
 import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 
 // Profil resmi URL'ini tam hale getiren yardımcı fonksiyon
 const getFullImageUrl = (url) => {
@@ -246,29 +250,11 @@ const FollowingSuggestions = ({ users, onSelectUser, currentUserId }) => {
 };
 
 // Yeni mesaj başlatma bileşeni
-const NewConversation = ({ onClose, onSelectUser }) => {
+const NewConversation = ({ onClose, onSelectUser, followingUsers }) => {
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [followingUsers, setFollowingUsers] = useState([]);
-  const [followingLoading, setFollowingLoading] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState(null);
-
-  useEffect(() => {
-    const fetchFollowing = async () => {
-      setFollowingLoading(true);
-      try {
-        const response = await api.user.getFollowing();
-        if (response.success) {
-          setFollowingUsers(response.data || []);
-        }
-      } catch (error) {
-        console.error("Takip edilen kullanıcılar yüklenemedi:", error);
-      } finally {
-        setFollowingLoading(false);
-      }
-    };
-  }, []);
 
   const handleSearch = async (query) => {
     if (!query.trim()) {
@@ -367,10 +353,13 @@ const NewConversation = ({ onClose, onSelectUser }) => {
               <p>"<span className='font-medium text-gray-300'>{search}</span>" ile eşleşen kullanıcı bulunamadı.</p>
             </div>
           ) : (
-             !search.trim() && !loading && followingUsers.length > 0 && (
+            !search.trim() && !loading && (
               <div className="mb-1">
-                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 px-1">Takip Edilenler</h3>
-                {followingUsers.map(user => (
+                <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 px-1">
+                  {followingUsers.length > 0 ? 'Takip Ettiklerim' : 'Yükleniyor...'}
+                </h3>
+                {followingUsers.length > 0 ? (
+                  followingUsers.map(user => (
                   <div 
                     key={user.id}
                     onClick={() => {
@@ -389,7 +378,13 @@ const NewConversation = ({ onClose, onSelectUser }) => {
                       <p className="text-gray-400 text-xs truncate">@{user.username}</p>
                     </div>
                   </div>
-                ))}
+                  ))
+                ) : (
+                  <div className="py-4 text-center text-gray-400 text-sm">
+                    <p>Henüz kimseyi takip etmiyorsunuz.</p>
+                    <p className="text-xs mt-1">Yukarıdaki arama kutusunu kullanarak kullanıcı arayabilirsiniz.</p>
+                  </div>
+                )}
               </div>
             )
           )}
@@ -572,587 +567,638 @@ const TypingIndicator = React.memo(({ senderInfo }) => {
 
 const Messages = () => {
   const navigate = useNavigate();
-  const { userId } = useParams();
-  const [currentUser, setCurrentUser] = useState(null);
+  const { id: conversationId } = useParams();
+  const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
-  const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [messageInput, setMessageInput] = useState('');
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isConnected, setIsConnected] = useState(true);
+  const [mediaFile, setMediaFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth <= 768);
+  const [showNewConversation, setShowNewConversation] = useState(false);
+  const [followingUsers, setFollowingUsers] = useState([]);
+  const fileInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('connecting'); // connecting, connected, error
+
+  // Firebase bağlantı test
+  useEffect(() => {
+    console.log('Messages: Component yüklendi, test başlatılıyor...');
+    setConnectionStatus('connecting');
+    
+    // RealtimeMessageService'ı başlat
+    if (user?.id) {
+      const service = getRealtimeMessageService(user.id);
+      
+      // Bağlantı durumu callback'i ekle
+      service.setConnectionStatusCallback((status) => {
+        console.log('Messages: Realtime bağlantı durumu:', status);
+        setConnectionStatus(status);
+      });
+      
+      // Test connection
+      setTimeout(() => {
+        service.cleanup();
+        setConnectionStatus('connected'); // Geçici test
+      }, 2000);
+    }
+  }, [user]);
+
+  // RealtimeMessageService
+  const serviceRef = useRef(null);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+  
+  const [selectedUserId, setSelectedUserId] = useState(null);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showMobileChat, setShowMobileChat] = useState(false);
-  const messagesEndRef = useRef(null);
-  const messageInputRef = useRef(null);
-  const [activeConversation, setActiveConversation] = useState(null);
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingTimeout, setTypingTimeout] = useState(null);
-  const [previousChats, setPreviousChats] = useState([]);
-  
-  // WebSocket referansı
-  const wsRef = useRef(null);
-  const wsConnectedRef = useRef(false);
-  const reconnectTimeoutRef = useRef(null);
-  
-  const fileInputRef = useRef(null);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [showNewConversation, setShowNewConversation] = useState(false);
-  const [followingSuggestions, setFollowingSuggestions] = useState([]);
-  const [loadingFollowing, setLoadingFollowing] = useState(false);
-  const [mediaFile, setMediaFile] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
   const messageContainerRef = useRef(null);
+  const [isTyping, setIsTyping] = useState(false);
 
-  // Ekran boyutunu kontrol etmek için
+  // Demo konuşmaları temizle (bir kerelik)
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const hasCleanedDemo = localStorage.getItem('demoMessagesCleared');
+    if (!hasCleanedDemo) {
+      console.log('Demo mesaj verileri temizleniyor...');
+      // Demo conversation ve message verilerini manuel temizle
+      try {
+        const conversations = JSON.parse(localStorage.getItem('rms_conversations') || '{}');
+        const messages = JSON.parse(localStorage.getItem('rms_messages') || '{}');
+        
+        let conversationsChanged = false;
+        let messagesChanged = false;
+        
+        // Conversations temizle
+        Object.keys(conversations).forEach(userId => {
+          const userConvs = conversations[userId];
+          Object.keys(userConvs).forEach(convId => {
+            if (convId.includes('demo_user_')) {
+              delete userConvs[convId];
+              conversationsChanged = true;
+            }
+          });
+        });
+        
+        // Messages temizle  
+        Object.keys(messages).forEach(convId => {
+          if (convId.includes('demo_user_')) {
+            delete messages[convId];
+            messagesChanged = true;
+          }
+        });
+        
+        if (conversationsChanged) {
+          localStorage.setItem('rms_conversations', JSON.stringify(conversations));
+        }
+        if (messagesChanged) {
+          localStorage.setItem('rms_messages', JSON.stringify(messages));
+        }
+        
+        // Temizlik işaretini koy
+        localStorage.setItem('demoMessagesCleared', 'true');
+        console.log('Demo mesaj verileri temizlendi');
+      } catch (error) {
+        console.error('Demo veri temizleme hatası:', error);
+      }
+    }
   }, []);
 
-  // Kullanıcı oturumunu kontrol et
+  // Takip edilen kullanıcıları yükle
   useEffect(() => {
-    const storedUser = JSON.parse(sessionStorage.getItem('user')) || JSON.parse(localStorage.getItem('user'));
-    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-
-    if (!storedUser || !token) {
-      navigate('/login');
-      return;
-    }
-
-    setCurrentUser(storedUser);
-    fetchConversations();
-  }, [navigate]);
-
-  // Komponent yüklenmesi esnasında daha önce mesajlaşılan kullanıcıları çek
-  useEffect(() => {
-    if (currentUser) {
-      fetchPreviousChats();
-    }
-  }, [currentUser]);
-
-  // Daha önce mesajlaşılan kullanıcıları getir
-  const fetchPreviousChats = async () => {
-    try {
-      console.log("Önceki mesajlaşmalar getiriliyor...");
-      const response = await api.messages.getPreviousChats();
-      if (response.success && response.data) {
-        // Önceki mesajlaşmalar için state'i güncelle
-        setPreviousChats(response.data);
-        console.log("Önceki mesajlaşmalar yüklendi:", response.data.length);
-      } else {
-        console.warn("Önceki mesajlaşmalar yüklenemedi:", response.message || "Bilinmeyen hata");
-      }
-    } catch (error) {
-      console.error("Önceki mesajlaşmalar yüklenemedi:", error);
-    }
-  };
-
-  // URL'den gelen userId ile konuşma seçme
-  useEffect(() => {
-    if (userId && conversations.length > 0) {
-      const conversation = conversations.find(c => c.sender.id.toString() === userId);
-      if (conversation) {
-        selectConversation(conversation);
-        if (isMobile) {
-          setShowMobileChat(true);
-        }
-      }
-    }
-  }, [userId, conversations, isMobile]);
-
-  // Mesajları otomatik kaydırma
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
-
-  // Yazıyor göstergesine göre de otomatik kaydırma
-  useEffect(() => {
-    if (isTyping && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [isTyping]);
-
-  // WebSocket bağlantısı - useEffect
-  useEffect(() => {
-    if (!currentUser) return;
-    
-    const connectWebSocket = async () => {
-      console.log("WebSocket bağlantısı başlatılıyor...");
-      wsConnectedRef.current = false;
+    const fetchFollowing = async () => {
+      if (!user?.id) return;
       
       try {
-        // Önce token'ın geçerli olduğundan emin ol
-        try {
-          const refreshResponse = await api.refreshToken();
-          if (!refreshResponse.success) {
-            console.error("Token yenileme başarısız, WebSocket bağlantısı kurulamayabilir");
-          }
-        } catch (refreshError) {
-          console.warn("Token yenileme sırasında hata:", refreshError);
+        // Kullanıcının kendi takip ettiklerini getir
+        const response = await api.user.getFollowing();
+        console.log('Takip edilen kullanıcılar API response:', response);
+        
+        if (response.success && response.data) {
+          // Backend'den gelen veri formatına göre users array'ini al
+          const users = response.data.users || response.data || [];
+          setFollowingUsers(Array.isArray(users) ? users : []);
+        } else {
+          console.warn('Takip edilen kullanıcılar alınamadı:', response.message);
+          setFollowingUsers([]);
         }
-        
-        // WebSocket bağlantısı oluştur
-        const newWs = api.websocket.connect();
-        wsRef.current = newWs;
-        
-        // Token doğrulama işlemini gerçekleştir
-        try {
-          await newWs.ensureAuthSent();
-          console.log("WebSocket auth başarıyla tamamlandı");
-          wsConnectedRef.current = true;
-        } catch (authError) {
-          console.error("WebSocket auth hatası:", authError.message);
-          return; // Auth başarısız olduğunda bağlantıyı yeniden kurmaya çalışma
-        }
-        
-        // Mesaj alma işleyicisi
-        newWs.onmessage = (event) => {
-          const receptionTime = Date.now();
-          
-          try {
-            const data = JSON.parse(event.data);
-            
-            // Auth başarı mesajı
-            if (data.type === 'auth_success') {
-              console.log("WebSocket bağlantı başarı mesajı alındı:", data.message);
-              return;
-            }
-
-            // Auth hata mesajı - token yenileme ihtiyacı
-            if (data.type === 'auth_error' && data.error && data.error.includes('expired')) {
-              console.log("Token süresi dolmuş, yenileme deneniyor...");
-              
-              // WebSocket'i kapat ve yeniden bağlan
-              scheduleReconnect(0);
-              return;
-            }
-            
-            // ... Mevcut diğer mesaj işlemleri ...
-          } catch (error) {
-            console.error(`[${receptionTime}] WebSocket mesajı ayrıştırma hatası:`, error, "Ham veri:", event.data);
-          }
-        };
       } catch (error) {
-        console.error("WebSocket bağlantısı kurulurken hata:", error);
+        console.error("Takip edilen kullanıcılar yüklenemedi:", error);
+        setFollowingUsers([]);
       }
     };
     
-    // Yeniden bağlanma zamanla
-    const scheduleReconnect = (delay) => {
-      console.log("Yeniden bağlanma planlanıyor...");
+    fetchFollowing();
+  }, [user]);
+
+  // RealtimeMessageService'ı başlat
+  useEffect(() => {
+    if (user?.id) {
+      // Realtime servisini başlat
+      console.log('Realtime mesajlaşma servisi başlatılıyor, userId:', user.id, 'type:', typeof user.id);
+      serviceRef.current = getRealtimeMessageService();
       
-      // Önceki yeniden bağlanma zamanlayıcısını temizle
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-      
-      // 3 saniye sonra yeniden bağlanma girişimi
-      console.log("WebSocket 3 saniye sonra yeniden bağlanacak");
-      reconnectTimeoutRef.current = setTimeout(() => {
-        console.log("WebSocket yeniden bağlanma girişimi başlatılıyor...");
-        connectWebSocket();
-      }, delay * 1000);
-    };
-    
-    // İlk bağlantıyı kur
-    connectWebSocket();
-    
-    // Komponent temizlendiğinde bağlantıyı kapat
-    return () => {
-      console.log('WebSocket temizleniyor...');
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+      // Kullanıcıyı manuel olarak ayarla
+      if (serviceRef.current) {
+        serviceRef.current.setCurrentUser(user.id);
+        console.log('Service başlatıldı ve currentUser ayarlandı:', user.id);
       }
       
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-    };
-  }, [currentUser]);
-  
-  // WebSocket üzerinden gelen yeni mesajı işle
-  const handleNewWebSocketMessage = (message, receptionTime) => {
-    console.log(`[${Date.now()}] handleNewWebSocketMessage çağrıldı (alınma zamanı: ${receptionTime}):`, message);
-    // Mesaj objesinin geçerli olup olmadığını kontrol et
-    if (!message || typeof message !== 'object') {
-      console.warn("Geçersiz WebSocket mesajı alındı:", message);
-      return;
-    }
-
-    // Mesaj türüne göre işle
-    if (message.type === 'typing') {
-      console.log("Yazma durumu mesajı alındı:", message);
-      // Seçili sohbete ait mi kontrol et
-      if (selectedConversation && message.senderId === selectedConversation.sender.id) {
-        setIsTyping(message.isTyping); // Yazma göstergesini güncelle
-      }
-      return;
-    }
-    
-    // Normal mesaj değilse veya gerekli alanlar yoksa işleme
-    if (!message.id && !message.tempId) {
-      console.warn("Mesaj ID eksik, işlenemez:", message);
-      return;
-    }
-
-    // Backend'den gelen mesaj için teslim edildi ve okundu durumlarını belirle
-    const receivedMessage = {
-      ...message,
-      id: message.id || message.tempId || `temp-${Date.now()}`,
-      isDelivered: true, // Backend'den geldi, teslim edildi varsayımı
-      isRead: message.isRead || false // Okundu bilgisi varsa kullan, yoksa false
-    };
-
-    // Mesaj şu anki konuşmaya ait mi kontrol et
-    const isCurrentConversation = selectedConversation && 
-      (message.senderId === selectedConversation.sender.id || 
-       (message.receiverId === selectedConversation.sender.id && message.senderId === currentUser.id));
-       
-    if (isCurrentConversation) {
-      console.log("Geçerli konuşma için mesaj alındı, mesajlar listesi güncelleniyor:", receivedMessage.id);
-      // Mesajlar listesine ekle/güncelle
-      setMessages(prevMessages => {
-        // Backend'den gelen gerçek ID ile eşleşen geçici mesaj var mı?
-        const tempMessageIndex = prevMessages.findIndex(m => 
-          m.id.toString().startsWith('temp-') && 
-          m.senderId === message.senderId &&
-          m.receiverId === message.receiverId &&
-          m.content === message.content // İçerik eşleşmesi de kontrol edilebilir
+      setIsRealtimeConnected(true);
+      
+      // Tüm konuşmaları dinle
+      const unsubscribe = serviceRef.current.listenToConversations(async (conversationsData) => {
+        console.log('Realtime\'den konuşmalar alındı:', conversationsData);
+        
+        // Her konuşma için kullanıcı bilgilerini API'den çek
+        const conversationsWithUserInfo = await Promise.all(
+          conversationsData.map(async (conv) => {
+            try {
+              let userInfo = null;
+              
+              // Demo kullanıcı mı kontrol et
+              if (conv.otherParticipantId.startsWith('demo_user_')) {
+                userInfo = serviceRef.current.getDemoUserInfo(conv.otherParticipantId);
+                console.log('Demo kullanıcı bilgisi alındı:', userInfo);
+              } else {
+                // Gerçek kullanıcı için API'den çek
+                const userResponse = await api.user.getUserById(conv.otherParticipantId);
+                if (userResponse.success) {
+                  userInfo = userResponse.data;
+                }
+              }
+              
+              if (userInfo) {
+                return {
+                  id: conv.id,
+                  senderId: conv.otherParticipantId,
+                  receiverId: user.id,
+                  lastMessage: conv.lastMessage,
+                  lastMessageAt: conv.lastMessageTime,
+                  lastMessageSenderId: conv.lastMessageSender,
+                  unreadCount: conv.unreadCount,
+                  lastTimestamp: conv.lastMessageTime?.toDate ? conv.lastMessageTime.toDate().toISOString() : new Date().toISOString(),
+                  lastContent: conv.lastMessage,
+                  sender: {
+                    id: conv.otherParticipantId,
+                    username: userInfo.username,
+                    fullName: userInfo.full_name || userInfo.fullName,
+                    profile_picture: userInfo.profile_picture || userInfo.profileImage,
+                    profileImage: userInfo.profile_picture || userInfo.profileImage,
+                    online: false // Şimdilik false, gerçek zamanlı durumu eklenebilir
+                  }
+                };
+              } else {
+                // API'den bilgi alınamazsa varsayılan değerler kullan
+                return {
+                  id: conv.id,
+                  senderId: conv.otherParticipantId,
+                  receiverId: user.id,
+                  lastMessage: conv.lastMessage,
+                  lastMessageAt: conv.lastMessageTime,
+                  lastMessageSenderId: conv.lastMessageSender,
+                  unreadCount: conv.unreadCount,
+                  lastTimestamp: conv.lastMessageTime?.toDate ? conv.lastMessageTime.toDate().toISOString() : new Date().toISOString(),
+                  lastContent: conv.lastMessage,
+                  sender: {
+                    id: conv.otherParticipantId,
+                    username: 'Kullanıcı',
+                    fullName: 'Bilinmeyen Kullanıcı',
+                    profile_picture: null,
+                    profileImage: null,
+                    online: false
+                  }
+                };
+              }
+    } catch (error) {
+              console.error('Kullanıcı bilgisi alınırken hata:', error);
+              // Hata durumunda varsayılan değerler
+              return {
+                id: conv.id,
+                senderId: conv.otherParticipantId,
+                receiverId: user.id,
+                lastMessage: conv.lastMessage,
+                lastMessageAt: conv.lastMessageTime,
+                lastMessageSenderId: conv.lastMessageSender,
+                unreadCount: conv.unreadCount,
+                lastTimestamp: conv.lastMessageTime?.toDate ? conv.lastMessageTime.toDate().toISOString() : new Date().toISOString(),
+                lastContent: conv.lastMessage,
+                sender: {
+                  id: conv.otherParticipantId,
+                  username: 'Kullanıcı',
+                  fullName: 'Bilinmeyen Kullanıcı',
+                  profile_picture: null,
+                  profileImage: null,
+                  online: false
+                }
+              };
+            }
+          })
         );
-
-        if (tempMessageIndex !== -1) {
-          // Geçici mesajı gerçek mesajla değiştir
-          const updatedMessages = [...prevMessages];
-          updatedMessages[tempMessageIndex] = receivedMessage;
-          console.log("Geçici mesaj güncellendi:", receivedMessage.id);
-          return updatedMessages;
-        } else {
-          // Mesaj zaten listede var mı kontrol et (çift mesajı önle)
-          const exists = prevMessages.some(m => m.id === receivedMessage.id);
-          if (exists) {
-            console.log("Mesaj zaten mevcut:", receivedMessage.id);
-            return prevMessages; // Değişiklik yapma
-          }
-          // Yeni mesajı ekle
-          console.log("Mesaj ekleniyor:", receivedMessage);
-          return [...prevMessages, receivedMessage];
-        }
+        
+        setConversations(conversationsWithUserInfo);
+        setLoading(false);
       });
       
-      // Mesaj karşı taraftansa okundu olarak işaretle
-      if (message.senderId === selectedConversation.sender.id && !receivedMessage.isRead) {
-        markMessageAsRead(receivedMessage.id);
-      }
-    } else {
-      console.log("Arka plandaki bir sohbete mesaj geldi:", message.senderId);
+      // Temizleme fonksiyonu
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
     }
-    
-    // Konuşmalar listesini güncelle (her zaman, sadece açık olana değil)
-    updateConversationsWithNewMessage(receivedMessage);
-  };
-  
-  // Konuşmalar listesini yeni mesaja göre güncelle
-  const updateConversationsWithNewMessage = (message) => {
-    console.log(`[${Date.now()}] updateConversationsWithNewMessage çağrıldı, mesaj:`, message);
-    
-    // Gerekli mesaj bilgilerini kontrol et
-    if (!message || !message.id || !message.senderId || !message.receiverId || !currentUser) {
-      console.error("updateConversationsWithNewMessage: Gerekli mesaj bilgileri eksik.", {message, currentUser});
-      return;
-    }
+  }, [user]);
 
-    setConversations(prevConversations => {
-      console.log(`[${Date.now()}] setConversations tetiklendi (önceki: ${prevConversations.length} konuşma)`);
-      let conversationUpdated = false;
-      let isNewConversation = false;
-      
-      let updatedConversations = prevConversations.map(conv => {
-        // Konuşma objesi ve sender kontrolü
-        if (!conv || !conv.sender || typeof conv.sender.id === 'undefined') {
-          console.warn("Geçersiz konuşma objesi atlanıyor:", conv);
-          return conv;
-        }
-        
-        // İlgili konuşmayı bul (mesajın göndericisi veya alıcısı mevcut kullanıcı değilse)
-        const otherPartyId = message.senderId === currentUser.id ? message.receiverId : message.senderId;
-        const isRelated = conv.sender.id === otherPartyId;
-        
-        if (isRelated) {
-          console.log(`[${Date.now()}] İlgili konuşma bulundu:`, conv.sender.username);
-          conversationUpdated = true;
-          // Konuşma bilgilerini güncelle
-          const updatedConv = {
-            ...conv,
-            lastMessage: message.content || 'Medya', // İçerik yoksa medya varsayımı
-            lastTimestamp: message.sentAt, // Son mesaj zamanını güncelle
-            unreadCount: (message.receiverId === currentUser.id && 
-                          (!selectedConversation || selectedConversation.sender.id !== message.senderId)) 
-                          ? (conv.unreadCount || 0) + 1 
-                          : conv.unreadCount
-          };
-          console.log(`[${Date.now()}] Konuşma güncellendi:`, updatedConv);
-          return updatedConv;
-        }
-        return conv;
-      });
-
-      // Eğer ilgili konuşma bulunamadıysa ve mesaj bize geldiyse (yeni konuşma)
-      if (!conversationUpdated && message.receiverId === currentUser.id) {
-        console.log(`[${Date.now()}] Mevcut konuşma bulunamadı, yeni konuşma kontrol ediliyor...`);
-        // Yeni konuşmayı eklemek için gönderen bilgisi var mı?
-        if (message.senderInfo && message.senderInfo.id) {
-          isNewConversation = true;
-          const newConversation = {
-            sender: {
-              id: message.senderInfo.id,
-              username: message.senderInfo.username || 'Bilinmeyen',
-              fullName: message.senderInfo.fullName || '',
-              profileImage: message.senderInfo.profileImage || null,
-              online: true // Bu bilgi idealde backend'den gelmeli
-            },
-            lastMessage: message.content || 'Medya',
-            unreadCount: 1, // Yeni konuşma olduğu için 1 okunmamış mesaj
-            lastTimestamp: message.sentAt
-          };
-          updatedConversations = [newConversation, ...updatedConversations.filter(c => c && c.sender && c.sender.id !== newConversation.sender.id)]; // Varsa eski geçiciyi kaldır
-          console.log(`[${Date.now()}] Yeni konuşma listeye eklendi:`, newConversation);
-        } else {
-           console.warn(`[${Date.now()}] Yeni konuşma eklenemedi: senderInfo eksik.`, message);
-        }
-      }
-      
-      // Eğer var olan bir konuşma güncellendiyse veya yeni konuşma eklendiyse, sırala
-      if (conversationUpdated || isNewConversation) {
-         // Güncellenen/yeni konuşmayı listenin başına taşı
-        const targetUserId = message.senderId === currentUser.id ? message.receiverId : message.senderId;
-        const targetConversationIndex = updatedConversations.findIndex(conv => conv && conv.sender && conv.sender.id === targetUserId);
-        
-        if (targetConversationIndex > 0) { // Zaten başta değilse
-          console.log(`[${Date.now()}] Konuşma başa taşınıyor:`, updatedConversations[targetConversationIndex].sender.username);
-          const targetConversation = updatedConversations.splice(targetConversationIndex, 1)[0];
-          updatedConversations.unshift(targetConversation);
-        } else if (targetConversationIndex === -1 && isNewConversation) {
-           console.log(`[${Date.now()}] Yeni konuşma zaten başta.`);
-        } else if (targetConversationIndex === 0) {
-           console.log(`[${Date.now()}] Konuşma zaten başta.`);
-        }
-      }
-      
-      console.log(`[${Date.now()}] setConversations tamamlandı (sonraki: ${updatedConversations.length} konuşma)`);
-      return updatedConversations;
+  // Konuşma seçildiğinde mesajları dinle
+  useEffect(() => {
+    console.log('useEffect (mesaj yükleme) tetiklendi:', {
+      hasUser: !!user?.id,
+      hasSelectedUserId: !!selectedUserId,
+      selectedUserId
     });
-  };
 
-  // Konuşmaları getir
-  const fetchConversations = useCallback(async () => {
-    try {
+    if (user?.id && selectedUserId) {
+      console.log('Mesajlar yükleniyor:', {
+        userId: user.id,
+        selectedUserId: selectedUserId
+      });
+      
+      // Mevcut mesajları temizle
+      setMessages([]);
       setLoading(true);
-      setError(null);
-      const response = await api.messages.getConversations();
-      if (response.success && response.data && response.data.conversations) {
-        setConversations(response.data.conversations);
-      } else {
-        // Yanıt başarılı değilse veya beklenen veri yoksa hata ayarla
-        setError(response.message || 'Konuşmalar yüklenirken bir hata oluştu.');
-      }
-    } catch (err) {
-      setError('Konuşmalar yüklenirken bir hata oluştu: ' + err.message);
-      console.error('Fetch conversations error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Mesajları getir
-  const fetchMessages = async (conversationId) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await api.messages.getConversation(conversationId);
-      if (response.success && response.data && response.data.messages) {
-        setMessages(response.data.messages);
-      }
-    } catch (err) {
-      setError('Mesajlar yüklenirken bir hata oluştu: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Konuşma seçildiğinde
-  const selectConversation = (conversation) => {
-    setSelectedConversation(conversation);
-    fetchMessages(conversation.sender.id);
-    
-    // Konuşma seçildiğinde okunmamış mesaj sayısını sıfırla
-    setConversations(prev => 
-      prev.map(conv => 
-        conv.sender.id === conversation.sender.id 
-          ? { ...conv, unreadCount: 0 } 
-          : conv
-      )
-    );
-  };
-
-  // Yazma durumunu gönder
-  const sendTypingStatus = (isTyping) => {
-    if (!selectedConversation || !wsConnectedRef.current || !wsRef.current || !currentUser) return;
-    
-    try {
-      const typingMessage = {
-        type: 'typing',
-        senderId: currentUser.id,
-        receiverId: selectedConversation.sender.id,
-        isTyping: isTyping
+      
+      // API'den mesajları yükle
+      const loadMessagesFromAPI = async () => {
+        try {
+          const response = await api.messages.getConversation(selectedUserId);
+          console.log('API\'den mesajlar alındı:', response);
+          
+          if (response.success && response.data && response.data.messages) {
+            const apiMessages = response.data.messages.map(msg => ({
+              id: msg.id,
+              content: msg.content,
+              senderId: msg.senderId,
+              receiverId: msg.receiverId,
+              sentAt: msg.sentAt || msg.createdAt,
+              isRead: msg.isRead || false,
+              isDelivered: true,
+              mediaUrl: msg.mediaUrl,
+              mediaType: msg.mediaType,
+              senderInfo: {
+                id: msg.senderId,
+                username: msg.senderId === user.id ? user.username : selectedConversation?.sender?.username || 'Kullanıcı',
+                profileImage: msg.senderId === user.id ? user.profile_picture : selectedConversation?.sender?.profileImage
+              }
+            }));
+            
+            // Zaman sırasına göre sırala
+            const sortedMessages = apiMessages.sort((a, b) => 
+              new Date(a.sentAt) - new Date(b.sentAt)
+            );
+            
+            console.log('✅ Mesajlar state\'e yüklendi:', {
+              messageCount: sortedMessages.length,
+              latestMessage: sortedMessages[sortedMessages.length - 1]
+            });
+            
+            setMessages(sortedMessages);
+            
+            // Mesajlar gelince otomatik kaydır
+            setTimeout(() => {
+              if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+              }
+            }, 100);
+          } else {
+            console.log('API\'den mesaj bulunamadı veya boş konuşma');
+            setMessages([]);
+          }
+        } catch (error) {
+          console.error('❌ Mesaj yükleme hatası:', error);
+          setMessages([]);
+        } finally {
+          setLoading(false);
+        }
       };
       
-      // WebSocket hazır mı kontrol et
-      if (wsRef.current.readyState === WebSocket.OPEN) {
-        console.log("Yazma durumu gönderiliyor:", typingMessage);
-        wsRef.current.send(JSON.stringify(typingMessage));
-      } else {
-        console.warn("WebSocket hazır değil, yazma durumu gönderilemiyor");
-      }
-    } catch (error) {
-      console.error('Yazma durumu gönderme hatası:', error);
-    }
-  };
-
-  // Mesaj okundu olarak işaretle
-  const markMessageAsRead = async (messageId) => {
-    try {
-      await api.messages.markAsRead(messageId);
-    } catch (err) {
-      console.error('Mesaj okundu işaretleme hatası:', err);
-    }
-  };
-
-  // Mesaj girmesi sırasında yazma durumunu gönder
-  const handleMessageInputChange = (e) => {
-    setNewMessage(e.target.value);
-    
-    // Yazma durumunu gönder
-    if (typingTimeout) {
-      clearTimeout(typingTimeout);
-    }
-    
-    // Yazıyor olarak işaretle
-    sendTypingStatus(true);
-    
-    // 2 saniye sonra yazma durumunu sonlandır
-    const newTimeout = setTimeout(() => {
-      sendTypingStatus(false);
-    }, 2000);
-    
-    setTypingTimeout(newTimeout);
-  };
-
-  // Mesajı gönderme
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    
-    if ((!newMessage.trim() && !mediaFile) || isUploading || !selectedConversation) return;
-    
-    // Medya yükleme varsa
-    if (mediaFile) {
-      setIsUploading(true);
-      setUploadProgress(0);
+      loadMessagesFromAPI();
       
-      const uploadCancel = mediaService.uploadFile(
-        mediaFile.file,
-        (progress) => {
-          setUploadProgress(progress);
-        },
-        async (uploadedMedia) => {
-          // Başarılı yükleme sonrası mesaj gönder
-          try {
-            const messageData = {
-              receiverId: selectedConversation.id,
-              content: newMessage.trim(),
-              mediaUrl: uploadedMedia.filename || uploadedMedia.url
-            };
-            
-            const newMessage = {
-              id: `temp-${Date.now()}`,
-              conversationId: selectedConversation.id,
-              content: newMessage.trim(),
-              mediaUrl: mediaFile.preview,
-              mediaType: mediaFile.type,
-              sender: "currentUser",
-              timestamp: new Date().toISOString(),
-              isNew: true,
-            };
-            
-            setMessages(prev => [...prev, newMessage]);
-            setNewMessage("");
-            setMediaFile(null);
-            setIsUploading(false);
-            
-            await api.messages.sendMessage(messageData);
-            
-            // Yazıyor durumunu iptal et
-            if (isTyping) {
-              sendTypingStatus(false);
-            }
-            
-            // Mesaj gönderildikten sonra mesajları yeniden yükle
-            setTimeout(() => {
-              fetchMessages(selectedConversation.id);
-            }, 1000);
-          } catch (error) {
-            console.error("Medya içerikli mesaj gönderilirken hata:", error);
-            toast.error("Mesaj gönderilemedi, lütfen tekrar deneyin");
-          }
-        },
-        (error) => {
-          setIsUploading(false);
-          toast.error(error.message || "Dosya yüklenirken bir hata oluştu");
+    } else {
+      console.warn('Mesaj yükleme koşulları sağlanmadı:', {
+        hasUser: !!user?.id,
+        hasSelectedUserId: !!selectedUserId
+      });
+      setMessages([]);
+      setLoading(false);
+    }
+  }, [user?.id, selectedUserId]); // Dependency'leri basitleştir
+
+  // URL'den belirli bir kullanıcı seçildiğinde
+  useEffect(() => {
+    if (conversationId && user?.id) {
+      console.log('🔍 URL\'den conversationId alındı:', { conversationId, userId: user.id });
+      
+      // conversationId'yi selectedUserId olarak set et
+      setSelectedUserId(conversationId);
+      
+      // Konuşmayı bul veya oluştur - DÜZGÜN SENDER BİLGİSİYLE
+      const newConversationId = createConversationId(user.id, conversationId);
+      setSelectedConversation({
+        id: newConversationId,
+        senderId: conversationId,
+        receiverId: user.id,
+        sender: {
+          id: conversationId,
+          username: 'Kullanıcı',
+          fullName: 'Yükleniyor...',
+          profileImage: null,
+          online: false
         }
-      );
+      });
       
+      console.log('✅ selectedUserId ve selectedConversation set edildi:', {
+        selectedUserId: conversationId,
+        conversationId: newConversationId
+      });
+      
+      // Kullanıcı bilgilerini API'den yükle ve güncelle
+      const loadUserInfo = async () => {
+        try {
+          const userResponse = await api.user.getUserById(conversationId);
+          if (userResponse.success) {
+            const userInfo = userResponse.data;
+            setSelectedConversation(prev => ({
+              ...prev,
+              sender: {
+                id: conversationId,
+                username: userInfo.username,
+                fullName: userInfo.fullName || userInfo.full_name,
+                profileImage: userInfo.profileImage || userInfo.profile_picture,
+                online: false
+              }
+            }));
+            console.log('✅ Kullanıcı bilgisi API\'den yüklendi ve güncellendi:', userInfo.username);
+          }
+        } catch (error) {
+          console.error('❌ Kullanıcı bilgisi yüklenemedi:', error);
+        }
+      };
+      
+      loadUserInfo();
+      
+      // Mobil görünümde sohbet ekranını göster
+      if (isSmallScreen) {
+        setShowMobileChat(true);
+      }
+    }
+  }, [conversationId, user, isSmallScreen]);
+
+  // Ekran boyutu değişimini izle
+  useEffect(() => {
+    const handleResize = () => {
+      const small = window.innerWidth <= 768;
+      setIsSmallScreen(small);
+      
+      // Mobil moddan çıkıldığında, sohbet görünümünü sıfırla
+      if (!small) {
+        setShowMobileChat(false);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  // Konuşma ID'si oluştur (Realtime ile uyumlu)
+  const createConversationId = (userId1, userId2) => {
+    const sortedIds = [userId1, userId2].sort();
+    return `conv_${sortedIds[0]}_${sortedIds[1]}`;
+  };
+
+  // Konuşma seçme işlemi
+  const selectConversation = (conversation) => {
+    if (!user?.id || !conversation?.sender?.id) {
+      console.error("selectConversation: Geçersiz kullanıcı veya konuşma bilgisi");
+      return;
+    }
+
+    const targetUserId = conversation.sender.id;
+    setSelectedUserId(targetUserId);
+    setSelectedConversation(conversation);
+    
+    // URL'yi güncelle
+    navigate(`/messages/${targetUserId}`);
+    
+    // Mobil görünümde sohbet ekranını göster
+    if (isSmallScreen) {
+      setShowMobileChat(true);
+    }
+  };
+
+  // Mesaj gönderme işlemi
+  const handleSendMessage = async (e) => {
+    e?.preventDefault();
+    
+    // ⚠️ AGRESIF DEBUG VE FALLBACK ⚠️
+    console.log('🚨 MESAJ GÖNDERME BAŞLADI - AGRESIF DEBUG:', {
+      selectedUserId: selectedUserId,
+      selectedUserId_type: typeof selectedUserId,
+      conversationId: conversationId,
+      conversationId_type: typeof conversationId,
+      selectedConversation: selectedConversation,
+      user: user,
+      newMessage: newMessage
+    });
+    
+    // selectedUserId'yi kontrol et ve gerekirse düzelt
+    let actualSelectedUserId = selectedUserId;
+    
+    // Eğer selectedUserId undefined ise, conversationId'den al
+    if (!actualSelectedUserId && conversationId) {
+      console.log('⚠️ selectedUserId undefined, conversationId\'den alınıyor:', conversationId);
+      actualSelectedUserId = conversationId;
+      setSelectedUserId(conversationId);
+    }
+    
+    // Eğer hala undefined ise selectedConversation'dan al
+    if (!actualSelectedUserId && selectedConversation?.sender?.id) {
+      console.log('⚠️ selectedUserId hala undefined, selectedConversation\'dan alınıyor:', selectedConversation.sender.id);
+      actualSelectedUserId = selectedConversation.sender.id;
+      setSelectedUserId(selectedConversation.sender.id);
+    }
+    
+    // Son çare: URL'den çıkar
+    if (!actualSelectedUserId) {
+      const urlParts = window.location.pathname.split('/');
+      const urlUserId = urlParts[urlParts.length - 1];
+      if (urlUserId && urlUserId !== 'messages' && !isNaN(Number(urlUserId))) {
+        console.log('🚨 SON ÇARE: URL\'den alınıyor:', urlUserId);
+        actualSelectedUserId = urlUserId;
+        setSelectedUserId(urlUserId);
+      }
+    }
+    
+    // actualSelectedUserId'yi string'e çevir ve kontrol et
+    if (actualSelectedUserId) {
+      actualSelectedUserId = String(actualSelectedUserId);
+    }
+    
+    console.log('🔥 FİNAL actualSelectedUserId:', {
+      actualSelectedUserId: actualSelectedUserId,
+      type: typeof actualSelectedUserId,
+      length: actualSelectedUserId ? actualSelectedUserId.length : 0,
+      isUndefined: actualSelectedUserId === undefined,
+      isNull: actualSelectedUserId === null,
+      isEmpty: actualSelectedUserId === '',
+      isStringUndefined: actualSelectedUserId === 'undefined'
+    });
+    
+    if ((!newMessage.trim() && !mediaFile) || isUploading) {
+      console.warn('❌ Mesaj gönderme durduruldu: Boş mesaj veya upload devam ediyor');
       return;
     }
     
-    // Normal metin mesajı gönderme
-    const newMessage = {
-      id: `temp-${Date.now()}`,
-      conversationId: selectedConversation.id,
-      content: newMessage.trim(),
-      sender: "currentUser",
-      timestamp: new Date().toISOString(),
-      isNew: true,
-    };
+    if (!user || !actualSelectedUserId) {
+      console.error('❌ Kullanıcı veya alıcı seçilmedi:', { 
+        hasUser: !!user, 
+        actualSelectedUserId: actualSelectedUserId,
+        selectedUserId_type: typeof actualSelectedUserId 
+      });
+      toast.error('Kullanıcı veya alıcı seçilmedi');
+      return;
+    }
     
-    setMessages(prev => [...prev, newMessage]);
-    setNewMessage("");
+    // actualSelectedUserId'nin geçerli olduğundan emin ol
+    if (actualSelectedUserId === 'undefined' || actualSelectedUserId === undefined || actualSelectedUserId === null || actualSelectedUserId.trim() === '') {
+      console.error('❌ actualSelectedUserId geçersiz:', actualSelectedUserId);
+      toast.error('Geçersiz kullanıcı seçildi. Lütfen konuşmayı yeniden başlatın.');
+      return;
+    }
     
     try {
-      await messageService.sendMessage(selectedConversation.id, newMessage.content);
+      setIsUploading(true);
       
-      // Yazıyor durumunu iptal et
-      if (isTyping) {
-        sendTypingStatus(false);
+      // Mesaj içeriği
+      const messageContent = newMessage.trim();
+      let mediaUrl = null;
+      let mediaType = null;
+      
+      if (mediaFile) {
+        mediaUrl = mediaFile.preview;
+        mediaType = mediaFile.fileType;
       }
+
+      // Geçici mesaj ID'si oluştur
+      const tempMessageId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
-      // Mesaj gönderildikten sonra mesajları yeniden yükle
+      // Yeni mesaj objesi oluştur
+      const newMessageObj = {
+        id: tempMessageId,
+        content: messageContent,
+        senderId: user.id,
+        receiverId: actualSelectedUserId,
+        sentAt: new Date().toISOString(),
+        isRead: false,
+        isDelivered: false,
+        mediaUrl,
+        mediaType,
+        senderInfo: {
+          id: user.id,
+          username: user.username,
+          profileImage: user.profile_picture
+        }
+      };
+
+      // Input'u hemen temizle
+      setNewMessage('');
+      setMediaFile(null);
+      
+      // ANINDA UI'yi güncelle - En önemli kısım!
+      setMessages(prevMessages => {
+        const updatedMessages = [...prevMessages, newMessageObj];
+        console.log('🔥 Mesaj state\'e eklendi - Anında UI güncellenecek!', {
+          messageCount: updatedMessages.length,
+          newMessage: newMessageObj
+        });
+        return updatedMessages;
+      });
+      
+      // Mesajları otomatik kaydır
       setTimeout(() => {
-        fetchMessages(selectedConversation.id);
-      }, 1000);
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 50);
+      
+      // Backend'e gönder (background işlem)
+      try {
+        console.log('📡 Backend\'e mesaj gönderiliyor:', { actualSelectedUserId, messageContent });
+        const response = await api.messages.sendMessage(actualSelectedUserId, {
+          content: messageContent,
+          mediaUrl,
+          mediaType
+        });
+        
+        if (response.success) {
+          // Backend'den gerçek ID gelince güncelle
+          const realMessageId = response.data.id;
+          setMessages(prevMessages => 
+            prevMessages.map(msg => 
+              msg.id === tempMessageId 
+                ? { ...msg, id: realMessageId, isDelivered: true }
+                : msg
+            )
+          );
+          
+          console.log('✅ Mesaj backend\'e gönderildi, ID güncellendi:', realMessageId);
+        } else {
+          // Hata durumunda mesajı hata olarak işaretle
+          setMessages(prevMessages => 
+            prevMessages.map(msg => 
+              msg.id === tempMessageId 
+                ? { ...msg, isDelivered: false, error: 'Gönderim başarısız' }
+                : msg
+            )
+          );
+          console.error('❌ Backend mesaj gönderme hatası:', response.message);
+        }
+      } catch (apiError) {
+        // API hatası durumunda
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.id === tempMessageId 
+              ? { ...msg, isDelivered: false, error: 'Bağlantı hatası' }
+              : msg
+          )
+        );
+        console.error('❌ API çağrısı hatası:', apiError);
+      }
+        
     } catch (error) {
-      console.error("Mesaj gönderilirken hata:", error);
-      toast.error("Mesaj gönderilemedi, lütfen tekrar deneyin");
-      setMessages(prev => prev.filter(msg => msg.id !== newMessage.id));
+      console.error('Mesaj gönderme hatası:', error);
+      toast.error('Mesaj gönderilemedi. Lütfen tekrar deneyin.');
+      // Hata durumunda input'u geri getir
+      setNewMessage(messageContent || '');
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+      
+      // Input alanına odaklan
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+        }
+      }, 100);
     }
   };
 
@@ -1184,143 +1230,104 @@ const Messages = () => {
     setShowMobileChat(false);
   };
 
-  // Yeni mesaj başlatma fonksiyonu
-  const startNewConversation = (userId) => {
-    setShowNewConversation(false);
+  // Yeni konuşma başlatma işlemi
+  const startNewConversation = async (userId) => {
+    console.log('🔍 startNewConversation çağrıldı:', { 
+      userId, 
+      userId_type: typeof userId,
+      currentUser: user ? { id: user.id, username: user.username } : null
+    });
     
-    // Kullanıcı ID'sinin geçerli olduğundan emin ol
-    if (!userId) {
-      console.error("startNewConversation: Geçersiz userId", userId);
-      setError("Kullanıcı seçilirken bir hata oluştu.");
+    if (!userId || userId === 'undefined' || userId === undefined || userId === null) {
+      console.error("❌ startNewConversation: Geçersiz userId:", userId);
+      toast.error('Geçersiz kullanıcı ID\'si');
       return;
     }
 
-    // WebSocket bağlantısı kurulduktan sonra konuşma başlatma işlemine devam et
-    const continueWithConversation = () => {
-      // İlgili kullanıcı zaten seçilen kullanıcılar listesinden geldiği için
-      // Doğrudan konuşmaya gidebiliriz
-      fetchMessages(userId);
-      
-      // Konuşma listesinde varsa seç, yoksa kullanıcılar aramalarından seçilmiş bilgilerle oluştur
-      const existingConversation = conversations.find(c => c.sender.id === userId);
-      if (existingConversation) {
-        selectConversation(existingConversation);
+    console.log('✅ Yeni konuşma başlatılıyor:', { userId, currentUserId: user.id });
+
+    // userId'yi string'e çevir ve set et
+    const userIdStr = String(userId);
+    setSelectedUserId(userIdStr);
+    
+    console.log('✅ selectedUserId set edildi:', userIdStr);
+    
+    // ConversationId'yi Realtime servisinin beklediği formatta oluştur
+    const conversationId = createConversationId(String(user.id), userIdStr);
+    
+    // Hedef kullanıcının bilgilerini API'den veya cache'den al  
+    let targetUserInfo = null;
+    try {
+      // Önce takip edilen kullanıcılar arasında ara
+      const followingUser = followingUsers.find(u => String(u.id) === userIdStr);
+      if (followingUser) {
+        targetUserInfo = followingUser;
+        console.log('✅ Kullanıcı bilgisi followingUsers\'dan alındı:', targetUserInfo.username);
       } else {
-        // Seçilen kullanıcıyı previousChats veya searchResults'tan bul
-        let userData = null;
-        
-        // Önce previousChats içinde ara
-        if (previousChats && previousChats.length > 0) {
-          const foundUser = previousChats.find(user => user.id === userId);
-          if (foundUser) {
-            userData = foundUser;
-          }
-        }
-        
-        // Kullanıcı bulunamadıysa bir geçici kullanıcı bilgisi oluştur
-        const tempConversation = {
-          sender: {
-            id: userId,
-            username: userData ? userData.username : "Kullanıcı",
-            fullName: userData ? userData.fullName : "Kullanıcı",
-            profileImage: userData ? userData.profileImage : null
-          },
-          lastMessage: "",
-          unreadCount: 0
-        };
-        
-        // Konuşmayı seç
-        setSelectedConversation(tempConversation);
-        
-        // Konuşmayı listeye ekle (böylece "Henüz mesajınız yok" yazısı kaybolur)
-        setConversations(prevConversations => {
-          // Eğer bu ID ile bir konuşma zaten varsa listeyi olduğu gibi döndür
-          if (prevConversations.some(conv => conv.sender.id === userId)) {
-            return prevConversations;
-          }
-          
-          // Yoksa yeni konuşmayı ekle
-          return [tempConversation, ...prevConversations];
-        });
-        
-        // Mobil görünümde mesaj alanını göster
-        if (isMobile) {
-          setShowMobileChat(true);
+        // API'den kullanıcı bilgilerini çek
+        console.log('📡 API\'den kullanıcı bilgisi alınıyor...');
+        const userResponse = await api.user.getUserById(userId);
+        if (userResponse.success) {
+          targetUserInfo = userResponse.data;
+          console.log('✅ Kullanıcı bilgisi API\'den alındı:', targetUserInfo.username);
         }
       }
-    };
+    } catch (error) {
+      console.error('❌ Kullanıcı bilgisi alınamadı:', error);
+    }
     
-    // WebSocket bağlantısını kontrol et ve gerekirse yeniden kur
-    if (!wsConnectedRef.current || !wsRef.current) {
-      console.warn("startNewConversation: WebSocket bağlantısı hazır değil, yeniden bağlanılıyor...");
-      
-      // API üzerinden mesaj göndermek için WebSocket'i yeniden başlat
-      const reconnectWs = async () => {
-        // Önceki bağlantıyı kapat
-        if (wsRef.current) {
-          wsRef.current.close();
-          wsRef.current = null;
+    if (targetUserInfo) {
+      const conversation = {
+        id: conversationId,
+        senderId: userIdStr,
+        receiverId: String(user.id),
+        sender: {
+          id: userIdStr,
+          username: targetUserInfo.username,
+          fullName: targetUserInfo.fullName || targetUserInfo.full_name,
+          profileImage: targetUserInfo.profileImage || targetUserInfo.profile_picture,
+          online: false
         }
-        
-        // Yeni bir bağlantı başlat ve durumunu bekle
-        const newWs = api.messages.createWebSocketConnection();
-        wsRef.current = newWs;
-        
-        // Bağlantının kurulmasını bekle
-        return new Promise((resolve) => {
-          if (!newWs) {
-            resolve(false);
-            return;
-          }
-          
-          // Yeni bağlantı zaten açıksa hemen true dön
-          if (newWs.readyState === WebSocket.OPEN) {
-            wsConnectedRef.current = true;
-            resolve(true);
-            return;
-          }
-          
-          // Bağlantı açılana kadar bekle
-          const openHandler = () => {
-            wsConnectedRef.current = true;
-            newWs.removeEventListener('open', openHandler);
-            newWs.removeEventListener('error', errorHandler);
-            resolve(true);
-          };
-          
-          const errorHandler = () => {
-            newWs.removeEventListener('open', openHandler);
-            newWs.removeEventListener('error', errorHandler);
-            resolve(false);
-          };
-          
-          newWs.addEventListener('open', openHandler);
-          newWs.addEventListener('error', errorHandler);
-          
-          // 5 saniye sonra hala bağlanamadıysak false dön
-          setTimeout(() => {
-            newWs.removeEventListener('open', openHandler);
-            newWs.removeEventListener('error', errorHandler);
-            resolve(false);
-          }, 5000);
-        });
       };
       
-      // Bağlantıyı yeniden kur ve sonucuna göre devam et
-      reconnectWs().then(connected => {
-        if (connected) {
-          console.log("WebSocket bağlantısı yeniden kuruldu, konuşma başlatılıyor...");
-          continueWithConversation(); // Şimdi `continueWithConversation` tanımlı
-        } else {
-          setError("Mesajlaşma servisine bağlanılamadı. Sayfayı yenileyip tekrar deneyin.");
-          console.error("WebSocket bağlantısı kurulamadı, konuşma başlatılamıyor.");
-        }
-      });
+      setSelectedConversation(conversation);
+      console.log('✅ selectedConversation set edildi:', conversation);
     } else {
-      // WebSocket bağlantısı zaten mevcutsa doğrudan devam et
-      continueWithConversation();
+      // Kullanıcı bilgisi alınamazsa varsayılan bilgilerle devam et
+      const conversation = {
+        id: conversationId,
+        senderId: userIdStr,
+        receiverId: String(user.id),
+        sender: {
+          id: userIdStr,
+          username: 'Kullanıcı',
+          fullName: 'Bilinmeyen Kullanıcı',
+          profileImage: null,
+          online: false
+        }
+      };
+      
+      setSelectedConversation(conversation);
+      console.log('⚠️ selectedConversation varsayılan bilgilerle set edildi:', conversation);
     }
-
+    
+    // Yeni konuşma penceresini kapat
+    setShowNewConversation(false);
+    
+    // Mobil görünümde sohbet ekranını göster
+    if (isSmallScreen) {
+      setShowMobileChat(true);
+    }
+    
+    // URL'yi güncelle
+    navigate(`/messages/${userIdStr}`);
+    
+    // Mesaj input alanına odaklan
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    }, 300);
   };
 
   // Dosya seçimi
@@ -1354,33 +1361,57 @@ const Messages = () => {
     setMediaFile(null);
   };
 
+  // Uygulama temizleme işlemi
+  useEffect(() => {
+    return () => {
+      // Realtime dinleyicileri temizle
+      if (serviceRef.current) {
+        serviceRef.current.cleanup();
+      }
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen bg-black p-0 flex items-center justify-center">
-      <div className="max-w-screen-xl w-full mx-auto relative">
-        <div className="absolute inset-0 -z-10 overflow-hidden opacity-30">
-          <SparklesCore
-            id="tsparticlesfullpage"
-            background="transparent"
-            minSize={0.3}
-            maxSize={0.8}
-            particleDensity={50}
-            className="w-full h-full"
-            particleColor="#0AFFD9"
-          />
+    <div className="flex h-screen bg-gray-100">
+      {/* Realtime Bağlantı Durumu */}
+      {connectionStatus !== 'connected' && (
+        <div className={`fixed top-0 left-0 right-0 z-50 text-white text-center py-2 text-sm ${
+          connectionStatus === 'connecting' ? 'bg-yellow-500' : 
+          connectionStatus === 'error' ? 'bg-red-500' : 'bg-gray-500'
+        }`}>
+          {connectionStatus === 'connecting' && '🔄 Realtime bağlantısı kuruluyor...'}
+          {connectionStatus === 'error' && '❌ Realtime bağlantı hatası - Yeniden deneniyor...'}
         </div>
-        
-        <div className="relative w-full h-screen md:h-[calc(100vh-2rem)] lg:h-[calc(100vh-3rem)] overflow-hidden rounded-none md:rounded-2xl shadow-2xl bg-black/70 backdrop-blur-xl border border-[#0affd9]/20 flex">
-          
-          <div className={`${isMobile && showMobileChat ? 'hidden' : 'flex'} md:flex flex-col w-full md:w-[340px] lg:w-[380px] bg-black/60 backdrop-blur-sm h-full border-r border-[#0affd9]/20`}>
-            <div className="p-4 border-b border-[#0affd9]/20">
-              <div className="flex items-center justify-between mb-4">
-                <h1 className="text-xl font-semibold text-[#0affd9] tracking-wide">Sohbetler</h1>
+      )}
+      
+      {/* Sol Sidebar - Konuşma Listesi */}
+      <div className={`${
+        isSmallScreen ? (selectedConversation ? 'hidden' : 'w-full') : 'w-1/3'
+      } border-r border-gray-300 bg-white flex flex-col`}>
+        {/* Arama ve Başlık */}
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold text-gray-800">Mesajlar</h1>
+            <div className="flex gap-2">
+              {/* Test buton - yakup2 ile sohbet başlat */}
+                  <button 
+                onClick={() => startNewConversation(2)}
+                className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
+                title="yakup2 ile sohbet başlat (test)"
+              >
+                @yakup2
+                  </button>
+              
                 <button 
                   onClick={() => setShowNewConversation(true)}
-                  className="flex items-center bg-[#0affd9]/90 hover:bg-[#0affd9] text-black px-3 py-1.5 rounded-lg transition-all duration-300 text-sm font-medium shadow-md hover:shadow-lg hover:shadow-[#0affd9]/30 transform hover:scale-105"
+                className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors"
+                title="Yeni sohbet başlat"
                 >
-                  <PlusCircle size={16} className="mr-1.5" /> Yeni
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
                 </button>
+            </div>
               </div>
               
               <div className="relative">
@@ -1428,7 +1459,7 @@ const Messages = () => {
                       }`}
                       onClick={() => {
                         selectConversation(conversation);
-                        if (isMobile) setShowMobileChat(true);
+                    if (isSmallScreen) setShowMobileChat(true);
                       }}
                     >
                       {selectedConversation?.sender?.id === conversation.sender?.id && (
@@ -1477,7 +1508,7 @@ const Messages = () => {
             </div>
           </div>
 
-          <div className={`${isMobile && !showMobileChat ? 'hidden' : 'flex'} md:flex flex-col w-full flex-1 bg-black/50 h-full`}>
+      <div className={`${isSmallScreen && !showMobileChat ? 'hidden' : 'flex'} md:flex flex-col w-full flex-1 bg-black/50 h-full`}>
             {!selectedConversation ? (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center text-gray-500">
                 <MessageSquare size={64} className="opacity-20 mb-5 text-[#0AAFFD]/40" />
@@ -1487,7 +1518,7 @@ const Messages = () => {
             ) : (
               <>
                 <div className="p-3 px-4 border-b border-[#0AAFFD]/20 flex items-center flex-shrink-0 bg-black/60 backdrop-blur-sm shadow-sm">
-                  {isMobile && (
+              {isSmallScreen && (
                     <button
                       onClick={handleBackToConversations}
                       className="mr-3 text-gray-400 hover:text-[#0AAFFD] p-1 rounded-full hover:bg-[#0AAFFD]/10 transition-colors"
@@ -1538,7 +1569,7 @@ const Messages = () => {
                       <MessageList 
                         key="message-list"
                         messages={messages} 
-                        currentUser={currentUser} 
+                    currentUser={user} 
                         formatTime={formatMessageTime} 
                       />
                       {isTyping && selectedConversation && (
@@ -1558,7 +1589,27 @@ const Messages = () => {
                   )}
                   {isUploading && <UploadProgress progress={uploadProgress} />}
                   
-                  <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    // 🚨 EMERGENCY FIX: selectedUserId undefined kontrolü
+                    if (!selectedUserId) {
+                      console.log('🚨 EMERGENCY FORM: selectedUserId undefined, URL\'den çıkarılıyor!');
+                      const urlParts = window.location.pathname.split('/');
+                      const urlUserId = urlParts[urlParts.length - 1];
+                      if (urlUserId && urlUserId !== 'messages' && !isNaN(Number(urlUserId))) {
+                        console.log('🚨 EMERGENCY FORM: URL\'den alınan userId:', urlUserId);
+                        setSelectedUserId(urlUserId);
+                        
+                        // 100ms bekle ve sonra mesajı gönder
+                        setTimeout(() => {
+                          handleSendMessage(e);
+                        }, 100);
+                        return;
+                      }
+                    }
+                    
+                    handleSendMessage(e);
+                  }} className="flex items-center gap-2">
                     <input 
                       type="file" 
                       ref={fileInputRef}
@@ -1582,14 +1633,34 @@ const Messages = () => {
                     
                     <input
                       type="text"
-                      ref={messageInputRef}
+                  ref={textareaRef}
                       value={newMessage}
-                      onChange={handleMessageInputChange}
+                      onChange={(e) => {
+                        setNewMessage(e.target.value);
+                        setIsTyping(e.target.value.trim() !== '');
+                      }}
                       placeholder="Mesajınızı yazın..."
                       className="flex-1 bg-black/40 border border-[#0AAFFD]/25 text-gray-200 placeholder-gray-500 px-4 py-2.5 rounded-full focus:outline-none"
                       disabled={isUploading}
                       onKeyPress={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
+                          // 🚨 EMERGENCY FIX: selectedUserId undefined kontrolü
+                          if (!selectedUserId) {
+                            console.log('🚨 EMERGENCY KEYPRESS: selectedUserId undefined, URL\'den çıkarılıyor!');
+                            const urlParts = window.location.pathname.split('/');
+                            const urlUserId = urlParts[urlParts.length - 1];
+                            if (urlUserId && urlUserId !== 'messages' && !isNaN(Number(urlUserId))) {
+                              console.log('🚨 EMERGENCY KEYPRESS: URL\'den alınan userId:', urlUserId);
+                              setSelectedUserId(urlUserId);
+                              
+                              // 100ms bekle ve sonra mesajı gönder
+                              setTimeout(() => {
+                                handleSendMessage(e);
+                              }, 100);
+                              return;
+                            }
+                          }
+                          
                           handleSendMessage(e);
                         }
                       }}
@@ -1611,34 +1682,20 @@ const Messages = () => {
                 </div>
               </>
             )}
-          </div>
-        </div>
       </div>
 
-      {showNewConversation && (
+      {/* Yeni Konuşma Modal'ı */}
         <AnimatePresence>
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[100] p-4"
-            onClick={() => setShowNewConversation(false)}
-          >
-            <motion.div 
-              onClick={(e) => e.stopPropagation()}
-              initial={{ scale: 0.9, opacity: 0.8 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-            > 
+        {showNewConversation && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
               <NewConversation 
                 onClose={() => setShowNewConversation(false)} 
                 onSelectUser={startNewConversation}
+              followingUsers={followingUsers}
               />
-            </motion.div>
-          </motion.div>
-        </AnimatePresence>
+          </div>
       )}
+      </AnimatePresence>
     </div>
   );
 };

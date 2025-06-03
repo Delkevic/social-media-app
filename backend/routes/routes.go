@@ -26,10 +26,10 @@ func SetupRoutes() *gin.Engine {
 	// Notification servisini başlat
 	notificationService := services.NewNotificationService()
 	controllers.SetNotificationService(notificationService)
-	log.Println("Notification servisi başlatıldı ve WebSocket handler'a bağlandı")
+	log.Println("Notification servisi başlatıldı")
 
 	// Not: Run metodu private olduğundan kendisi dahili olarak çalışır
-	log.Println("Notification servisi aktif")
+	log.Println("Notification servisi aktif (HTTP polling tabanlı)")
 
 	// Dosya boyutu sınırlamasını artır (100MB)
 	router.MaxMultipartMemory = 100 << 20
@@ -152,7 +152,9 @@ func SetupRoutes() *gin.Engine {
 			auth.POST("/messages/:userId", controllers.SendMessage)
 			auth.POST("/messages/:userId/typing", controllers.SendTypingStatus)
 			auth.POST("/messages/read/:id", controllers.MarkMessageAsRead)
-			auth.GET("/messages/previous-chats", controllers.GetPreviousChats) // Daha önce mesajlaşılan kullanıcıları getirir
+			auth.GET("/messages/previous-chats", controllers.GetPreviousChats)         // Daha önce mesajlaşılan kullanıcıları getirir
+			auth.GET("/messages/unread-count", controllers.GetUnreadMessageCount)      // Okunmamış mesaj sayısı
+			auth.POST("/messages/read-all/:userId", controllers.MarkAllMessagesAsRead) // Bir kullanıcıdan gelen tüm mesajları okundu olarak işaretle
 
 			// Reels rotaları
 			auth.GET("/reels", controllers.GetReels)
@@ -202,8 +204,9 @@ func SetupRoutes() *gin.Engine {
 
 		// Kullanıcı arama rotası (auth dışında)
 		api.GET("/users/search", controllers.SearchUsers)
+		api.GET("/users/id/:id", controllers.GetUserById)
 
-		// WebSocket bağlantı noktası - auth dışında
+		// WebSocket bağlantısı
 		api.GET("/ws", controllers.WebSocketHandler)
 	}
 

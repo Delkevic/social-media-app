@@ -21,6 +21,7 @@
     "antd": "^5.24.8",
     "axios": "^1.8.4",
     "date-fns": "^4.1.0",
+    "firebase": "^11.8.1",
     "framer-motion": "^12.9.2",
     "lucide-react": "^0.482.0",
     "motion": "^12.5.0",

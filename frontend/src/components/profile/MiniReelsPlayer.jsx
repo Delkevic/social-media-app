@@ -15,7 +15,38 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
   // Eğer videolar yoksa boş bir dizi olarak ayarla
   useEffect(() => {
     if (reels && reels.length > 0) {
-      setReelsData(reels);
+      // Tüm reels verilerini konsola yazdır (hata ayıklama)
+      console.log("MiniReelsPlayer - Ham Reels Verileri:", reels);
+      
+      const processedReels = reels.map(reel => {
+        // Kullanıcı bilgilerini ayıkla
+        const userInfo = reel.user || {};
+        
+        // Kullanıcı bilgilerinin tüm olası kaynaklarını kontrol et
+        const userId = reel.user?.id || reel.userId || reel.user_id || null;
+        const username = reel.user?.username || reel.username || reel.user?.name || reel.user?.displayName || reel.displayName || null;
+        const profileImage = reel.user?.profileImage || reel.user?.profile_picture || reel.user?.avatar || reel.profile_picture || reel.profileImage || null;
+        const isFollowing = reel.user?.isFollowing || reel.isFollowing || false;
+        
+        // Normalize edilmiş kullanıcı nesnesi
+        const normalizedUser = {
+          ...userInfo,
+          id: userId,
+          username: username,
+          profileImage: profileImage,
+          isFollowing: isFollowing
+        };
+        
+        // Normalize edilmiş kullanıcı bilgilerini log'la
+        console.log(`Reel ${reel.id || 'Bilinmeyen'} için normalize edilen kullanıcı:`, normalizedUser);
+        
+        return {
+          ...reel,
+          user: normalizedUser
+        };
+      });
+      
+      setReelsData(processedReels);
     } else {
       setReelsData([]);
     }
@@ -147,7 +178,7 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
     const currentUser = currentReel?.user;
     
     if (!currentUser || !currentUser.id) {
-      console.error("Kullanıcı bilgisi bulunamadı");
+      console.error("Kullanıcı bilgisi bulunamadı:", currentUser);
       return;
     }
     
@@ -160,7 +191,11 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
     
     try {
       const method = currentUser.isFollowing ? 'DELETE' : 'POST';
+      // API endpoint'i user ID'sini kullanacak şekilde düzelt
       const endpoint = `${API_BASE_URL}/api/user/follow/${currentUser.id}`;
+      
+      console.log(`Takip isteği gönderiliyor: ${method} ${endpoint}`);
+      console.log("Kullanıcı:", currentUser);
       
       const response = await fetch(endpoint, {
         method,
@@ -181,8 +216,10 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
           }
         };
         setReelsData(updatedReels);
+        console.log(`Takip durumu güncellendi: ${!currentUser.isFollowing ? 'Takip ediliyor' : 'Takip edilmiyor'}`);
       } else {
-        console.error("Takip işlemi başarısız oldu:", await response.text());
+        const errorText = await response.text();
+        console.error("Takip işlemi başarısız oldu:", errorText);
       }
     } catch (error) {
       console.error("Takip işlemi sırasında hata:", error);
@@ -256,6 +293,19 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
   
   // Şu anki reelin kullanıcı bilgilerini al
   const reelOwner = isExploreMode ? currentReel?.user : user;
+  
+  // Reels sahibi bilgilerini log'la (hata ayıklama)
+  console.log("ReelOwner:", reelOwner);
+  // Alternatif kaynaklardan kullanıcı adını bul
+  const ownerUsername = 
+    reelOwner?.username || 
+    reelOwner?.name || 
+    reelOwner?.displayName || 
+    currentReel?.username ||
+    currentReel?.user_name ||
+    "Bilinmeyen Kullanıcı";
+  
+  console.log("Görüntülenecek kullanıcı adı:", ownerUsername);
 
   return (
     <div className="rounded-2xl overflow-hidden bg-black/70 backdrop-blur-lg border border-[#0affd9]/20 p-4">
@@ -330,19 +380,31 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
         {/* Kullanıcı ve Açıklama Bilgileri */} 
         <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 via-black/30 to-transparent">
           <div className="flex items-center mb-1">
-            {reelOwner?.profileImage && (
-          <img 
-                src={getFullMediaUrl(reelOwner.profileImage)} 
-                alt={reelOwner.username} 
-                className="w-6 h-6 rounded-full mr-2 border border-[#0affd9]/50"
-          />
-            )}
-            <span className="text-white text-xs font-medium drop-shadow-md">
-              {reelOwner?.username || 'Bilinmeyen Kullanıcı'}
+            {/* Kullanıcı profil resmi - farklı kaynaklardan alma */}
+            <div className="w-6 h-6 rounded-full mr-2 border border-[#0affd9]/50 overflow-hidden flex-shrink-0">
+              <img 
+                src={reelOwner?.profileImage ? 
+                  getFullMediaUrl(reelOwner.profileImage) : 
+                  `https://ui-avatars.com/api/?name=${ownerUsername.charAt(0)}&background=0D1117&color=0AFFD9`
+                } 
+                alt={ownerUsername} 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  console.error("Profil resmi yüklenemedi:", e);
+                  e.target.onerror = null;
+                  e.target.src = `https://ui-avatars.com/api/?name=${ownerUsername.charAt(0)}&background=0D1117&color=0AFFD9`;
+                }}
+              />
+            </div>
+            
+            {/* Kullanıcı adı gösterimi */}
+            <span className="text-white text-xs font-medium drop-shadow-md truncate max-w-[120px]">
+              {ownerUsername}
             </span>
+            
             {/* Keşfet modunda takip et butonu */}
             {isExploreMode && reelOwner && !isOwnProfile && (
-          <button
+              <button
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleFollow();
@@ -351,17 +413,17 @@ const MiniReelsPlayer = ({ reels, user, isExploreMode = false, isOwnProfile = fa
                   ${reelOwner.isFollowing 
                     ? 'bg-black/50 border border-[#0affd9]/30 text-[#0affd9] hover:bg-[#0affd9]/10' 
                     : 'bg-[#0affd9] text-black hover:bg-[#0affd9]/80'
-            }`}
-          >
+                }`}
+              >
                 {reelOwner.isFollowing ? 'Takip Ediliyor' : 'Takip Et'}
               </button>
             )}
           </div>
           <p className="text-gray-300 text-[11px] line-clamp-2 drop-shadow-sm">
-            {currentReel.description}
+            {currentReel.description || ''}
           </p>
-      </div>
-      
+        </div>
+        
         {/* Beğenme, Kaydetme gibi aksiyonlar (sağ alt köşede) */}
         <div className="absolute bottom-16 right-2 flex flex-col items-center space-y-3 z-10">
           <button 
