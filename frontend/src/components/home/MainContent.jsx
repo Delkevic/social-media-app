@@ -3,6 +3,15 @@ import SearchBar from './common/SearchBar';
 import Feed from './posts/Feed';
 import CreatePostForm from './posts/CreatePostForm';
 import api from '../../services/api';
+import { API_BASE_URL } from '../../config/constants';
+
+// Profil resmi URL'ini tam hale getiren yardımcı fonksiyon
+const getFullImageUrl = (url) => {
+  if (!url) return `https://ui-avatars.com/api/?name=U&background=0D1117&color=0AFFD9`;
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return `${API_BASE_URL}${url}`;
+  return `${API_BASE_URL}/${url}`;
+};
 
 const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShowCreateForm }) => {
   const [localShowCreateForm, localSetShowCreateForm] = useState(false);
@@ -119,18 +128,15 @@ const MainContent = ({ user, showSearchOnly, hideSearch, showCreateForm, setShow
                   onClick={() => window.location.href = `/profile/${user.username}`}
                 >
                   {/* Profil resmi */}
-                  <div className="w-12 h-12 rounded-full overflow-hidden mr-3 bg-black/50">
-                    {user.profileImage ? (
-                      <img 
-                        src={user.profileImage} 
-                        alt={user.username} 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-[#0affd9]/20 flex items-center justify-center text-[#0affd9] font-bold">
-                        {user.username[0].toUpperCase()}
-                      </div>
-                    )}
+                  <div className="w-12 h-12 rounded-full overflow-hidden mr-3 bg-black/50 border border-[#0affd9]/20">
+                    <img 
+                      src={getFullImageUrl(user.profileImage)} 
+                      alt={user.username} 
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = `https://ui-avatars.com/api/?name=${user.username[0]}&background=0D1117&color=0AFFD9`;
+                      }}
+                    />
                   </div>
                   
                   {/* Kullanıcı bilgileri */}

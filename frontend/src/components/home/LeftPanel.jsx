@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Search, Compass, Clapperboard, MessageCircle, Heart, User, Settings, LogOut, SquarePen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext'; // AuthContext yolunu kontrol edin
 import { useNotification } from '../../context/NotificationContext'; // useNotification hook'unu ekliyoruz
@@ -11,6 +11,7 @@ import api from '../../services/api';
 
 const LeftPanel = ({ showMessagesAndNotifications = true, onPostFormToggle }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { togglePanel: toggleNotificationPanel } = useNotification(); // Notification hook'undan togglePanel'i alıyoruz
   const [showCreatePostModal, setShowCreatePostModal] = useState(false);
@@ -19,9 +20,36 @@ const LeftPanel = ({ showMessagesAndNotifications = true, onPostFormToggle }) =>
   
   const isActive = (path) => location.pathname === path;
 
+  // Search butonuna tıklandığında Home sayfasındaki search'e odaklanma fonksiyonu
+  const handleSearchClick = () => {
+    // Eğer Home sayfasında değilsek, Home'a git
+    if (location.pathname !== '/') {
+      navigate('/');
+      // Sayfa yüklendikten sonra search input'una odaklan
+      setTimeout(() => {
+        const searchInput = document.querySelector('input[placeholder*="ara"]') || 
+                           document.querySelector('input[placeholder*="Ara"]') ||
+                           document.querySelector('input[type="search"]');
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
+    } else {
+      // Zaten Home sayfasındaysak, search input'una odaklan
+      const searchInput = document.querySelector('input[placeholder*="ara"]') || 
+                         document.querySelector('input[placeholder*="Ara"]') ||
+                         document.querySelector('input[type="search"]');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  };
+
   const menuItems = [
     { icon: Home, text: 'Ana Sayfa', path: '/' },
-    { icon: Search, text: 'Ara', path: '/search' },
+    { icon: Search, text: 'Ara', onClick: handleSearchClick },
     { icon: Compass, text: 'Keşfet', path: '/explore' },
     { icon: Clapperboard, text: 'Reels', path: '/reels' },
     { icon: MessageCircle, text: 'Mesajlar', path: '/messages', show: showMessagesAndNotifications },
