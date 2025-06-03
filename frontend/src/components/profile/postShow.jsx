@@ -929,136 +929,138 @@ const PostShow = ({ post, onClose, isOpen, profileUser, onNext, onPrevious, onPo
           </button>
         )}
         
-        <div className="flex-1 min-h-0 relative">
-          {hasImages ? (
-            <div className="relative h-full bg-black">
-                <div 
-                className="flex transition-transform duration-300 h-full"
-                  style={{
-                    transform: `translateX(-${currentImageIndex * 100}%)`,
-                  width: `${postImages.length * 100}%`
-                }}
-              >
-                {postImages.map((image, index) => {
-                  // URL işleme
-                  const imageUrl = getFullImageUrl(typeof image === 'object' ? image.url : image);
-                  console.log(`Resim ${index} URL:`, imageUrl);
-                  
-                  return (
-                    <div key={index} className="flex-shrink-0" style={{ width: `${100 / postImages.length}%` }}>
-                      <div className="w-full h-full flex items-center justify-center bg-black">
-                        {imageUrl ? (
-                          <img 
-                            src={imageUrl} 
-                        alt={`Post content ${index + 1}`} 
-                        onError={handleImageError}
-                            className="max-w-full max-h-full object-contain"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center text-gray-500">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                            </svg>
-                            <p>Görsel bulunamadı</p>
-                          </div>
-                        )}
+        <div className="flex-1 min-h-0 relative flex flex-col">
+          <div className="flex-1 min-h-0">
+            {hasImages ? (
+              <div className="relative h-full bg-black">
+                  <div 
+                  className="flex transition-transform duration-300 h-full"
+                    style={{
+                      transform: `translateX(-${currentImageIndex * 100}%)`,
+                    width: `${postImages.length * 100}%`
+                  }}
+                >
+                  {postImages.map((image, index) => {
+                    // URL işleme
+                    const imageUrl = getFullImageUrl(typeof image === 'object' ? image.url : image);
+                    console.log(`Resim ${index} URL:`, imageUrl);
+                    
+                    return (
+                      <div key={index} className="flex-shrink-0" style={{ width: `${100 / postImages.length}%` }}>
+                        <div className="w-full h-full flex items-center justify-center bg-black">
+                          {imageUrl ? (
+                            <img 
+                              src={imageUrl} 
+                          alt={`Post content ${index + 1}`} 
+                          onError={handleImageError}
+                              className="max-w-full max-h-full object-contain"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center text-gray-500">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                              </svg>
+                              <p>Görsel bulunamadı</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {/* Image navigation dots */}
-              {postImages.length > 1 && (
-                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
-                  {postImages.map((_, index) => (
-                    <button 
-                      key={index}
-                      className={`w-2 h-2 rounded-full ${index === currentImageIndex ? 'bg-[#0affd9]' : 'bg-gray-500'}`}
+                    );
+                  })}
+                </div>
+                
+                {/* Image navigation dots */}
+                {postImages.length > 1 && (
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
+                    {postImages.map((_, index) => (
+                      <button 
+                        key={index}
+                        className={`w-2 h-2 rounded-full ${index === currentImageIndex ? 'bg-[#0affd9]' : 'bg-gray-500'}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCurrentImageIndex(index);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+                  
+                  {/* Left navigation button */}
+                  {currentImageIndex > 0 && (
+                    <button
+                    className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 rounded-full p-2 hover:bg-opacity-70"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setCurrentImageIndex(index);
+                        setCurrentImageIndex(prev => prev - 1);
                       }}
-                    />
-                  ))}
+                    >
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                  )}
+                  
+                  {/* Right navigation button */}
+                  {postImages.length > 1 && currentImageIndex < postImages.length - 1 && (
+                    <button
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 rounded-full p-2 hover:bg-opacity-70"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentImageIndex(prev => prev + 1);
+                      }}
+                    >
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
-              )}
-                
-                {/* Left navigation button */}
-                {currentImageIndex > 0 && (
-                  <button
-                  className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 rounded-full p-2 hover:bg-opacity-70"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCurrentImageIndex(prev => prev - 1);
-                    }}
-                  >
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                )}
-                
-                {/* Right navigation button */}
-                {postImages.length > 1 && currentImageIndex < postImages.length - 1 && (
-                  <button
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 rounded-full p-2 hover:bg-opacity-70"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCurrentImageIndex(prev => prev + 1);
-                    }}
-                  >
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                )}
+            ) : (
+              <div className="h-full flex items-center justify-center p-8 bg-gradient-to-b from-gray-900 to-black">
+                <div className="text-center text-2xl font-medium text-white p-6 rounded-lg">
+                  {post.content}
+                </div>
               </div>
-          ) : (
-            <div className="h-full flex items-center justify-center p-8 bg-gradient-to-b from-gray-900 to-black">
-              <div className="text-center text-2xl font-medium text-white p-6 rounded-lg">
-                {post.content}
-              </div>
-            </div>
-          )}
+            )}
+          </div>
           
-          {/* Sağ kenar etkileşim butonları (TikTok stili) */}
-          <div className="absolute right-4 bottom-16 flex flex-col items-center gap-4">
+          {/* Etkileşim butonları - her zaman alt kısımda */}
+          <div className="absolute right-4 bottom-4 flex flex-col items-center gap-4 z-10">
             <button 
               onClick={handleLike}
               className="flex flex-col items-center" 
             >
-              <div className={`p-3 rounded-full bg-black/50 backdrop-blur-sm border ${isLiked ? 'border-red-500' : 'border-gray-600'} transition-all hover:scale-110`}>
+              <div className={`p-3 rounded-full bg-black/70 backdrop-blur-sm border ${isLiked ? 'border-red-500' : 'border-gray-600'} transition-all hover:scale-110`}>
                 <Heart className={`w-6 h-6 ${isLiked ? 'text-red-500 fill-red-500' : 'text-white'}`} />
               </div>
-              <span className="text-xs mt-1 text-white font-medium">{likesCount}</span>
+              <span className="text-xs mt-1 text-white font-medium bg-black/50 px-1 rounded">{likesCount}</span>
             </button>
             
             <button 
               onClick={() => commentInputRef.current?.focus()} 
               className="flex flex-col items-center"
             >
-              <div className="p-3 rounded-full bg-black/50 backdrop-blur-sm border border-gray-600 transition-all hover:scale-110">
+              <div className="p-3 rounded-full bg-black/70 backdrop-blur-sm border border-gray-600 transition-all hover:scale-110">
                 <MessageCircle className="w-6 h-6 text-white" />
               </div>
-              <span className="text-xs mt-1 text-white font-medium">{comments.length}</span>
+              <span className="text-xs mt-1 text-white font-medium bg-black/50 px-1 rounded">{comments.length}</span>
             </button>
             
             <button 
               onClick={handleSave} 
               className="flex flex-col items-center"
             >
-              <div className={`p-3 rounded-full bg-black/50 backdrop-blur-sm border ${isSaved ? 'border-yellow-500' : 'border-gray-600'} transition-all hover:scale-110`}>
+              <div className={`p-3 rounded-full bg-black/70 backdrop-blur-sm border ${isSaved ? 'border-yellow-500' : 'border-gray-600'} transition-all hover:scale-110`}>
                 <Bookmark className={`w-6 h-6 ${isSaved ? 'text-yellow-500 fill-yellow-500' : 'text-white'}`} />
               </div>
-              <span className="text-xs mt-1 text-white font-medium">Kaydet</span>
+              <span className="text-xs mt-1 text-white font-medium bg-black/50 px-1 rounded">Kaydet</span>
             </button>
             
             <button className="flex flex-col items-center">
-              <div className="p-3 rounded-full bg-black/50 backdrop-blur-sm border border-gray-600 transition-all hover:scale-110">
+              <div className="p-3 rounded-full bg-black/70 backdrop-blur-sm border border-gray-600 transition-all hover:scale-110">
                 <Share2 className="w-6 h-6 text-white" />
               </div>
-              <span className="text-xs mt-1 text-white font-medium">Paylaş</span>
+              <span className="text-xs mt-1 text-white font-medium bg-black/50 px-1 rounded">Paylaş</span>
             </button>
           </div>
         </div>
@@ -1264,7 +1266,5 @@ const PostShow = ({ post, onClose, isOpen, profileUser, onNext, onPrevious, onPo
     </div>
   );
 }
-
-
 
 export default PostShow

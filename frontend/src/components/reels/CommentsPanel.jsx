@@ -3,37 +3,38 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Heart, Send, MoreHorizontal, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
+import { API_BASE_URL } from '../../config/constants';
+import api from '../../services/api';
 
+// Profil resmi URL'ini tam hale getiren yardımcı fonksiyon
+const getFullImageUrl = (url) => {
+  if (!url) return `https://ui-avatars.com/api/?name=U&background=0D1117&color=0AFFD9`;
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return `${API_BASE_URL}${url}`;
+  return `${API_BASE_URL}/${url}`;
+};
+
+// Örnek yorumlar
 const SAMPLE_COMMENTS = [
   {
     id: 1,
     user: {
-      username: 'AhmetArslan-j5m',
-      profileImage: 'https://randomuser.me/api/portraits/men/32.jpg',
+      username: 'yakup',
+      profileImage: getFullImageUrl('/uploads/profiles/default.jpg')
     },
-    text: 'Yanlışım varsa düzeltin ama manwa\'da da durum böyleydi parkta izleyip, yer değiş tekniği ile gidiyordu. Novel\'i okumadım bilmiyorum.',
-    likeCount: 15,
-    timestamp: '8 saat önce'
+    text: 'Bu reel harika! 🔥',
+    likeCount: 5,
+    timestamp: '2 sa'
   },
   {
     id: 2,
     user: {
-      username: 'ramiznifteliyev6083',
-      profileImage: 'https://randomuser.me/api/portraits/men/43.jpg',
+      username: 'ayse123',
+      profileImage: getFullImageUrl('/uploads/profiles/user2.jpg')
     },
-    text: 'Benim bildiğim kadarıyla gölgeleri kamera gibi kullanma özelliğini sonradan kazanıyordu, hatta bu özelliği test ederken Cha Hae in\'i banyo yaparken yakalamıştı',
-    likeCount: 13,
-    timestamp: '8 saat önce (düzenlendi)'
-  },
-  {
-    id: 3,
-    user: {
-      username: 'ahmetbro4890',
-      profileImage: 'https://randomuser.me/api/portraits/men/55.jpg',
-    },
-    text: 'Animedeki çok daha mantıklı olmuş gerçekten',
-    likeCount: 0,
-    timestamp: '5 saat önce'
+    text: 'Çok güzel bir paylaşım olmuş 👍',
+    likeCount: 3,
+    timestamp: '4 sa'
   }
 ];
 
@@ -52,15 +53,15 @@ const CommentItem = ({ comment, onLikeComment }) => {
   return (
     <div className="flex items-start gap-3 p-4 hover:bg-slate-800/40 transition-colors duration-200">
       <img 
-        src={comment.user.profileImage} 
-        alt={comment.user.username} 
+        src={getFullImageUrl(comment.user?.profileImage)} 
+        alt={comment.user?.username} 
         className="w-9 h-9 rounded-full object-cover"
       />
       
       <div className="flex-1">
         <div className="flex items-start justify-between">
           <h4 className="font-medium text-white">
-            {comment.user.username}
+            {comment.user?.username || 'Anonim'}
           </h4>
           
           <div className="relative">
@@ -239,7 +240,7 @@ const CommentsPanel = ({
           <div className="absolute bottom-0 left-0 right-0 border-t border-slate-700 bg-slate-900 px-4 py-3">
             <form onSubmit={handleSubmitComment} className="flex items-center gap-2">
               <img 
-                src={user?.profileImage || "https://randomuser.me/api/portraits/lego/1.jpg"} 
+                src={getFullImageUrl(user?.profileImage)} 
                 alt="Profil" 
                 className="w-8 h-8 rounded-full object-cover"
               />

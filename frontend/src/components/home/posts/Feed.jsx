@@ -510,16 +510,18 @@ const Feed = ({ user }) => {
 
   // Gönderi tıklama işleyicisi
   const handlePostClick = (post) => {
+    // Fallback: modal aç
     setSelectedPost(post);
     setShowPostModal(true);
-    console.log('Gönderi tıklandı, modal açılıyor');
+    console.log('Gönderi tıklandı');
   };
 
-  // Yorum butonuna tıklandığında modal açılacak yeni fonksiyon
+  // Yorum butonuna tıklandığında yorum paneli açılacak fonksiyon
   const handleCommentClick = (post) => {
+    // Fallback: modal aç
     setSelectedPost(post);
     setShowPostModal(true);
-    console.log('Yorum butonu tıklandığında modal açılıyor');
+    console.log('Yorum butonu tıklandı');
   };
 
   return (

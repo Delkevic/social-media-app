@@ -41,6 +41,7 @@ import { useAuth } from '../context/AuthContext';
 const getFullImageUrl = (url) => {
   if (!url) return `https://ui-avatars.com/api/?name=U&background=0D1117&color=0AFFD9`;
   if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return `${API_BASE_URL}${url}`;
   return `${API_BASE_URL}/${url}`;
 };
 
@@ -121,7 +122,7 @@ const MessageBubble = ({ message, isCurrentUser }) => {
       {!isCurrentUser && (
         <div className="mr-2 w-8 h-8">
           <img 
-            src={message.senderInfo?.profileImage || `https://ui-avatars.com/api/?name=${message.senderInfo?.username}`} 
+            src={getFullImageUrl(message.senderInfo?.profileImage)} 
             alt="Avatar" 
             className="rounded-full w-8 h-8" 
           />
@@ -158,7 +159,7 @@ const MessageBubble = ({ message, isCurrentUser }) => {
       {isCurrentUser && (
         <div className="ml-2 w-8 h-8">
           <img 
-            src={message.senderInfo?.profileImage || `https://ui-avatars.com/api/?name=${message.senderInfo?.username}`} 
+            src={getFullImageUrl(message.senderInfo?.profileImage)} 
             alt="Avatar" 
             className="rounded-full w-8 h-8" 
           />
@@ -181,7 +182,7 @@ const ConversationItem = ({ conversation, isActive, onClick, currentUserId }) =>
     >
       <div className="relative">
         <img 
-          src={conversation.profileImage || `https://ui-avatars.com/api/?name=${conversation.username}`} 
+          src={getFullImageUrl(conversation.profileImage)} 
           alt={conversation.username} 
           className="w-12 h-12 rounded-full object-cover" 
         />

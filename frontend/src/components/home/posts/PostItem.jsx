@@ -6,7 +6,6 @@ import { formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, X, Trash2, AlertCircle, Bug } from 'lucide-react';
 import { createTestPost } from '../../../services/api';
-import PostShow from '../../profile/postShow';
 
 const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) => {
   // Prop kontrolleri
@@ -31,8 +30,6 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
   const [isLiking, setIsLiking] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
-  const [showPostModal, setShowPostModal] = useState(false);
-  const [selectedPost, setSelectedPost] = useState(null);
   const [likeCount, setLikeCount] = useState(post?.likes || 0);
   const [isLiked, setIsLiked] = useState(post?.liked || false);
   const [commentCount, setCommentCount] = useState(post?.comment_count || post?.comments_count || post?.comments || 0);
@@ -748,19 +745,25 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
 
   // Gönderi modalını açma fonksiyonu
   const handlePostClick = () => {
-    // Görsele tıklandığında modalı aç
-    setShowPostModal(true);
-    setSelectedPost(post);
+    // Parent component'e (Feed) post'u bildir
+    if (onPostClick) {
+      onPostClick(post);
+    }
     console.log('Gönderi tıklandı, modal açılıyor');
   };
 
   // Yorum butonuna tıklandığında modal açılacak fonksiyon
   const handleCommentClick = (e) => {
-    e.preventDefault();
-    e.stopPropagation(); // Event propagation'ı durdur
-    console.log('Yorum butonu tıklandı, modal açılıyor');
-    setSelectedPost(post);
-    setShowPostModal(true);
+    e.preventDefault(); 
+    e.stopPropagation();
+    
+    console.log('PostItem - Yorum butonu tıklandı, modal açılıyor');
+    console.log('Post verisi:', post);
+    
+    // Parent component'e (Feed) post'u bildir
+    if (onPostClick) {
+      onPostClick(post);
+    }
   };
 
   // Gönderi silme işleyicisi - hem normal silme hem de modal üzerinden silme için
@@ -773,8 +776,7 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
       console.log('Gönderi silme yanıtı:', response);
       
       if (response.success) {
-        // Modalı kapat
-        setShowPostModal(false);
+        console.log('Gönderi silindi');
         
         // Parent bileşene silme işlemini bildir
         if (typeof onDelete === 'function') {
@@ -1284,14 +1286,6 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) 
             </div>
           </form>
         </div>
-      )}
-      
-      {/* Post modal */}
-      {showPostModal && (
-        <PostShow
-          post={selectedPost}
-          onClose={() => setShowPostModal(false)}
-        />
       )}
     </div>
   );
