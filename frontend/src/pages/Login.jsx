@@ -1,8 +1,27 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { SparklesCore } from "../components/ui/sparkles";
 import { HoverButton } from "../components/ui/HoverButton";
 import { GlowingEffect } from "../components/ui/GlowingEffect";
+import { useAuth } from "../context/AuthContext";
+import axios from "axios";
+import { toast } from "react-hot-toast";
+import { API_URL } from "../config/constants";
+import { motion, AnimatePresence } from "framer-motion";
+
+// Utility function to convert boolean attributes to strings
+const convertBooleanProps = (props) => {
+  const result = { ...props };
+  const attributesToConvert = ['jsx', 'global'];
+  
+  attributesToConvert.forEach(attr => {
+    if (attr in result && typeof result[attr] === 'boolean') {
+      result[attr] = result[attr].toString();
+    }
+  });
+  
+  return result;
+};
 
 const Login = () => {
   const [identifier, setIdentifier] = useState("");
@@ -12,18 +31,15 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const validateForm = () => {
-    if (!identifier) {
-      setError("E-posta adresi veya kullanıcı adı gereklidir");
+    if (!identifier.trim()) {
+      setError("Lütfen e-posta adresi veya kullanıcı adı girin");
       return false;
     }
     if (!password) {
-      setError("Şifre gereklidir");
-      return false;
-    }
-    if (password.length < 6) {
-      setError("Şifre en az 6 karakter olmalıdır");
+      setError("Lütfen şifrenizi girin");
       return false;
     }
     return true;
@@ -36,75 +52,93 @@ const Login = () => {
       setError("");
 
       try {
-        const response = await fetch("http://localhost:8080/api/login", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ identifier, password }),
+        // Axios ile API isteği gönderelim
+        const response = await axios.post(`${API_URL}/login`, {
+          identifier,
+          password,
         });
 
-        const data = await response.json();
+        const data = response.data;
 
         if (!data.success) {
-          setError(data.message);
+          setError(data.message || "Giriş başarısız oldu");
           setLoading(false);
           return;
         }
 
-        // Token'ı localStorage veya sessionStorage'a kaydet
-        if (rememberMe) {
-          localStorage.setItem("token", data.token);
-          localStorage.setItem("user", JSON.stringify(data.data.user));
-        } else {
-          sessionStorage.setItem("token", data.token);
-          sessionStorage.setItem("user", JSON.stringify(data.data.user));
+        // İki faktörlü doğrulama kontrol et
+        if (data.data && data.data.twoFactorRequired) {
+          // 2FA gerektiren yanıt aldık, doğrulama sayfasına yönlendir
+          setLoading(false);
+          console.log('İki faktörlü doğrulama gerekiyor, yönlendiriliyor...');
+          navigate('/two-factor-verify', { 
+            state: { 
+              email: data.data.email,
+              rememberMe: rememberMe 
+            } 
+          });
+          return;
         }
 
-        // Kullanıcıyı ana sayfaya yönlendir
+        // Normal giriş işlemi (2FA yok)
+        login(data.data.user, data.token, rememberMe);
         setLoading(false);
+        toast.success("Giriş başarılı!");
         navigate("/");
-        console.log("Giriş başarılı:", data);
+        console.log("Giriş başarılı:", data);
       } catch (error) {
-        setError("Sunucu bağlantısı sırasında bir hata oluştu");
+        console.error("Login hatası:", error);
+        
+        if (error.response) {
+          // Sunucudan bir yanıt aldık ama başarısız
+          setError(error.response.data.message || "Kullanıcı adı/şifre hatalı");
+        } else if (error.request) {
+          // İstek gönderildi ama yanıt alınamadı
+          setError("Sunucuya bağlanılamıyor. Lütfen internet bağlantınızı kontrol edin.");
+        } else {
+          // İstek oluşturulurken bir şeyler ters gitti
+          setError("Giriş işlemi sırasında bir hata oluştu");
+        }
+        
         setLoading(false);
       }
     }
   };
 
   return (
-    <div className="min-h-screen relative w-full flex items-center justify-center overflow-hidden">
-      {/* Sparkles arkaplan */}
-      <div className="w-full absolute inset-0 h-screen">
-        <SparklesCore
-          id="loginParticles"
-          background="transparent"
-          minSize={0.6}
-          maxSize={1.4}
-          particleDensity={100}
-          className="w-full h-full"
-          particleColor="#FFFFFF"
-          speed={0.8}
-        />
+    <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-black">
+      {/* Arkaplan - Sparkles */}
+      <div className="absolute inset-0 w-full h-full">
+        {convertBooleanProps({
+          component: <SparklesCore
+            id="loginSparkles"
+            background="transparent"
+            minSize={0.6}
+            maxSize={1.4}
+            particleDensity={100}
+            className="w-full h-full"
+            particleColor="#0affd9"
+            speed={0.3}
+            jsx="true"
+            global="true"
+          />
+        }).component}
       </div>
 
       {/* Radyal gradient maskesi */}
       <div 
-        className="absolute inset-0 w-full h-full bg-slate-950 opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
+        className="absolute inset-0 w-full h-full bg-black opacity-90 [mask-image:radial-gradient(circle_at_center,transparent_25%,black)]"
         style={{ backdropFilter: "blur(3px)" }}
       ></div>
 
       <div className="relative z-10 w-full max-w-lg px-4 py-8">
         <div
-          className="relative rounded-2xl p-8 backdrop-blur-lg"
-          style={{
-            backgroundColor: "rgba(20, 24, 36, 0.7)",
-            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-            border: "1px solid rgba(255, 255, 255, 0.1)"
-          }}
+          className="relative rounded-2xl p-8 backdrop-blur-lg bg-black/70 border border-[#0affd9]/20"
+          style={{ boxShadow: "0 0 25px rgba(10, 255, 217, 0.2)" }} 
         >
-          {/* Kırmızı parlayan efekt */}
+          {/* Turkuaz parlayan efekt */}
           <GlowingEffect
+            color="#0affd9" // Rengi turkuaz yapıldı
             spread={40}
             glow={true}
             disabled={false}
@@ -117,25 +151,20 @@ const Login = () => {
             <h1
               className="text-4xl font-bold inline-block relative tracking-widest text-white"
             >
-              BUZZIFY
+              NEXORA
               <span
-                className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-32 h-0.5 mt-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"
+                className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-32 h-0.5 mt-1 bg-gradient-to-r from-transparent via-[#0affd9] to-transparent"
               ></span>
             </h1>
-            <p className="mt-6 text-blue-100 opacity-80">
-              Hesabınıza Giriş Yapın
+            <p className="mt-6 text-gray-300 opacity-80">
+              Hesabınıza Giriş Yapın
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <div
-                className="p-3 rounded-lg text-sm border text-center"
-                style={{
-                  backgroundColor: "rgba(239, 68, 68, 0.2)",
-                  color: "#ef4444",
-                  borderColor: "rgba(239, 68, 68, 0.5)",
-                }}
+                className="p-3 rounded-lg text-sm border text-center bg-red-900/30 text-red-400 border-red-700/50"
               >
                 {error}
               </div>
@@ -143,13 +172,13 @@ const Login = () => {
 
             <div className="space-y-2">
               <label
-                className="block text-sm font-medium text-blue-100"
+                className="block text-sm font-medium text-gray-300"
               >
                 E-posta Adresi veya Kullanıcı Adı
               </label>
               <div className="relative">
                 <div
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-300"
+                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"
                 >
                   <svg
                     className="w-5 h-5"
@@ -164,7 +193,7 @@ const Login = () => {
                   type="text"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
+                  className="w-full pl-10 pr-4 py-3 rounded-lg bg-black/50 border border-[#0affd9]/30 text-white focus:border-[#0affd9] focus:ring-2 focus:ring-[#0affd9]/50 outline-none"
                   placeholder="ornek@email.com veya kullanıcı_adı"
                   required
                 />
@@ -173,13 +202,13 @@ const Login = () => {
 
             <div className="space-y-2">
               <label
-                className="block text-sm font-medium text-blue-100"
+                className="block text-sm font-medium text-gray-300"
               >
-                Şifre
+                Şifre
               </label>
               <div className="relative">
                 <div
-                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-300"
+                  className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400"
                 >
                   <svg
                     className="w-5 h-5"
@@ -197,14 +226,14 @@ const Login = () => {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 rounded-lg bg-slate-800/50 border border-slate-700 text-white"
+                  className="w-full pl-10 pr-10 py-3 rounded-lg bg-black/50 border border-[#0affd9]/30 text-white focus:border-[#0affd9] focus:ring-2 focus:ring-[#0affd9]/50 outline-none"
                   placeholder="••••••••"
                   autoComplete="current-password"
                   required
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-blue-300 hover:text-blue-100"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-200"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
@@ -228,10 +257,10 @@ const Login = () => {
                     >
                       <path
                         fillRule="evenodd"
-                        d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z"
+                        d="M13.477 14.89A6 6 0 015.11 6.523l8.367 8.367zm1.414-1.414L6.523 5.11A6 6 0 0114.89 13.477zM18.272 10C17.23 6.246 13.92 4 10 4a6.98 6.98 0 00-3.633.994L10 8.586l3.633 3.633A6.98 6.98 0 0018.272 10zM4.728 10a6.98 6.98 0 003.633 4.006L10 11.414 6.367 7.781A6.98 6.98 0 004.728 10z"
                         clipRule="evenodd"
                       ></path>
-                      <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z"></path>
+                      <path d="M10 18a8 8 0 100-16 8 8 0 000 16z"></path>
                     </svg>
                   )}
                 </button>
@@ -241,80 +270,50 @@ const Login = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input
-                  id="remember"
+                  id="remember-me"
+                  name="remember-me"
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded bg-slate-800 border-slate-600 text-blue-500"
+                  className="h-4 w-4 rounded border-gray-600 text-[#0affd9] focus:ring-[#0affd9]/50 bg-black/50"
                 />
                 <label
-                  htmlFor="remember"
-                  className="ml-2 text-sm text-blue-100"
+                  htmlFor="remember-me"
+                  className="ml-2 block text-sm text-gray-400"
                 >
                   Beni Hatırla
                 </label>
               </div>
-              <Link
-                to="/forgot-password"
-                className="text-sm font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
-              >
-                Şifremi Unuttum
-                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
-              </Link>
+
+              <div className="text-sm">
+                <Link
+                  to="/forgot-password"
+                  className="font-medium text-[#0affd9] hover:text-[#0affd9]/80"
+                >
+                  Şifreni mi unuttun?
+                </Link>
+              </div>
             </div>
 
-            {/* HoverButton kullanımı */}
-            <HoverButton
-              type="submit"
-              disabled={loading}
-              className="w-full flex items-center justify-center"
-              style={{
-                "--circle-start": "#3b82f6", 
-                "--circle-end": "#1e40af"
-              }}
-            >
-              {loading ? (
-                <>
-                  <svg
-                    className="animate-spin -ml-1 mr-2 h-5 w-5"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Giriş Yapılıyor...
-                </>
-              ) : (
-                "Giriş Yap"
-              )}
-            </HoverButton>
-
-            <div className="text-center mt-4">
-              <p className="text-blue-100">
-                Hesabınız yok mu?{" "}
-                <Link
-                  to="/register"
-                  className="font-medium text-blue-400 hover:text-blue-300 hover:underline relative inline-block"
-                >
-                  Kayıt Ol
-                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></span>
-                </Link>
-              </p>
+            {/* Giriş Yap Butonu Div'i */}
+            <div className="flex justify-center">
+              <HoverButton type="submit" disabled={loading}>
+                {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
+              </HoverButton>
             </div>
           </form>
+
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-400">
+              Hesabınız yok mu?
+              <Link 
+                to="/register" 
+                className="font-medium text-[#0affd9] hover:text-[#0affd9]/80 ml-1"
+              >
+                Kayıt Ol
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>

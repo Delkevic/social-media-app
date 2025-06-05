@@ -2,96 +2,61 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GlowingEffect } from '../../components/ui/GlowingEffect';
 import { HoverButton } from '../../components/ui/HoverButton';
-import { MagnetizeButton } from '../../components/ui/MagnetizeButton';
 import api from '../../services/api';
-import UserProfileCard from './profile/UserProfileCard';
-import NavigationLinks from './navigation/ NavigationLinks';
+import MiniReelsPlayer from '../../components/profile/MiniReelsPlayer';
 
 const RightPanel = ({ user, isProfilePage = false }) => {
   const navigate = useNavigate();
-  const [profileStats, setProfileStats] = useState({
-    postCount: 0,
-    followerCount: 0,
-    followingCount: 0
-  });
+  const [exploreReels, setExploreReels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  useEffect(() => {
-    // Sadece profil sayfasında değilsek ve kullanıcı varsa profil istatistiklerini getir
-    if (!isProfilePage && user) {
-      const fetchUserProfile = async () => {
-        try {
-          setLoading(true);
-          setError(null);
-          
-          const response = await api.user.getProfile();
-          
-          if (response.success && response.data && response.data.user) {
-            // Profil istatistiklerini ayarla
-            setProfileStats({
-              postCount: response.data.user.postCount || 0,
-              followerCount: response.data.user.followerCount || 0,
-              followingCount: response.data.user.followingCount || 0
-            });
-          }
-        } catch (err) {
-          setError('Profil bilgileri yüklenirken bir hata oluştu: ' + err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
+  // Keşfet Reels verilerini getiren fonksiyon
+  const fetchExploreReels = async () => {
+    try {
+      setLoading(true);
+      setError(null);
       
-      fetchUserProfile();
+      const response = await fetch(
+        `http://localhost:8080/api/reels/explore`, 
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token')}`,
+          },
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        setExploreReels(data.data);
+      } else {
+        setError('Reels verileri yüklenirken bir hata oluştu.');
+      }
+    } catch (err) {
+      setError('Reels verileri yüklenirken bir hata oluştu: ' + err.message);
+    } finally {
+      setLoading(false);
     }
-  }, [user, isProfilePage]);
-  
-  const handleLogout = () => {
-    // Çıkış işlemi
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('user');
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
   };
+  
+  useEffect(() => {
+    fetchExploreReels();
+  }, []);
   
   return (
     <div className="space-y-4">
       {/* Hata mesajı */}
       {error && (
         <div 
-          className="p-3 rounded-lg text-sm border text-center"
-          style={{
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            color: 'var(--accent-red)',
-            borderColor: 'var(--accent-red)',
-          }}
+          className="p-3 rounded-lg text-sm border border-red-600 bg-red-600/10 text-red-400 text-center"
         >
           {error}
         </div>
       )}
       
-      {/* Kullanıcı Profil Kartı - Sadece profil sayfasında değilse göster */}
-      {!isProfilePage && (
-        <div className="relative rounded-2xl overflow-hidden">
-          <GlowingEffect
-            spread={40}
-            glow={true}
-            disabled={false}
-            proximity={64}
-            inactiveZone={0.01}
-            borderWidth={2}
-          />
-          <UserProfileCard
-            user={user}
-            stats={profileStats}
-            loading={loading}
-          />
-        </div>
-      )}
-      
-      {/* Navigasyon Bağlantıları */}
-      <div className="relative rounded-2xl overflow-hidden">
+      {/* Mini Reels Oynatıcı */}
+      <div className="relative rounded-2xl overflow-hidden border border-[#0affd9]/20 bg-black/50 backdrop-blur-lg">
         <GlowingEffect
           spread={40}
           glow={true}
@@ -100,20 +65,15 @@ const RightPanel = ({ user, isProfilePage = false }) => {
           inactiveZone={0.01}
           borderWidth={2}
         />
-        <div 
-          className="rounded-2xl p-4 backdrop-blur-lg"
-          style={{
-            backgroundColor: "rgba(20, 24, 36, 0.7)",
-            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-            border: "1px solid rgba(255, 255, 255, 0.1)"
-          }}
-        >
-          <NavigationLinks />
-        </div>
+        <MiniReelsPlayer 
+          reels={exploreReels} 
+          user={user} 
+          isExploreMode={true}
+        />
       </div>
       
-      {/* Reels Bölümü - MagnetizeButton ile güncellendi */}
-      <div className="relative rounded-2xl overflow-hidden">
+      {/* Reels Bölümü - HoverButton ile güncellendi */}
+      <div className="relative rounded-2xl overflow-hidden border border-[#0affd9]/20 bg-black/50 backdrop-blur-lg">
         <GlowingEffect
           spread={40}
           glow={true}
@@ -122,23 +82,15 @@ const RightPanel = ({ user, isProfilePage = false }) => {
           inactiveZone={0.01}
           borderWidth={2}
         />
-        <div 
-          className="rounded-2xl p-4 backdrop-blur-lg"
-          style={{
-            backgroundColor: "rgba(20, 24, 36, 0.7)",
-            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-            border: "1px solid rgba(255, 255, 255, 0.1)"
-          }}
-        >
-          <MagnetizeButton
+        <div className="p-4">
+          <HoverButton
             onClick={() => navigate('/reels')}
             className="w-full flex items-center justify-center"
-            particleCount={14}
-            attractRadius={50}
+            color="#0affd9"
           >
-            <span className="flex items-center justify-center">
+            <span className="flex items-center justify-center text-white">
               <svg 
-                className="w-5 h-5 mr-2" 
+                className="w-5 h-5 mr-2 text-[#0affd9]"
                 fill="currentColor" 
                 viewBox="0 0 24 24" 
                 xmlns="http://www.w3.org/2000/svg"
@@ -147,45 +99,6 @@ const RightPanel = ({ user, isProfilePage = false }) => {
               </svg>
               Reels
             </span>
-          </MagnetizeButton>
-        </div>
-      </div>
-      
-      {/* Çıkış Butonu */}
-      <div className="relative rounded-2xl overflow-hidden">
-        <GlowingEffect
-          spread={40}
-          glow={true}
-          disabled={false}
-          proximity={64}
-          inactiveZone={0.01}
-          borderWidth={2}
-        />
-        <div
-          className="rounded-2xl p-4 backdrop-blur-lg"
-          style={{
-            backgroundColor: "rgba(20, 24, 36, 0.7)",
-            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-            border: "1px solid rgba(255, 255, 255, 0.1)"
-          }}
-        >
-          <HoverButton
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center"
-            style={{
-              "--circle-start": "#3b82f6", 
-              "--circle-end": "#1e40af"
-            }}
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              ></path>
-            </svg>
-            Çıkış Yap
           </HoverButton>
         </div>
       </div>

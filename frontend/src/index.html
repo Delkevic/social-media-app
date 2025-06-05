@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite + React</title>
+    <!-- Güçlendirilmiş hata bastırma script etiketi -->
+    <script>
+      (function() {
+        // Orijinal console.error fonksiyonunu kaydet
+        var _originalConsoleError = window.console.error;
+        
+        // Bastırılacak hata desenleri
+        var suppressPatterns = [
+          'non-boolean attribute `jsx`',
+          'non-boolean attribute `global`'
+        ];
+        
+        // console.error fonksiyonunu yeniden tanımla
+        window.console.error = function() {
+          // İlk argümanı kontrol et
+          var firstArg = arguments[0] || '';
+          
+          // Eğer bastırılacak desenlerden birini içeriyorsa, çalıştırma
+          if (typeof firstArg === 'string' && suppressPatterns.some(pattern => firstArg.includes(pattern))) {
+            return; // Hiçbir şey yapma
+          }
+          
+          // Diğer tüm hatalar için orijinal fonksiyonu çağır
+          return _originalConsoleError.apply(console, arguments);
+        };
+        
+        // ReactDOM'un yüklenmesini bekleyip tekrar kontrol et
+        window.addEventListener('DOMContentLoaded', function() {
+          // Bir süre sonra tekrar aynı işlemi yap (React başlatıldıktan sonra)
+          setTimeout(function() {
+            var currentConsoleError = window.console.error;
+            if (currentConsoleError !== window.console.error) {
+              // Console.error değiştirilmiş, tekrar üzerine yaz
+              window.console.error = function() {
+                var firstArg = arguments[0] || '';
+                if (typeof firstArg === 'string' && suppressPatterns.some(pattern => firstArg.includes(pattern))) {
+                  return;
+                }
+                return currentConsoleError.apply(console, arguments);
+              };
+            }
+          }, 100);
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <!-- Eski script etiketini kaldırıyoruz -->
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html> 

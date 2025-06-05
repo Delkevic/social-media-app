@@ -1,51 +1,32 @@
 import React from 'react';
 import PostItem from './PostItem';
 
-const PostList = ({ posts, onLike, onSave, onDelete, currentUser }) => {
-  if (posts.length === 0) {
+const PostList = ({ posts, onLike, onSave, onDelete, currentUser, onPostClick }) => {
+  if (!posts || posts.length === 0) {
     return (
-      <div 
-        className="rounded-2xl p-8 text-center"
-        style={{
-          backgroundColor: 'var(--background-card)',
-          backdropFilter: 'var(--backdrop-blur)',
-          boxShadow: 'var(--shadow-lg)',
-        }}
-      >
-        <svg 
-          className="w-16 h-16 mx-auto mb-4"
-          fill="currentColor"
-          viewBox="0 0 20 20"
-          xmlns="http://www.w3.org/2000/svg"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          <path
-            fillRule="evenodd"
-            d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 002 2H4a2 2 0 01-2-2V5zm3 1h6v4H5V6zm6 6H5v2h6v-2z"
-            clipRule="evenodd"
-          ></path>
-          <path d="M15 7h1a2 2 0 012 2v5.5a1.5 1.5 0 01-3 0V7z"></path>
-        </svg>
-        <h3 className="text-lg font-medium" style={{ color: 'var(--text-primary)' }}>
-          Henüz gönderi yok
-        </h3>
-        <p className="mt-2" style={{ color: 'var(--text-tertiary)' }}>
-          İlk gönderiyi paylaşan sen ol!
-        </p>
+      <div className="text-center py-8">
+        <div className="w-16 h-16 rounded-full bg-[#0affd9]/10 flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-[#0affd9]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-medium text-white">Henüz gönderi yok</h3>
+        <p className="mt-2 text-gray-400">Takip ettiğin kişiler gönderi paylaştıklarında burada görünecek</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {posts.map(post => (
-        <PostItem
-          key={post.id}
-          post={post}
-          onLike={onLike}
-          onSave={onSave}
+        <PostItem 
+          key={post.id} 
+          post={post} 
+          onLike={onLike} 
+          onSave={onSave} 
           onDelete={onDelete}
           currentUser={currentUser}
+          onPostClick={onPostClick}
         />
       ))}
     </div>

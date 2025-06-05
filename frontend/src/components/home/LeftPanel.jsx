@@ -1,187 +1,256 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Home, Search, Compass, Clapperboard, MessageCircle, Heart, User, Settings, LogOut, SquarePen } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext'; // AuthContext yolunu kontrol edin
+import { useNotification } from '../../context/NotificationContext'; // useNotification hook'unu ekliyoruz
 import { GlowingEffect } from '../../components/ui/GlowingEffect';
-import NotificationList from './notifications/NotificationList';
-import MessageList from './messages/MessageList';
-import NavigationLinks from './navigation/ NavigationLinks';
+import NavigationLinks from './navigation/NavigationLinks';
+import CreatePostForm from './posts/CreatePostForm';
+import { toast } from 'react-hot-toast';
 import api from '../../services/api';
 
-const LeftPanel = ({ user }) => {
-  const [activeTab, setActiveTab] = useState('notifications');
-  const [notifications, setNotifications] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const LeftPanel = ({ showMessagesAndNotifications = true, onPostFormToggle }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const { togglePanel: toggleNotificationPanel } = useNotification(); // Notification hook'undan togglePanel'i alıyoruz
+  const [showCreatePostModal, setShowCreatePostModal] = useState(false);
+  const [isCreatingPost, setIsCreatingPost] = useState(false);
+  const [latestGeminiResponse, setLatestGeminiResponse] = useState(null);
+  
+  const isActive = (path) => location.pathname === path;
 
-  useEffect(() => {
-    // Aktif sekmeye göre veri yükle
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        if (activeTab === 'notifications') {
-          const response = await api.notifications.getAll();
-          setNotifications(response.data.notifications || []);
-        } else if (activeTab === 'messages') {
-          const response = await api.messages.getConversations();
-          setMessages(response.data.conversations || []);
+  // Search butonuna tıklandığında Home sayfasındaki search'e odaklanma fonksiyonu
+  const handleSearchClick = () => {
+    // Eğer Home sayfasında değilsek, Home'a git
+    if (location.pathname !== '/') {
+      navigate('/');
+      // Sayfa yüklendikten sonra search input'una odaklan
+      setTimeout(() => {
+        const searchInput = document.querySelector('input[placeholder*="ara"]') || 
+                           document.querySelector('input[placeholder*="Ara"]') ||
+                           document.querySelector('input[type="search"]');
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-      } catch (err) {
-        setError($`{activeTab === 'notifications' ? 'Bildirimler' : 'Mesajlar'} yüklenirken bir hata oluştu: ${err.message}`);
-      } finally {
-        setLoading(false);
+      }, 500);
+    } else {
+      // Zaten Home sayfasındaysak, search input'una odaklan
+      const searchInput = document.querySelector('input[placeholder*="ara"]') || 
+                         document.querySelector('input[placeholder*="Ara"]') ||
+                         document.querySelector('input[type="search"]');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-    };
-    
-    fetchData();
-  }, [activeTab]);
+    }
+  };
 
-  const handleMarkNotificationAsRead = async (notificationId) => {
+  const menuItems = [
+    { icon: Home, text: 'Ana Sayfa', path: '/' },
+    { icon: Search, text: 'Ara', onClick: handleSearchClick },
+    { icon: Compass, text: 'Keşfet', path: '/explore' },
+    { icon: Clapperboard, text: 'Reels', path: '/reels' },
+    { icon: MessageCircle, text: 'Mesajlar', path: '/messages', show: showMessagesAndNotifications },
+    { icon: Heart, text: 'Bildirimler', onClick: toggleNotificationPanel, show: showMessagesAndNotifications },
+    { icon: User, text: 'Profil', path: `/profile/${user?.username}` }, // Kullanıcı adını dinamik olarak al
+  ];
+
+  const bottomMenuItems = [
+    { icon: Settings, text: 'Ayarlar', path: '/settings' },
+    { icon: LogOut, text: 'Çıkış Yap', onClick: logout }, // Çıkış yapma fonksiyonunu onClick ile bağla
+  ];
+  
+  // Post oluşturma için tıklama işleyicisi
+  const handleCreatePostClick = () => {
+    // Ana Sayfa'da değilsek, Ana Sayfa'ya yönlendir
+    if (location.pathname !== '/') {
+      window.location.href = '/';
+      // Local Storage'a bir flag koy, sayfa yüklendiğinde post formunu açmak için
+      localStorage.setItem('openPostForm', 'true');
+      return;
+    }
+    
+    // Ana Sayfa'da isek, özel callback'i çağır
+    if (onPostFormToggle) {
+      onPostFormToggle(true);
+    } else {
+      // Callback yoksa, modal'ı göster
+      setShowCreatePostModal(true);
+    }
+  };
+  
+  // Reel oluşturma için tıklama işleyicisi
+  const handleCreateReelClick = () => {
+    // Reels sayfasında değilsek, Reels sayfasına yönlendir
+    if (location.pathname !== '/reels') {
+      window.location.href = '/reels';
+      // Local Storage'a bir flag koy, sayfa yüklendiğinde reel oluşturma modalını açmak için
+      localStorage.setItem('openReelUploader', 'true');
+      return;
+    }
+    
+    // Reels sayfasında isek, Reel oluşturma modalını tetikle
+    // Bu, Reels.jsx sayfasındaki video yükleme butonunu tetikler
+    document.querySelector('#reels-upload-button')?.click();
+  };
+  
+  // Post gönderme işlemi
+  const handleSubmitPost = async (postData) => {
     try {
-      // Optimistik güncelleme
-      setNotifications(prevNotifications => 
-        prevNotifications.map(notification => 
-          notification.id === notificationId 
-            ? { ...notification, isRead: true } 
-            : notification
-        )
-      );
+      setIsCreatingPost(true);
       
-      // API çağrısı
-      await api.notifications.markAsRead(notificationId);
+      console.log('Post oluşturma isteği gönderiliyor:', postData);
+      // API'ye gönderi oluşturma isteği gönder
+      const response = await api.posts.create(postData);
+      console.log('Post oluşturma cevabı:', response);
+      
+      if (response.success) {
+        // Formu kapat
+        setShowCreatePostModal(false);
+        
+        // Gemini yanıtını sakla
+        if (postData.geminiResponse) {
+          setLatestGeminiResponse(postData.geminiResponse);
+          // Yanıtı localStorage'a da kaydedelim
+          localStorage.setItem('latestGeminiResponse', postData.geminiResponse);
+          console.log("Gemini etiketleri kaydedildi:", postData.geminiResponse);
+        }
+        
+        // Başarı mesajı göster
+        toast.success('Gönderi başarıyla oluşturuldu!');
+        
+        // Sayfayı yenileyelim ki yeni post görünsün
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        toast.error('Gönderi oluşturulamadı: ' + (response.message || 'Bilinmeyen hata'));
+      }
     } catch (err) {
-      // Hata durumunda geri al
-      setNotifications(prevNotifications => 
-        prevNotifications.map(notification => 
-          notification.id === notificationId 
-            ? { ...notification, isRead: false } 
-            : notification
-        )
-      );
-      
-      setError('Bildirim işaretlenirken bir hata oluştu: ' + err.message);
+      console.error('Post oluşturma hatası:', err);
+      toast.error('Gönderi oluşturulurken bir hata oluştu: ' + err.message);
+    } finally {
+      setIsCreatingPost(false);
     }
   };
 
   return (
-    <div className="space-y-4">
-      {/* Bildirimler ve Mesajlar Paneli */}
-      <div className="relative rounded-2xl overflow-hidden">
-        <GlowingEffect
-          spread={40}
-          glow={true}
-          disabled={false}
-          proximity={64}
-          inactiveZone={0.01}
-          borderWidth={2}
-        />
-        <div 
-          className="rounded-2xl overflow-hidden backdrop-blur-lg"
-          style={{
-            backgroundColor: "rgba(20, 24, 36, 0.7)",
-            boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-            border: "1px solid rgba(255, 255, 255, 0.1)"
-          }}
-        >
-          {/* Tab Başlıkları */}
-          <div className="flex border-b" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
-            <button
-              className={`flex-1 py-3 text-center font-medium transition-colors ${
-                activeTab === 'notifications' 
-                  ? 'border-b-2' 
-                  : 'opacity-70'
-              }`}
-              style={{ 
-                borderColor: activeTab === 'notifications' ? '#3b82f6' : 'transparent',
-                color: 'white' 
-              }}
-              onClick={() => setActiveTab('notifications')}
-            >
-              Bildirimler
-              {notifications.filter(n => !n.isRead).length > 0 && (
-                <span 
-                  className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs rounded-full"
-                  style={{ backgroundColor: '#3b82f6', color: 'white' }}
+    <div className="flex flex-col h-full justify-between text-white">
+      <div>
+        {/* Logo veya Başlık */}
+        <div className="mb-8 p-2">
+          <Link to="/" className="text-2xl font-bold text-[#0affd9]">
+            Nexora
+          </Link>
+      </div>
+
+        {/* Ana Menü Öğeleri */}
+        <nav className="flex flex-col space-y-2">
+          {menuItems.map((item) => (
+            item.show !== false && (
+              item.onClick ? (
+                // onClick prop'u varsa, Link yerine button kullan
+                <button
+                  key={item.text}
+                  onClick={item.onClick}
+                  className={`flex items-center px-3 py-2 rounded-lg transition-colors text-left w-full 
+                    ${isActive(item.path) ? 'bg-[#0affd9]/20 text-[#0affd9]' : 'hover:bg-black/70'}`}
                 >
-                  {notifications.filter(n => !n.isRead).length}
-                </span>
-              )}
-            </button>
-            
-            <button
-              className={`flex-1 py-3 text-center font-medium transition-colors ${
-                activeTab === 'messages' 
-                  ? 'border-b-2' 
-                  : 'opacity-70'
-              }`}
-              style={{ 
-                borderColor: activeTab === 'messages' ? '#3b82f6' : 'transparent',
-                color: 'white' 
-              }}
-              onClick={() => setActiveTab('messages')}
-            >
-              Mesajlar
-              {messages.filter(m => m.unread).length > 0 && (
-                <span 
-                  className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs rounded-full"
-                  style={{ backgroundColor: '#3b82f6', color: 'white' }}
+                  <item.icon className="h-5 w-5 mr-3" />
+                  <span>{item.text}</span>
+                </button>
+              ) : (
+                // Normal Link kullan
+                <Link
+                  key={item.text}
+                  to={item.path}
+                  className={`flex items-center px-3 py-2 rounded-lg transition-colors ${
+                    isActive(item.path)
+                      ? 'bg-[#0affd9]/20 text-[#0affd9]'
+                      : 'hover:bg-black/70'
+                  }`}
                 >
-                  {messages.filter(m => m.unread).length}
-                </span>
-              )}
-            </button>
-          </div>
-          
-          {/* Hata mesajı */}
-          {error && (
-            <div 
-              className="p-3 m-4 rounded-lg text-sm border text-center"
-              style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                color: '#ef4444',
-                borderColor: '#ef4444',
-              }}
-            >
-              {error}
-            </div>
-          )}
-          
-          {/* Tab İçeriği */}
-          <div className="p-4">
-            {loading ? (
-              <div className="flex justify-center py-6">
-                <div className="animate-spin h-6 w-6 border-2 rounded-full border-blue-500 border-t-transparent"></div>
-              </div>
-            ) : (
-              <>
-                {activeTab === 'notifications' && (
-                  <NotificationList 
-                    notifications={notifications}
-                    onMarkAsRead={handleMarkNotificationAsRead}
-                  />
-                )}
-                
-                {activeTab === 'messages' && (
-                  <MessageList messages={messages} />
-                )}
-              </>
-            )}
-          </div>
+                  <item.icon className="h-5 w-5 mr-3" />
+                  <span>{item.text}</span>
+                </Link>
+              )
+            )
+          ))}
+        </nav>
+        
+        {/* Oluştur Butonları */}
+        <div className="mt-6 pt-4 border-t border-[#0affd9]/20"> {/* Çizgi opaklığı artırıldı */}
+          <h4 className="text-xs font-semibold text-gray-400 uppercase mb-3 px-3">Oluştur</h4>
+          <button 
+            className="flex items-center w-full px-3 py-2 rounded-lg transition-colors hover:bg-black/70"
+            onClick={handleCreatePostClick}
+          >
+            <SquarePen className="h-5 w-5 mr-3 text-[#0affd9]" />
+            <span>Post Paylaş</span>
+          </button>
+          <button 
+            onClick={handleCreateReelClick}
+            className="flex items-center w-full px-3 py-2 rounded-lg transition-colors hover:bg-black/70 mt-1"
+          >
+            <Clapperboard className="h-5 w-5 mr-3 text-[#0affd9]" />
+            <span>Reel Paylaş</span>
+          </button>
         </div>
       </div>
-      
-      {/* Hızlı Erişim Bölümü - NavigationLinks */}
-      <div className="relative rounded-2xl overflow-hidden">
-        <GlowingEffect
-          spread={40}
-          glow={true}
-          disabled={false}
-          proximity={64}
-          inactiveZone={0.01}
-          borderWidth={2}
-        />
-        <NavigationLinks />
+
+      {/* Alt Menü Öğeleri (Ayarlar, Çıkış Yap) */}
+      <div className="mt-auto pt-4 border-t border-[#0affd9]/20"> {/* Çizgi opaklığı artırıldı */}
+        {bottomMenuItems.map((item) => (
+          <Link
+            key={item.text}
+            to={item.onClick ? '#' : item.path} // onClick varsa path'i yok say
+            onClick={item.onClick} // onClick olayını doğrudan elemana ata
+            className={`flex items-center px-3 py-2 rounded-lg transition-colors ${
+              isActive(item.path)
+                ? 'bg-[#0affd9]/20 text-[#0affd9]'
+                : 'hover:bg-black/70'
+            }`}
+          >
+            <item.icon className="h-5 w-5 mr-3" />
+            <span>{item.text}</span>
+          </Link>
+        ))}
       </div>
+      
+      {/* Post Oluşturma Modalı */}
+      {showCreatePostModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div 
+            className="bg-black/90 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-[#0affd9]/40 animate-fadeIn"
+            style={{
+              boxShadow: "0 0 30px rgba(10, 255, 217, 0.3)"
+            }}
+          >
+            {/* Modal Başlık */}
+            <div className="bg-gradient-to-r from-[#0affd9]/20 to-black border-b border-[#0affd9]/30 p-4 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-[#0affd9]">Gönderi Oluştur</h3>
+              <button 
+                onClick={() => setShowCreatePostModal(false)}
+                className="text-gray-400 hover:text-[#0affd9] transition-colors p-1.5 rounded-full hover:bg-[#0affd9]/10"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Form İçeriği */}
+            <div className="p-5">
+              <CreatePostForm 
+                onSubmit={handleSubmitPost} 
+                onCancel={() => setShowCreatePostModal(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

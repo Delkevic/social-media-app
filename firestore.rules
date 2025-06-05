@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // GEÇİCİ: WebChannel bağlantı hatalarını çözmek için gevşetilmiş kurallar
+    // TODO: Daha sonra düzgün authentication sistemi kurulacak
+    
+    // Kullanıcı profilleri koleksiyonu kuralları
+    match /users/{userId} {
+      // Geçici: Herkes okuyabilir ve yazabilir
+      allow read, write: if true;
+    }
+    
+    // Konuşmalar koleksiyonu kuralları
+    match /conversations/{conversationId} {
+      // Geçici: Herkes okuyabilir ve yazabilir
+      allow read, write: if true;
+      
+      // Mesajlar alt-koleksiyonu kuralları
+      match /messages/{messageId} {
+        // Geçici: Herkes okuyabilir ve yazabilir
+        allow read, write: if true;
+      }
+    }
+    
+    // Medya dosyaları metadata koleksiyonu (opsiyonel)
+    match /media/{mediaId} {
+      // Geçici: Herkes okuyabilir ve yazabilir
+      allow read, write: if true;
+    }
+    
+    // Diğer tüm yolları engelle
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 

@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../../services/api';
+import { API_BASE_URL, DEFAULT_PLACEHOLDER_IMAGE, DEFAULT_AVATAR_URL } from '../../../config/constants';
+import { formatDistanceToNow } from 'date-fns';
+import { tr } from 'date-fns/locale';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, X, Trash2, AlertCircle, Bug } from 'lucide-react';
+import { createTestPost } from '../../../services/api';
 
-const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
+const PostItem = ({ post, onLike, onSave, onDelete, currentUser, onPostClick }) => {
   // Prop kontrolleri
   if (!post) {
     console.error('PostItem: post prop\'u gerekli');
@@ -24,8 +29,67 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isLiking, setIsLiking] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  const [likeCount, setLikeCount] = useState(post?.likes || 0);
+  const [isLiked, setIsLiked] = useState(post?.liked || false);
+  const [commentCount, setCommentCount] = useState(post?.comment_count || post?.comments_count || post?.comments || 0);
+  const [showGeminiResponse, setShowGeminiResponse] = useState(false);
+  const geminiResponse = localStorage.getItem('latestGeminiResponse');
 
-  // Yorumlar gösterildiğinde yükleme yap
+  // Debug mod için Shift tuş basımı dinleyicisi
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Shift') {
+        setShowDebug(true);
+      }
+    };
+    
+    const handleKeyUp = (e) => {
+      if (e.key === 'Shift') {
+        setShowDebug(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Test post oluşturma fonksiyonu
+  const handleCreateTestPost = async () => {
+    try {
+      const result = await createTestPost();
+      if (result.success) {
+        alert(`Test gönderi oluşturuldu! ID: ${result.data.id || result.data.ID}`);
+        window.location.reload(); // Sayfayı yenile
+      } else {
+        alert(`Hata: ${result.message}`);
+      }
+    } catch (error) {
+      alert(`İşlem hatası: ${error.message}`);
+    }
+  };
+
+  // Sayfa yüklendiğinde ve post değiştiğinde yorumları otomatik yükle
+  useEffect(() => {
+    // Sayfa yüklendiğinde yorumları otomatik olarak yükle
+    if (post && post.id) {
+      console.log('Yorumlar yükleniyor, post ID:', post.id);
+      fetchComments();
+    }
+    
+    // Komponent temizlendiğinde state'i sıfırla
+    return () => {
+      setComments([]);
+      setLoadingComments(false);
+      setError(null);
+    };
+  }, [post?.id]); // post.id değiştiğinde tetiklenecek
+
   useEffect(() => {
     if (showComments && comments.length === 0) {
       fetchComments();
@@ -39,37 +103,87 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
       setLoadingComments(true);
       setError(null);
       
+      console.log('Yorumlar API isteği başlatılıyor, post ID:', post.id);
+      
+      // Post ID'yi güvenli şekilde işle
+      let safePostId;
+      if (typeof post.id === 'string') {
+        if (/^\d+$/.test(post.id)) {
+          safePostId = parseInt(post.id, 10);
+        } else {
+          safePostId = post.id;
+        }
+      } else {
+        safePostId = post.id;
+      }
+      
       // API'den yorumları getir
-      const response = await api.posts.getComments(post.id);
+      const response = await api.posts.getComments(safePostId);
+      
+      console.log('Yorumlar API yanıtı:', response);
+      
+      // Post verisini kontrol et
+      if (post && post.id) {
+        console.log("Post görselleri:", {
+          imageUrls: post.imageUrls,
+          images: post.images, 
+          media: post.media,
+          image: post.image
+        });
+      }
+      
       if (response.success) {
         // Yorum verilerini normalize et
-        const normalizedComments = (response.data.comments || []).map(comment => ({
-          ...comment,
-          id: comment.ID,
-          createdAt: comment.CreatedAt,
-          updatedAt: comment.UpdatedAt,
-          deletedAt: comment.DeletedAt,
-          content: comment.content,
-          user: comment.user,
-          isLiked: comment.isLiked || false,
-          likeCount: comment.likeCount || 0,
-          replies: Array.isArray(comment.replies) ? comment.replies.map(reply => ({
-            ...reply,
-            id: reply.ID,
-            createdAt: reply.CreatedAt,
-            updatedAt: reply.UpdatedAt,
-            deletedAt: reply.DeletedAt,
-            isLiked: reply.isLiked || false,
-            likeCount: reply.likeCount || 0
-          })) : []
-        }));
+        const normalizedComments = (response.data.comments || []).map(comment => {
+          // Ana yorumu normalize et
+          const normalizedComment = {
+            ...comment,
+            id: comment.ID || comment.id,
+            createdAt: comment.CreatedAt || comment.createdAt,
+            updatedAt: comment.UpdatedAt || comment.updatedAt, 
+            deletedAt: comment.DeletedAt || comment.deletedAt,
+            content: comment.Content || comment.content,
+            user: comment.User || comment.user,
+            isLiked: comment.isLiked || false,
+            likeCount: comment.likeCount || 0
+          };
+          
+          // Yanıtları normalize et
+          if (comment.replies && Array.isArray(comment.replies)) {
+            normalizedComment.replies = comment.replies.map(reply => ({
+              ...reply,
+              id: reply.ID || reply.id,
+              createdAt: reply.CreatedAt || reply.createdAt,
+              updatedAt: reply.UpdatedAt || reply.updatedAt,
+              deletedAt: reply.DeletedAt || reply.deletedAt,
+              content: reply.Content || reply.content,
+              user: reply.User || reply.user,
+              isLiked: reply.isLiked || false,
+              likeCount: reply.likeCount || 0
+            }));
+          } else {
+            normalizedComment.replies = [];
+          }
+          
+          return normalizedComment;
+        });
+        
+        console.log('Normalize edilmiş yorumlar:', normalizedComments);
         setComments(normalizedComments);
+      } else {
+        throw new Error(response.message || 'Yorumlar alınamadı');
       }
       
       setLoadingComments(false);
     } catch (err) {
-      setError('Yorumlar yüklenirken bir hata oluştu: ' + err.message);
+      console.error('Yorumlar yüklenirken hata:', err, 'Post ID:', post.id);
+      setError('Yorumlar yüklenirken bir hata oluştu: ' + err.message);
       setLoadingComments(false);
+      
+      // Token hatası varsa oturumu temizle
+      if (err.message?.includes('token') || err.message?.includes('oturum')) {
+        console.error('Token hatası tespit edildi, yeniden giriş gerekebilir');
+      }
     }
   };
 
@@ -77,83 +191,352 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
     if (isLiking) return;
     setIsLiking(true);
     
+    // Şu anki beğeni durumunu al
+    const currentLikedState = isLiked;
+    const currentLikeCount = likeCount;
+    
+    // State'i optimistik olarak güncelle
+    setIsLiked(!currentLikedState);
+    const newLikeCount = currentLikedState ? Math.max(1, currentLikeCount) - 1 : currentLikeCount + 1;
+    setLikeCount(newLikeCount);
+    
+    // Gönderi nesnesini hemen güncelle (üst bileşenler için)
+    post.liked = !currentLikedState;
+    post.isLiked = !currentLikedState; // İsim uyumluluğu için
+    
+    post.likes = newLikeCount;
+    post.likeCount = newLikeCount;  // İsim uyumluluğu için
+    
+    // Eğer onLike prop'u varsa, parent bileşene değişikliği bildir
+    if (onLike) {
+      onLike(post.id);
+    }
+    
     try {
-      await onLike(post.id);
+      // Sunucuya istek gönder
+      const response = currentLikedState 
+        ? await api.posts.unlike(post.id) 
+        : await api.posts.like(post.id);
+      
+      console.log(`Post ${post.id} beğeni API yanıtı:`, response);
+      
+      let serverLikeCount = null;
+      let serverLikedStatus = null;
+      
+      // API yanıt değerlendirmesi
+      if (!response.success) {
+        // Özel durum: Eğer bir 500 hatası var ancak mesaj "Beğeni kaydedilirken hata oluştu" ise
+        if (response.status === 500 && response.message?.includes('Beğeni kaydedilirken hata oluştu')) {
+          console.log("Beğeni işlemi başarılı görünüyor ama API hata döndürdü. UI durumunu koruyoruz.");
+          // Optimistik güncellememizi koru
+          serverLikedStatus = !currentLikedState;
+          serverLikeCount = newLikeCount; // Optimistik olarak hesapladığımız değeri kullan
+        }
+        // "Zaten beğenilmiş" gibi mesajlar için
+        else if (response.message?.toLowerCase().includes('zaten beğen')) {
+          console.log("Gönderi zaten beğenilmiş, beğenilmiş durumunu koruyoruz.");
+          serverLikedStatus = true;
+          // API'den gelen sayı varsa onu kullan, yoksa mevcut değeri koru
+          if (typeof response.data === 'number' && response.data > 0) {
+            serverLikeCount = response.data;
+          } else if (typeof response.data?.likeCount === 'number' && response.data.likeCount > 0) {
+            serverLikeCount = response.data.likeCount;
+          } else if (typeof response.data?.likes === 'number' && response.data.likes > 0) {
+            serverLikeCount = response.data.likes;
+          } else {
+            // API'den geçerli bir değer gelmezse, optimistik değeri koru
+            serverLikeCount = currentLikeCount;
+          }
+        } 
+        // "Beğenilmemiş" mesajları için
+        else if (response.message?.toLowerCase().includes('beğenilmemiş')) {
+          console.log("Gönderi beğenilmemiş bilgisi alındı, beğenilmemiş durumunu koruyoruz.");
+          serverLikedStatus = false;
+          // API'den gelen sayı varsa ve makul bir değerse onu kullan, yoksa mevcut değeri koru
+          if (typeof response.data === 'number' && response.data >= 0) {
+            serverLikeCount = response.data;
+          } else if (typeof response.data?.likeCount === 'number' && response.data.likeCount >= 0) {
+            serverLikeCount = response.data.likeCount;
+          } else if (typeof response.data?.likes === 'number' && response.data.likes >= 0) {
+            serverLikeCount = response.data.likes;
+          } else {
+            // API'den geçerli bir değer gelmezse, optimistik değeri koru
+            serverLikeCount = currentLikeCount > 0 ? currentLikeCount - 1 : 0;
+          }
+        }
+        else {
+          // Gerçek hata durumunda UI'yı geri al
+          setIsLiked(currentLikedState);
+          setLikeCount(currentLikeCount);
+          // Post nesnesini de eski haline getir
+          post.liked = currentLikedState;
+          post.likes = currentLikeCount;
+          throw new Error(response.message || 'Beğeni işlemi başarısız oldu');
+        }
+      } else {
+        // Başarılı yanıt - API'den gelen değerleri kullan
+        serverLikedStatus = !currentLikedState; // API başarılıysa beğeni durumu değişmiştir
+        
+        // API'den dönen beğeni sayısını kontrol et - önemli: değer 0 olsa bile kabul et
+        if (response.data !== undefined && response.data !== null) {
+          if (typeof response.data.likeCount === 'number') {
+            serverLikeCount = response.data.likeCount;
+            console.log(`API'den likeCount alındı: ${response.data.likeCount}`);
+          } else if (typeof response.data.likes === 'number') {
+            serverLikeCount = response.data.likes;
+            console.log(`API'den likes alındı: ${response.data.likes}`);
+          } else if (typeof response.data === 'number') {
+            serverLikeCount = response.data;
+            console.log(`API'den sayısal değer alındı: ${response.data}`);
+          }
+        }
+      }
+      
+      // Eğer sunucudan beğeni sayısı veya durumu alındıysa, UI'yi güncelle
+      if (serverLikedStatus !== null) {
+        setIsLiked(serverLikedStatus);
+        post.liked = serverLikedStatus;
+        console.log(`Beğeni durumu güncellendi: ${serverLikedStatus}`);
+      }
+      
+      // API'den geçerli bir sayı geldi mi kontrol et (0 da geçerli bir değerdir!)
+      if (serverLikeCount !== null) {
+        console.log(`Beğeni sayısı API'den alındı: ${serverLikeCount}`);
+        setLikeCount(serverLikeCount);
+        post.likes = serverLikeCount;
+      } else {
+        // API'den değer gelmezse, beğeni durumuna göre mantıklı bir değer ayarla
+        const fallbackCount = post.liked ? Math.max(1, currentLikeCount) : Math.max(0, currentLikeCount - 1);
+        console.log(`API'den beğeni sayısı alınamadı, düzeltilmiş değer kullanılıyor: ${fallbackCount}`);
+        setLikeCount(fallbackCount);
+        post.likes = fallbackCount;
+      }
+      
+      // Diğer olası post alanlarını da güncelle (farklı isimler de kullanılabilir)
+      if (post.likeCount !== undefined) post.likeCount = post.likes;
+      if (post.isLiked !== undefined) post.isLiked = post.liked;
+      
+      console.log(`Post ${post.id} beğeni durumu güncellendi: ${post.liked ? 'beğenildi' : 'beğeni kaldırıldı'}, sayı: ${post.likes}`);
+      
     } catch (error) {
-      console.error('Beğeni işlemi başarısız:', error);
-      setError('Beğeni işlemi başarısız oldu');
+      // Özel durum kontrolü - beğeni hatalarında UI'yi tutarlı tut
+      if (error.message?.includes('Beğeni kaydedilirken hata oluştu')) {
+        console.log("Beğeni işlemi muhtemelen başarılı oldu ancak API hata döndürdü. UI durumunu koruyoruz.");
+        return; // Hata mesajı gösterme
+      }
+      
+      console.error('Beğeni işlemi başarısız:', error);
+      
+      // Gerçek bir hata olduğunda kullanıcıya bildir
+      setError('Beğeni işlemi başarısız oldu: ' + (error.message || 'Bilinmeyen hata'));
       setTimeout(() => setError(null), 3000);
+      
+      // Post nesnesini ve state'i eski haline getir
+      setIsLiked(currentLikedState);
+      setLikeCount(currentLikeCount);
+      post.liked = currentLikedState;
+      post.likes = currentLikeCount;
+      if (post.likeCount !== undefined) post.likeCount = currentLikeCount;
+      if (post.isLiked !== undefined) post.isLiked = currentLikedState;
+      
     } finally {
       setIsLiking(false);
     }
   };
 
-  const handleSave = () => {
-    onSave(post.id);
+  const handleSave = async () => {
+    // Şu anki kaydetme durumunu al
+    const currentSavedState = post.saved;
+    
+    // Optimistik UI güncellemesi için bir kopya oluştur
+    const updatedPost = {
+      ...post,
+      saved: !currentSavedState
+    };
+    
+    // Parent bileşene bildir (varsa)
+    if (onSave) {
+      onSave(post.id);
+    }
+    
+    try {
+      // Sunucuya istek gönder
+      const response = currentSavedState
+        ? await api.posts.unsave(post.id)
+        : await api.posts.save(post.id);
+      
+      // API yanıt değerlendirmesi  
+      if (!response.success) {
+        // UNIQUE constraint hatası veya "Zaten kaydedilmiş" mesajı işleniyor
+        if (response.message?.toLowerCase().includes('unique constraint') || 
+            response.message?.toLowerCase().includes('zaten kayded')) {
+          // Bu bir hata değil, gönderi zaten kaydedilmiş
+          console.log("Gönderi zaten kaydedilmiş, kullanıcı arayüzü güncellendi.");
+          // Hata gösterme
+        } else if (response.message?.toLowerCase().includes('kaydedilmemiş')) {
+          // Bu bir hata değil, gönderi zaten kaydedilmemiş
+          console.log("Gönderi zaten kaydedilmemiş, kullanıcı arayüzü güncellendi.");
+          // Hata gösterme
+        } else {
+          throw new Error(response.message || 'Gönderi kaydetme işlemi başarısız oldu');
+        }
+      }
+      
+      console.log(`Post ${post.id} kaydetme durumu: ${updatedPost.saved ? 'kaydedildi' : 'kaydı kaldırıldı'}`);
+      
+    } catch (error) {
+      console.error('Kaydetme işlemi başarısız:', error);
+      
+      // Gerçek bir hata durumunda kullanıcıya bildir
+      setError('Kaydetme işlemi başarısız oldu: ' + (error.message || 'Bilinmeyen hata'));
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  // Yorum eklemeden önce post nesnesini kontrol etmek için yardımcı fonksiyon
+  const debugPostObject = () => {
+    // Post nesnesinin bir kopyasını oluştur (referans yerine)
+    const postCopy = {...post};
+    
+    // Hassas veri içerebilecek büyük alanları temizle
+    if (postCopy.content && postCopy.content.length > 100) {
+      postCopy.content = postCopy.content.substring(0, 100) + '...';
+    }
+    
+    // Döngüsel referansları ve büyük nesneleri temizle
+    delete postCopy.user;
+    delete postCopy.likes;
+    delete postCopy.comments;
+    
+    console.log('Post nesnesi detayları:', {
+      id: post.id,
+      idType: typeof post.id,
+      postKeys: Object.keys(post),
+      postValues: postCopy
+    });
+    
+    // ID'nin numerik olup olmadığını kontrol et
+    const numericId = Number(post.id);
+    console.log('ID Numerik mi?', {
+      original: post.id,
+      converted: numericId,
+      isNaN: isNaN(numericId),
+      isFinite: isFinite(numericId),
+      isInteger: Number.isInteger(numericId)
+    });
   };
 
   const handleSubmitComment = async (e, parentId = null) => {
     e.preventDefault();
     if (!comment.trim()) return;
     
+    // Debug bilgisi
+    debugPostObject();
+    
     try {
-      // API'ye yorumu gönder
-      const response = await api.posts.addComment(post.id, {
+      setError(null);
+      setLoadingComments(true);
+      
+      // Postun ID formatını kontrol et ve düzelt
+      let safePostId;
+      if (typeof post.id === 'string') {
+        // Eğer ID bir string ise ve sayısal görünüyorsa sayıya çevir
+        if (/^\d+$/.test(post.id)) {
+          safePostId = parseInt(post.id, 10);
+        } else {
+          // Sayı değilse string olarak bırak
+          safePostId = post.id;
+        }
+      } else {
+        // Zaten sayı ise aynen kullan
+        safePostId = post.id;
+      }
+      
+      console.log("Yorum gönderiliyor:", {
         content: comment.trim(),
-        parentId: parentId
+        parentId: parentId,
+        postId: post.id,
+        postIdType: typeof post.id,
+        safePostId: safePostId,
+        safePostIdType: typeof safePostId
       });
       
-      // Başarılı yanıt gelirse yorumu ekle
-      if (response.success) {
-        const newComment = {
-          ...response.data.comment,
-          id: response.data.comment.ID,
-          createdAt: response.data.comment.CreatedAt,
-          updatedAt: response.data.comment.UpdatedAt,
-          deletedAt: response.data.comment.DeletedAt,
-          replies: []
-        };
+      // Yorum içeriğini saklayıp formu temizle
+      const commentText = comment.trim();
+      setComment('');
+      
+      // Optimistik UI güncellemesi (yorum sayısını artır)
+      setCommentCount(prev => prev + 1);
+      
+      // API'ye yorumu gönder
+      const response = await api.posts.addComment(safePostId, commentText, parentId);
+      
+      console.log('Yorum gönderme yanıtı:', response);
+      
+      if (!response?.success) {
+        // Başarısız olduysa optimistik güncellemeyi geri al
+        setCommentCount(prev => Math.max(0, prev - 1));
+        throw new Error(response?.message || 'Yorum gönderilirken bir hata oluştu');
+      }
+      
+      // Gönderi yorum sayısını güncelle (post objesi için)
+      post.comments = commentCount;
+      post.comment_count = commentCount;
+      post.comments_count = commentCount;
+      
+      // Yeni yorumu ekle (API yanıtı yorumu içeriyorsa)
+      if (response.data && response.data.comment) {
+        const newComment = response.data.comment;
         
         if (parentId) {
-          setComments(prevComments => prevComments.map(c => {
-            if (c.id === parentId) {
-              return {
-                ...c,
-                replies: [newComment, ...(c.replies || [])]
-              };
-            }
-            return c;
-          }));
+          // Eğer bir yanıt ise, ana yoruma ekle
+          setComments(prevComments => 
+            prevComments.map(c => 
+              c.id === parentId 
+                ? { ...c, replies: [...(c.replies || []), newComment] } 
+                : c
+            )
+          );
         } else {
-          setComments(prevComments => [newComment, ...prevComments]);
+          // Yeni bir yorum ise, yorum listesine ekle
+          setComments(prevComments => [...prevComments, newComment]);
         }
-        
-        // Formu sıfırla
-        setComment('');
-        
-        // Gönderi yorum sayısını güncelle
-        post.comments += 1;
+      } else {
+        // API yorumu dönmüyorsa, tüm yorumları tekrar yükle
+        await fetchComments();
       }
+      
+      console.log('Yorum başarıyla eklendi');
     } catch (err) {
-      setError('Yorum gönderilirken bir hata oluştu: ' + err.message);
+      console.error('Yorum gönderme hatası:', err, 'Post ID:', post.id);
+      setError('Yorum gönderilirken bir hata oluştu: ' + (err.message || 'Bilinmeyen hata'));
+      
+      // Token hatası varsa oturumu temizle
+      if (err.message?.includes('token') || err.message?.includes('oturum')) {
+        console.error('Token hatası tespit edildi, yeniden giriş gerekebilir');
+      }
+    } finally {
+      setLoadingComments(false);
     }
   };
 
   const handleDelete = async () => {
     if (isDeleting) return;
-    
-    if (window.confirm('Bu gönderiyi silmek istediğinizden emin misiniz?')) {
       setIsDeleting(true);
       try {
-        await onDelete(post.id);
+      const response = await api.posts.delete(post.id);
+      if (response.success) {
         setShowMenu(false);
-      } catch (error) {
-        console.error('Gönderi silinirken bir hata oluştu:', error);
-        setError('Gönderi silinirken bir hata oluştu');
-        setTimeout(() => setError(null), 3000);
+        if (onDelete) onDelete(post.id);
+      } else {
+        throw new Error(response.message || 'Gönderi silinemedi');
+      }
+    } catch (err) {
+      console.error('Gönderi silme hatası:', err);
+      setError('Gönderi silinirken bir hata oluştu: ' + err.message);
+      setShowMenu(false);
       } finally {
         setIsDeleting(false);
-      }
     }
   };
 
@@ -161,784 +544,693 @@ const PostItem = ({ post, onLike, onSave, onDelete, currentUser }) => {
     try {
       const response = await api.posts.report(post.id);
       if (response.success) {
-        setError('Gönderi başarıyla şikayet edildi');
-        setTimeout(() => setError(null), 3000);
+        alert('Gönderi bildirildi.');
+        setShowMenu(false);
+      } else {
+        throw new Error(response.message || 'Gönderi bildirilemedi');
       }
-    } catch (error) {
-      console.error('Gönderi şikayet edilirken bir hata oluştu:', error);
-      setError('Gönderi şikayet edilirken bir hata oluştu');
-      setTimeout(() => setError(null), 3000);
-    }
+    } catch (err) {
+      console.error('Gönderi bildirme hatası:', err);
+      setError('Gönderi bildirilirken bir hata oluştu: ' + err.message);
     setShowMenu(false);
+    }
   };
 
+  // Görsel URL'lerini tam adrese dönüştürme yardımcı fonksiyonu
+  const getFullImageUrl = (url) => {
+    if (!url) return `https://ui-avatars.com/api/?name=U&background=0D1117&color=0AFFD9`;
+    if (url.startsWith('http')) return url;
+    if (url.startsWith('/')) return `${API_BASE_URL}${url}`;
+    return `${API_BASE_URL}/${url}`;
+  };
+
+  // Menüyü kapatmak için dışarı tıklama kontrolü
+    useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const formatDate = (dateString) => {
+    try {
+      if (!dateString) return 'Bilinmeyen tarih';
+      
+      // Özel durumlar: "şimdi" veya "biraz önce" gibi değerler için
+      if (typeof dateString === 'string') {
+        // Özel durumlar kontrolü
+        if (dateString === 'şimdi' || dateString === 'biraz önce' || dateString === 'just now') {
+          return 'biraz önce';
+        }
+        
+        // Diğer zaten formatlanmış tarihler
+        if (dateString.includes('önce') || 
+            dateString.includes('sonra') || 
+            dateString.includes('gün') || 
+            dateString.includes('ay') || 
+            dateString.includes('yıl') || 
+            dateString.includes('saat') || 
+            dateString.includes('dakika') || 
+            dateString.includes('saniye')) {
+          return dateString;
+        }
+      }
+      
+      // ISO string formatını kontrol et
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        console.warn("Geçersiz tarih formatı:", dateString, "biraz önce olarak gösteriliyor");
+        return 'biraz önce';
+      }
+      
+      return formatDistanceToNow(date, { addSuffix: true, locale: tr });
+    } catch (error) {
+      console.error("Tarih formatlama hatası:", error, "Tarih:", dateString);
+      return 'biraz önce';
+    }
+  };
+
+  const handleImageError = (e) => {
+    console.error("Görsel yükleme hatası:", e.target.src);
+    e.target.onerror = null; // Sonsuz hata döngüsünü önle
+    e.target.src = DEFAULT_PLACEHOLDER_IMAGE; // Varsayılan resim
+  };
+
+  const getImageArray = () => {
+    // Tüm olası görsel dizisi alanlarını kontrol et
+    if (post.imageUrls && post.imageUrls.length > 0) return post.imageUrls;
+    if (post.images && post.images.length > 0) return post.images;
+    if (post.media && post.media.length > 0) return post.media;
+    
+    // Büyük harfle başlayan alanları kontrol et
+    if (post.ImageUrls && post.ImageUrls.length > 0) return post.ImageUrls;
+    if (post.Images && post.Images.length > 0) return post.Images;
+    if (post.Media && post.Media.length > 0) return post.Media;
+    
+    // Tekil görsel alanlarını kontrol et
+    if (post.image) return [post.image];
+    if (post.coverImage) return [post.coverImage];
+    if (post.thumbnail) return [post.thumbnail];
+    if (post.Image) return [post.Image];
+    if (post.CoverImage) return [post.CoverImage];
+    if (post.Thumbnail) return [post.Thumbnail];
+    
+    // String olarak saklanmış JSON dizilerini kontrol et
+    if (typeof post.images === 'string') {
+      try {
+        const parsedImages = JSON.parse(post.images);
+        if (Array.isArray(parsedImages) && parsedImages.length > 0) {
+          return parsedImages;
+        }
+      } catch (e) {
+        // JSON parse hatası, tek bir URL olabilir
+        return [post.images];
+      }
+    }
+    
+    if (typeof post.media === 'string') {
+      try {
+        const parsedMedia = JSON.parse(post.media);
+        if (Array.isArray(parsedMedia) && parsedMedia.length > 0) {
+          return parsedMedia;
+        }
+      } catch (e) {
+        // JSON parse hatası, tek bir URL olabilir
+        return [post.media];
+      }
+    }
+    
+    // Hiçbir görsel bulunamadı
+    return [];
+  };
+
+  const nextImage = () => {
+    const images = getImageArray();
+    if (images.length === 0) return;
+    setCurrentImageIndex((prevIndex) => (prevIndex + 1) % images.length);
+  };
+
+  const prevImage = () => {
+    const images = getImageArray();
+    if (images.length === 0) return;
+    setCurrentImageIndex((prevIndex) => (prevIndex - 1 + images.length) % images.length);
+  };
+
+  const userProfileImageUrl = post.user?.profileImage 
+    ? (post.user.profileImage.startsWith('http') ? post.user.profileImage : `${API_BASE_URL}/${post.user.profileImage}`)
+    : null;
+
+  const currentUserProfileImageUrl = currentUser?.profileImage 
+    ? (currentUser.profileImage.startsWith('http') ? currentUser.profileImage : `${API_BASE_URL}/${currentUser.profileImage}`)
+    : null;
+
+  // Gönderi modalını açma fonksiyonu
+  const handlePostClick = () => {
+    // Parent component'e (Feed) post'u bildir
+    if (onPostClick) {
+      onPostClick(post);
+    }
+    console.log('Gönderi tıklandı, modal açılıyor');
+  };
+
+  // Yorum butonuna tıklandığında modal açılacak fonksiyon
+  const handleCommentClick = (e) => {
+    e.preventDefault(); 
+    e.stopPropagation();
+    
+    console.log('PostItem - Yorum butonu tıklandı, modal açılıyor');
+    console.log('Post verisi:', post);
+    
+    // Parent component'e (Feed) post'u bildir
+    if (onPostClick) {
+      onPostClick(post);
+    }
+  };
+
+  // Gönderi silme işleyicisi - hem normal silme hem de modal üzerinden silme için
+  const handlePostDelete = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+    
+    try {
+      const response = await api.posts.delete(post.id);
+      console.log('Gönderi silme yanıtı:', response);
+      
+      if (response.success) {
+        console.log('Gönderi silindi');
+        
+        // Parent bileşene silme işlemini bildir
+        if (typeof onDelete === 'function') {
+          onDelete(post.id);
+        }
+      } else {
+        throw new Error(response.message || 'Gönderi silinirken bir hata oluştu');
+      }
+    } catch (error) {
+      console.error('Gönderi silme hatası:', error);
+      alert('Gönderi silinirken bir hata oluştu: ' + error.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Post değiştiğinde beğeni sayısını ve yorum sayısını güncelle
+  useEffect(() => {
+    if (post) {
+      setLikeCount(post.likes || 0);
+      setIsLiked(post.liked || false);
+      setCommentCount(post.comment_count || post.comments_count || post.comments || 0);
+    }
+  }, [post?.id, post?.likes, post?.liked, post?.comment_count, post?.comments_count, post?.comments]);
+
+  // ---- YORUM BİLEŞENİ ----
   const Comment = ({ comment, onReply, currentUser, setComments }) => {
-    // Prop kontrolleri
-    if (!comment) {
-      console.error('Comment: comment prop\'u gerekli');
-      return null;
-    }
-
-    if (!currentUser) {
-      console.error('Comment: currentUser prop\'u gerekli');
-      return null;
-    }
-
-    if (!setComments) {
-      console.error('Comment: setComments prop\'u gerekli');
-      return null;
-    }
-
-    // Bir ref oluştur ve bunu yorumun kendine özgü bir ID'sine bağla
-    // Bu şekilde component yeniden render edilse bile state korunacak
-    const commentId = comment?.id?.toString() || Math.random().toString();
-    const instanceKey = `comment-${commentId}`;
-    
-    // Her Comment instance'ının kendi benzersiz ID'si ile state'leri global olarak sakla
-    if (!window.commentStates) {
-      window.commentStates = {};
-    }
-    
-    if (!window.commentStates[instanceKey]) {
-      window.commentStates[instanceKey] = {
-        showReplies: false,
-        showReplyForm: false
-      };
-    }
-
-    const [showReplyForm, setShowReplyForm] = useState(window.commentStates[instanceKey].showReplyForm);
-    const [showReplies, setShowReplies] = useState(window.commentStates[instanceKey].showReplies);
+    const [showReplyForm, setShowReplyForm] = useState(false);
     const [replyContent, setReplyContent] = useState('');
-    const [isLiking, setIsLiking] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef(null);
-    const [isDeleting, setIsDeleting] = useState(false);
-    
-    // showReplies veya showReplyForm değiştiğinde, global state'i güncelle
-    useEffect(() => {
-      window.commentStates[instanceKey].showReplies = showReplies;
-    }, [showReplies, instanceKey]);
-    
-    useEffect(() => {
-      window.commentStates[instanceKey].showReplyForm = showReplyForm;
-    }, [showReplyForm, instanceKey]);
 
-    if (!comment || !comment.user) {
-      return null;
-    }
+    // Yorum menüsünü kapatmak için dışarı tıklma
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (menuRef.current && !menuRef.current.contains(event.target)) {
+          setShowMenu(false);
+        }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }, []);
 
     const getInitial = (username) => {
-      if (!username) return '?';
-      return username.charAt(0).toUpperCase();
+      return username ? username[0].toUpperCase() : '?';
     };
 
-    const formatDate = (dateString) => {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diff = now - date;
-      const seconds = Math.floor(diff / 1000);
-      const minutes = Math.floor(seconds / 60);
-      const hours = Math.floor(minutes / 60);
-      const days = Math.floor(hours / 24);
-
-      if (seconds < 60) return 'şimdi';
-      if (minutes < 60) return `${minutes} dk önce`;
-      if (hours < 24) return `${hours} saat önce`;
-      if (days < 7) return `${days} gün önce`;
-      if (days < 30) {
-        const weeks = Math.floor(days / 7);
-        return `${weeks} hafta önce`;
-      }
-      if (days < 365) {
-        const months = Math.floor(days / 30);
-        return `${months} ay önce`;
-      }
-      const years = Math.floor(days / 365);
-      return `${years} yıl önce`;
-    };
+    const commentUserProfileImageUrl = comment.user?.profileImage 
+      ? (comment.user.profileImage.startsWith('http') ? comment.user.profileImage : `${API_BASE_URL}/${comment.user.profileImage}`)
+      : DEFAULT_AVATAR_URL;
 
     const handleReplySubmit = async (e) => {
       e.preventDefault();
-      if (!replyContent.trim()) return;
+      if (!replyContent.trim() || isReplying) return;
+
+      setIsReplying(true);
+      setReplyError(null);
       
       try {
-        const response = await api.posts.addComment(post.id, {
-          content: replyContent.trim(),
-          parentId: comment.id
+        // Post ve Comment ID'lerini güvenli şekilde işle
+        let safePostId;
+        if (typeof post.id === 'string') {
+          if (/^\d+$/.test(post.id)) {
+            safePostId = parseInt(post.id, 10);
+          } else {
+            safePostId = post.id;
+          }
+        } else {
+          safePostId = post.id;
+        }
+        
+        let safeCommentId = comment.id;
+        
+        console.log("Yanıt gönderiliyor:", {
+          postId: post.id, 
+          postIdType: typeof post.id,
+          safePostId: safePostId,
+          commentId: comment.id,
+          commentIdType: typeof comment.id,
+          safeCommentId: safeCommentId
         });
         
+        const response = await api.posts.addComment(safePostId, replyContent, safeCommentId); // parentId olarak yorumu ID'sini ver
         if (response.success) {
-          const newReply = {
-            ...response.data.comment,
-            id: response.data.comment.ID,
-            createdAt: response.data.comment.CreatedAt,
-            updatedAt: response.data.comment.UpdatedAt,
-            deletedAt: response.data.comment.DeletedAt,
-            likeCount: 0,
-            isLiked: false,
-            replies: []
-          };
-          
-          setComments(prevComments => 
-            prevComments.map(c => {
-              if (c.id === comment.id) {
-                return {
-                  ...c,
-                  replies: [newReply, ...(c.replies || [])]
-                };
-              }
-              return c;
-            })
-          );
-          
           setReplyContent('');
           setShowReplyForm(false);
-          setShowReplies(true);
-          post.comments += 1;
+          fetchComments(); // Ana post yorumlarını yeniden çekerek yanıtı da göster
+        } else {
+          throw new Error(response.message || 'Yanıt gönderilemedi');
         }
       } catch (err) {
-        console.error('Yanıt gönderilirken hata:', err);
+        console.error('Yanıt gönderme hatası:', err);
+        setReplyError('Yanıt gönderilemedi: ' + err.message);
+      } finally {
+        setIsReplying(false);
       }
     };
 
     const handleCommentLike = async () => {
-      if (isLiking || !comment?.id) {
-        console.error('Beğeni işlemi yapılamıyor:', !comment?.id ? 'Geçersiz yorum ID\'si' : 'İşlem devam ediyor');
-        return;
-      }
+      if (isLikingComment) return;
+      setIsLikingComment(true);
+
+      const currentLikedState = comment.isLiked;
+      const currentLikeCount = comment.likeCount || 0;
       
-      setIsLiking(true);
-      
-      // Halihazırda açık olan yorum yanıt durumlarını kaydet
-      const openRepliesStates = {};
-      const saveOpenStates = (comments) => {
-        if (!Array.isArray(comments)) return;
-        comments.forEach(c => {
-          if (!c || !c.id) return;
-          const key = `comment-${c.id}`;
-          if (window.commentStates && window.commentStates[key]) {
-            openRepliesStates[key] = { ...window.commentStates[key] };
-          }
-          if (c.replies && Array.isArray(c.replies)) {
-            saveOpenStates(c.replies);
-          }
-        });
-      };
-      
-      // Mevcut yorumların açık/kapalı durumlarını kaydet
-      saveOpenStates(comments);
-      
-      try {
-        const response = await api.comments.toggleLike(comment.id);
-        
-        if (!response?.success) {
-          throw new Error(response?.message || 'Beğeni işlemi başarısız oldu');
-        }
-        
-        // API yanıtına göre state'i güncelle
-        setComments(prevComments => {
-          if (!Array.isArray(prevComments)) {
-            console.error('setComments: prevComments bir dizi değil');
-            return prevComments;
-          }
-          
-          return prevComments.map(c => {
-            if (!c) return null;
-            
+      // Optimistic UI
+        const updateCommentLikeStatus = (commentList) => {
+          return commentList.map(c => {
             if (c.id === comment.id) {
-              return {
-                ...c,
-                isLiked: response.data.isLiked,
-                likeCount: response.data.likeCount
-              };
-            }
-            
-            if (c.replies && Array.isArray(c.replies)) {
-              const updatedReplies = c.replies.map(r => {
-                if (!r) return null;
-                if (r.id === comment.id) {
-                  return {
-                    ...r,
-                    isLiked: response.data.isLiked,
-                    likeCount: response.data.likeCount
-                  };
-                }
-                return r;
-              }).filter(Boolean);
-              
-              return { ...c, replies: updatedReplies };
-            }
-            
+            return { ...c, isLiked: !currentLikedState, likeCount: currentLikedState ? Math.max(0, currentLikeCount - 1) : currentLikeCount + 1 };
+          }
+          if (c.replies) {
+            return { ...c, replies: updateCommentLikeStatus(c.replies) };
+          }
             return c;
-          }).filter(Boolean);
         });
-        
-        // İşlem bittikten sonra, kaydedilen açık durumları window.commentStates'e geri yükle
-        Object.keys(openRepliesStates).forEach(key => {
-          if (window.commentStates) {
-            window.commentStates[key] = openRepliesStates[key];
-          }
-        });
-      } catch (err) {
-        console.error('Yorum beğenirken hata:', err);
-        setError(`Beğeni işlemi başarısız oldu: ${err.message}`);
-        setTimeout(() => setError(null), 3000);
-      } finally {
-        setIsLiking(false);
-      }
-    };
-
-    const handleDelete = async () => {
-      if (isDeleting) return;
+        };
+      setComments(prevComments => updateCommentLikeStatus(prevComments));
       
-      if (window.confirm('Bu yorumu silmek istediğinizden emin misiniz?')) {
-        setIsDeleting(true);
-        try {
-          const response = await api.comments.delete(comment.id);
-          if (response.success) {
-            setComments(prevComments => {
-              if (!Array.isArray(prevComments)) {
-                console.error('setComments: prevComments bir dizi değil');
-                return prevComments;
-              }
-              return prevComments.filter(c => c.id !== comment.id);
-            });
-          }
-        } catch (error) {
-          console.error('Yorum silinirken bir hata oluştu:', error);
-          setError('Yorum silinirken bir hata oluştu');
-          setTimeout(() => setError(null), 3000);
-        } finally {
-          setIsDeleting(false);
-          setShowMenu(false);
+      try {
+        // Comment ID'sini güvenli şekilde işle
+        let safeCommentId = comment.id;
+        
+        const response = currentLikedState
+          ? await api.posts.unlikeComment(safeCommentId)
+          : await api.posts.likeComment(safeCommentId);
+        
+        if (!response.success) {
+          throw new Error(response.message || 'Yorum beğenme işlemi başarısız oldu');
         }
+        
+        // Sunucudan gelen güncel veriyi kullan (isteğe bağlı ama daha doğru)
+        if (response.data && typeof response.data.likeCount !== 'undefined') {
+            const updateWithServerData = (commentList) => {
+              return commentList.map(c => {
+                if (c.id === comment.id) {
+                  return { ...c, isLiked: response.data.isLiked, likeCount: response.data.likeCount };
+                }
+                if (c.replies) {
+                  return { ...c, replies: updateWithServerData(c.replies) };
+                }
+                return c;
+              });
+            };
+             setComments(prevComments => updateWithServerData(prevComments));
+        }
+
+      } catch (error) {
+        console.error('Yorum beğenme hatası:', error);
+        // Hata durumunda geri al
+          const revertCommentLikeStatus = (commentList) => {
+            return commentList.map(c => {
+              if (c.id === comment.id) {
+                return { ...c, isLiked: currentLikedState, likeCount: currentLikeCount };
+              }
+              if (c.replies) {
+                return { ...c, replies: revertCommentLikeStatus(c.replies) };
+              }
+              return c;
+            });
+          };
+        setComments(prevComments => revertCommentLikeStatus(prevComments));
+        setReplyError('Yorum beğenme işlemi başarısız oldu');
+      } finally {
+        setIsLikingComment(false);
       }
     };
 
-    const handleReport = async () => {
+     const handleDeleteComment = async () => {
+      if (isDeletingComment) return;
+      setIsDeletingComment(true);
       try {
-        const response = await api.comments.report(comment.id);
-        if (response.success) {
-          setError('Yorum başarıyla şikayet edildi');
-          setTimeout(() => setError(null), 3000);
+        // Comment ID'sini güvenli şekilde işle
+        let safeCommentId = comment.id;
+        
+        const response = await api.posts.deleteComment(safeCommentId);
+          if (response.success) {
+           fetchComments(); // Yorumları yeniden çek
+        } else {
+          throw new Error(response.message || 'Yorum silinemedi');
         }
-      } catch (error) {
-        console.error('Yorum şikayet edilirken bir hata oluştu:', error);
-        setError('Yorum şikayet edilirken bir hata oluştu');
-        setTimeout(() => setError(null), 3000);
+      } catch (err) {
+        console.error('Yorum silme hatası:', err);
+        setReplyError('Yorum silinirken bir hata oluştu: ' + err.message);
+        } finally {
+        setIsDeletingComment(false);
+        setCommentMenuVisible(false);
       }
-      setShowMenu(false);
+    };
+
+     const handleReportComment = async () => {
+      try {
+          // Comment ID'sini güvenli şekilde işle
+          let safeCommentId = comment.id;
+          
+          const response = await api.posts.reportComment(safeCommentId);
+        if (response.success) {
+            alert('Yorum bildirildi.');
+          } else {
+            throw new Error(response.message || 'Yorum bildirilemedi');
+          }
+        } catch (err) {
+          console.error('Yorum bildirme hatası:', err);
+          setReplyError('Yorum bildirilirken bir hata oluştu: ' + err.message);
+        } finally {
+           setCommentMenuVisible(false);
+        }
     };
 
     return (
-      <div className="space-y-3">
-        <div className="flex space-x-3">
-          <div className="flex-shrink-0">
-            <Link to={`/profile/${comment.user.username}`}>
-              {comment.user.profileImage ? (
-                <img 
-                  src={comment.user.profileImage} 
-                  alt={comment.user.username}
-                  className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/20"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 ring-2 ring-blue-500/20">
-                  <span className="text-white font-medium text-sm">
-                    {getInitial(comment.user.username)}
-                  </span>
-                </div>
-              )}
-            </Link>
-          </div>
+      <div className="mb-4 last:mb-0 group">
+        <div className="flex">
+          <Link to={`/profile/${comment.user?.username}`} className="flex-shrink-0 mr-3">
+            <img 
+              src={getFullImageUrl(comment.user?.profile_picture || comment.user?.profileImage)} 
+              alt={comment.user?.username || 'Kullanıcı'} 
+              className="w-8 h-8 rounded-full object-cover border border-[#0affd9]/20"
+              onError={handleImageError}
+            />
+          </Link>
           
-          <div className="flex-1 space-y-2">
-            <div className="p-3 rounded-2xl bg-slate-800/50 backdrop-blur-sm border border-white/5">
-              <div className="flex justify-between items-start mb-1">
-                <div className="flex items-center space-x-2">
-                  <Link 
-                    to={`/profile/${comment.user.username}`}
-                    className="font-medium text-sm text-white hover:text-blue-400 transition-colors"
-                  >
-                    {comment.user.username}
-                  </Link>
-                  <span className="text-xs text-blue-300/50">
-                    {formatDate(comment.createdAt)}
-                  </span>
-                </div>
-                {comment.user.id === currentUser.id && (
-                  <div className="relative">
-                    <button 
-                      className="p-1 rounded-full text-blue-200 hover:bg-slate-700/50 transition-colors"
-                      onClick={() => setShowMenu(!showMenu)}
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
-                      </svg>
-                    </button>
-
-                    {showMenu && (
-                      <div 
-                        ref={menuRef}
-                        className="absolute right-0 mt-1 py-1 w-48 rounded-lg shadow-lg"
-                        style={{
-                          backgroundColor: "rgba(30, 34, 46, 0.95)",
-                          backdropFilter: "blur(10px)",
-                          border: "1px solid rgba(255, 255, 255, 0.1)"
-                        }}
-                      >
-                        <button
-                          className="w-full px-4 py-2 text-left text-sm hover:bg-red-500/20 text-red-400 flex items-center justify-between"
-                          onClick={handleDelete}
-                          disabled={isDeleting}
-                        >
-                          <span>Yorumu Sil</span>
-                          {isDeleting && (
-                            <div className="animate-spin h-4 w-4 border-2 border-red-400 border-t-transparent rounded-full"></div>
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+          <div className="flex-1 bg-black/40 rounded-2xl px-4 py-3 border border-[#0affd9]/10">
+            <div className="flex justify-between items-start mb-1">
+              <Link to={`/profile/${comment.user?.username}`} className="font-medium text-[#0affd9]/90 text-sm hover:underline">
+                {comment.user?.username || 'Kullanıcı'}
+              </Link>
+              <div className="flex items-center text-gray-400 text-xs">
+                <span className="mr-2">{formatDate(comment.createdAt)}</span>
+                <button 
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="p-1 hover:text-white transition-colors rounded-full hover:bg-black/30"
+                >
+                  <MoreHorizontal size={14} />
+                </button>
               </div>
-              <p className="text-sm text-blue-100/90 leading-relaxed">
-                {comment.content}
-              </p>
             </div>
             
-            <div className="flex items-center space-x-4 px-1">
+            <p className="text-sm text-gray-200 mb-2">{comment.content}</p>
+            
+            <div className="flex items-center text-xs text-gray-400 space-x-4">
               <button 
-                className={`flex items-center space-x-1 text-xs transition-colors ${
-                  comment.isLiked ? 'text-blue-400' : 'text-blue-300/50 hover:text-blue-400'
-                }`}
                 onClick={handleCommentLike}
-                disabled={isLiking}
+                className={`flex items-center hover:text-[#0affd9] transition-colors ${comment.isLiked ? 'text-[#0affd9]' : ''}`}
               >
-                <svg 
-                  className="w-4 h-4" 
-                  fill={comment.isLiked ? "currentColor" : "none"} 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={comment.isLiked ? "0" : "2"} 
-                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                  />
-                </svg>
+                <Heart size={14} className={`${comment.isLiked ? 'fill-[#0affd9]' : ''} mr-1`} />
                 <span>{comment.likeCount || 0}</span>
               </button>
-
+              
               <button 
-                className="text-xs text-blue-300/50 hover:text-blue-400 transition-colors"
                 onClick={() => setShowReplyForm(!showReplyForm)}
+                className="flex items-center hover:text-[#0affd9] transition-colors"
               >
-                Yanıtla
+                <MessageCircle size={14} className="mr-1" />
+                <span>Yanıtla</span>
               </button>
-
-              {comment.replies?.length > 0 && (
-                <button 
-                  className="text-xs text-blue-300/50 hover:text-blue-400 transition-colors"
-                  onClick={() => setShowReplies(!showReplies)}
-                >
-                  {showReplies ? 'Yanıtları Gizle' : `${comment.replies.length} yanıtı göster`}
-                </button>
-              )}
             </div>
-            
-            {showReplyForm && (
-              <form onSubmit={handleReplySubmit} className="flex mt-2">
-                <input
-                  type="text"
-                  placeholder="Yanıt yaz..."
-                  value={replyContent}
-                  onChange={(e) => setReplyContent(e.target.value)}
-                  className="flex-1 px-4 py-2 rounded-l-xl bg-slate-800/50 border border-white/5 text-white text-sm placeholder-blue-300/30 focus:outline-none focus:border-blue-500/50"
-                />
-                <button
-                  type="submit"
-                  className="px-4 rounded-r-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-medium hover:from-blue-600 hover:to-blue-700 transition-all"
-                  disabled={!replyContent.trim()}
-                  style={{
-                    opacity: !replyContent.trim() ? 0.5 : 1,
-                  }}
-                >
-                  Gönder
-                </button>
-              </form>
-            )}
           </div>
         </div>
-        
-        {showReplies && comment.replies?.length > 0 && (
-          <div className="ml-11 space-y-3 border-l-2 border-blue-500/10 pl-4">
-            {comment.replies.map(reply => {
-              // ID kontrolü yap
-              if (!reply?.id) {
-                console.error('Geçersiz yanıt:', reply);
-                return null;
-              }
-              
-              return (
-                <Comment 
-                  key={`reply-${reply.id}-${Date.now()}`} 
-                  comment={reply} 
-                  onReply={(parentId, content) => handleSubmitComment({ 
-                    preventDefault: () => {}, 
-                    target: null 
-                  }, parentId)}
-                  currentUser={currentUser}
-                  setComments={setComments}
-                />
-              );
-            }).filter(Boolean)}
-          </div>
-        )}
+
+        {/* ... existing code ... */}
       </div>
     );
   };
+  // ---- YORUM BİLEŞENİ SONU ----
 
   return (
-    <div 
-      className="rounded-2xl overflow-hidden backdrop-blur-lg mb-4"
-      style={{
-        backgroundColor: "rgba(20, 24, 36, 0.7)",
-        boxShadow: "0 15px 25px -5px rgba(0, 0, 0, 0.2)",
-        border: "1px solid rgba(255, 255, 255, 0.1)"
-      }}
-    >
-      {/* Gönderi başlığı */}
-      <div className="p-4 flex items-center">
-        <Link to={`/profile/${post.user.username}`} className="flex-shrink-0">
-          {post.user.profileImage ? (
+    <div className="bg-black/50 backdrop-blur-md rounded-2xl overflow-hidden border border-[#0affd9]/20 hover:border-[#0affd9]/30 transition-all shadow-lg hover:shadow-xl hover:shadow-[#0affd9]/5">
+      {/* Header - kullanıcı bilgileri */}
+      <div className="flex items-center justify-between p-4">
+        <Link to={`/profile/${post.user?.username || post.username}`} className="flex items-center flex-1 min-w-0">
+          <div className="relative w-11 h-11 rounded-full overflow-hidden border-2 border-[#0affd9]/30">
             <img 
-              src={post.user.profileImage} 
-              alt={post.user.username}
-              className="w-10 h-10 rounded-full object-cover"
+              src={getFullImageUrl(post.user?.profile_picture || post.user?.profileImage || post.profileImage || post.user?.profileImage)}
+              alt={post.user?.username || post.username || 'Kullanıcı'}
+              className="w-full h-full object-cover"
+              onError={handleImageError}
             />
-          ) : (
-            <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-500"
-            >
-              <span className="text-white font-bold">
-                {post.user.username.charAt(0).toUpperCase()}
-              </span>
+          </div>
+          
+          <div className="ml-3 min-w-0">
+            <div className="font-semibold text-white text-sm truncate">
+              {post.user?.username || post.username || 'Kullanıcı'}
             </div>
-          )}
+            <div className="text-xs text-gray-400 truncate">
+              {formatDate(post.createdAt || post.created_at)}
+            </div>
+          </div>
         </Link>
         
-        <div className="ml-3 min-w-0">
-          <Link 
-            to={`/profile/${post.user.username}`}
-            className="font-medium hover:underline text-white"
-          >
-            {post.user.username}
-          </Link>
-          <p className="text-xs text-blue-200/70">
-            {post.createdAt}
-          </p>
-        </div>
-        
-        <div className="ml-auto relative">
+        <div className="relative z-10">
           <button 
-            className="p-1 rounded-full text-blue-200 hover:bg-slate-700/50 transition-colors"
             onClick={() => setShowMenu(!showMenu)}
+            className="p-2 hover:bg-[#0affd9]/10 rounded-full transition-colors"
           >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
-            </svg>
+            <MoreHorizontal size={20} className="text-gray-400 hover:text-white" />
           </button>
-
+          
+          {/* Post menu dropdown */}
           {showMenu && (
             <div 
-              className="absolute right-0 mt-1 py-1 w-48 rounded-lg shadow-lg"
-              style={{
-                backgroundColor: "rgba(30, 34, 46, 0.95)",
-                backdropFilter: "blur(10px)",
-                border: "1px solid rgba(255, 255, 255, 0.1)"
-              }}
+              ref={menuRef}
+              className="absolute right-0 mt-1 w-48 py-2 bg-black/90 border border-[#0affd9]/20 rounded-xl shadow-lg backdrop-blur-md z-20"
             >
-              {post.user.id === currentUser.id && (
+              {currentUser && (post.user_id === currentUser.id || post.userId === currentUser.id) && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-red-500/20 text-red-400 flex items-center justify-between"
                   onClick={handleDelete}
                   disabled={isDeleting}
+                  className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-[#0affd9]/10 transition-colors flex items-center"
                 >
-                  <span>Gönderiyi Sil</span>
-                  {isDeleting && (
-                    <div className="animate-spin h-4 w-4 border-2 border-red-400 border-t-transparent rounded-full"></div>
-                  )}
+                  <Trash2 size={16} className="mr-2.5" />
+                  {isDeleting ? 'Siliniyor...' : 'Gönderiyi Sil'}
                 </button>
               )}
+              
               <button
-                className="w-full px-4 py-2 text-left text-sm hover:bg-slate-700/50 text-blue-200"
                 onClick={handleReport}
+                className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-[#0affd9]/10 transition-colors flex items-center"
               >
-                Gönderiyi Şikayet Et
+                <AlertCircle size={16} className="mr-2.5" />
+                Gönderiyi Şikayet Et
               </button>
+              
+              {/* Debug mod için test butonu */}
+              {showDebug && ( 
+                <button
+                  onClick={handleCreateTestPost}
+                  className="w-full text-left px-4 py-2.5 text-sm text-yellow-500 hover:bg-[#0affd9]/10 transition-colors flex items-center"
+                >
+                  <Bug size={16} className="mr-2.5" />
+                  Test Gönderi Oluştur
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
       
-      {/* Gönderi içeriği */}
-      <div className="px-4 pb-3">
-        <p className="text-white">{post.content}</p>
-      </div>
-      
-      {/* Gönderi görselleri (varsa) */}
-      {post.images && post.images.length > 0 && (
-        <div className="relative w-full flex justify-center bg-black">
-          {/* Görsel slider */}
-          <div className="relative w-full overflow-hidden" style={{ height: "calc(100vh - 400px)", minHeight: "400px", maxHeight: "600px" }}>
-            <div 
-              className="flex h-full transition-transform duration-300 ease-out"
-              style={{
-                transform: `translateX(-${currentImageIndex * 100}%)`,
-              }}
-            >
-              {post.images.map((image, index) => {
-                // Görsel URL'sini işle
-                let imageUrl = '';
-                
-                if (typeof image === 'string') {
-                  imageUrl = image;
-                } else if (image.url) {
-                  imageUrl = image.url;
-                }
-                
-                // URL'yi düzelt
-                if (imageUrl && !imageUrl.startsWith('http')) {
-                  imageUrl = `http://localhost:8080/api/images/${imageUrl}`;
-                }
-                
-                return (
-                  <div 
-                    key={`image-${index}-${typeof image === 'string' ? image : (image.id || Date.now())}`}
-                    className="flex-shrink-0 w-full h-full flex items-center justify-center bg-black"
-                  >
-                    <img 
-                      src={imageUrl}
-                      alt={`Gönderi görseli ${index + 1}`}
-                      className="max-w-full max-h-full object-contain"
-                      onError={(e) => {
-                        console.error(`Görsel yüklenemedi (${index}): ${e.target.src}`);
-                        e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='300' height='200' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='24' fill='%23fff' text-anchor='middle' dominant-baseline='middle'%3EGörsel Yüklenemedi%3C/text%3E%3C/svg%3E";
-                        e.target.onerror = null;
+      {/* Post içeriği */}
+      <div onClick={handlePostClick} className="cursor-pointer">
+        {/* Post resimleri */}
+        {getImageArray().length > 0 ? (
+          <div className="relative">
+            <img 
+              src={getImageArray()[currentImageIndex]} 
+              alt="Gönderi" 
+              className="w-full h-auto max-h-[600px] object-contain bg-black/60"
+              onError={handleImageError}
+            />
+            
+            {/* Çoklu resim navigasyonu */}
+            {getImageArray().length > 1 && (
+              <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+                <div className="flex space-x-1.5 px-2 py-1 bg-black/60 rounded-full">
+                  {getImageArray().map((_, index) => (
+                    <button 
+                      key={index}
+                      className={`w-2 h-2 rounded-full ${currentImageIndex === index ? 'bg-[#0affd9]' : 'bg-gray-400'}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentImageIndex(index);
                       }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Kaydırma butonları */}
-            {post.images.length > 1 && (
-              <>
-                {/* Sol buton */}
-                {currentImageIndex > 0 && (
-                  <button
-                    className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-                    onClick={() => setCurrentImageIndex(prev => prev - 1)}
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                )}
-                
-                {/* Sağ buton */}
-                {currentImageIndex < post.images.length - 1 && (
-                  <button
-                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-                    onClick={() => setCurrentImageIndex(prev => prev + 1)}
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                )}
-
-                {/* Nokta göstergeleri */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
-                  {post.images.map((image, index) => (
-                    <button
-                      key={`dot-${index}`}
-                      className={`w-2 h-2 rounded-full transition-colors ${
-                        index === currentImageIndex ? 'bg-white' : 'bg-white/50'
-                      }`}
-                      onClick={() => setCurrentImageIndex(index)}
-                    />
+                    ></button>
                   ))}
                 </div>
+              </div>
+            )}
+            
+            {/* Önceki/sonraki resim butonları */}
+            {getImageArray().length > 1 && (
+              <>
+                {/* Sol ok */}
+                <button 
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition-all opacity-75 hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    prevImage();
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                
+                {/* Sağ ok */}
+                <button 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition-all opacity-75 hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    nextImage();
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                  </svg>
+                </button>
               </>
             )}
           </div>
-        </div>
-      )}
-      
-      {/* Etkileşim bilgileri */}
-      <div 
-        className="px-4 py-2 flex justify-between text-sm text-blue-200"
-      >
-        <div>
-          {post.likes > 0 && (
-            <span>{post.likes} beğeni</span>
-          )}
-        </div>
-        <div>
-          {post.comments > 0 && (
-            <button onClick={() => setShowComments(!showComments)}>
-              {post.comments} yorum
-            </button>
-          )}
-        </div>
+        ) : null}
       </div>
       
-      {/* Etkileşim butonları */}
-      <div 
-        className="flex border-t border-b border-slate-700/50"
-      >
-        <button 
-          className="flex-1 py-2 flex items-center justify-center transition-colors hover:bg-slate-800/30"
-          style={{
-            color: post.liked ? '#3b82f6' : 'white',
-          }}
-          onClick={handleLike}
-          disabled={isLiking}
-        >
-          {isLiking ? (
-            <div className="animate-spin h-5 w-5 border-2 border-current border-t-transparent rounded-full"></div>
-          ) : (
-            <>
-              <svg 
-                className="w-5 h-5 mr-1" 
-                fill={post.liked ? "currentColor" : "none"}
-                stroke="currentColor" 
-                viewBox="0 0 24 24" 
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={post.liked ? "0" : "2"} 
-                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                ></path>
-              </svg>
-              <span>Beğen</span>
-            </>
-          )}
-        </button>
-        
-        <button 
-          className="flex-1 py-2 flex items-center justify-center text-white hover:bg-slate-800/30 transition-colors"
-          onClick={() => setShowComments(!showComments)}
-        >
-          <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth="2" 
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            ></path>
-          </svg>
-          <span>Yorum</span>
-        </button>
-        
-        <button 
-          className="flex-1 py-2 flex items-center justify-center hover:bg-slate-800/30 transition-colors"
-          style={{
-            color: post.saved ? '#3b82f6' : 'white',
-          }}
-          onClick={handleSave}
-        >
-          <svg 
-            className="w-5 h-5 mr-1" 
-            fill={post.saved ? "currentColor" : "none"} 
-            stroke="currentColor" 
-            viewBox="0 0 24 24" 
-            xmlns="http://www.w3.org/2000/svg"
+      {/* Post metni */}
+      <div className="px-5 py-3.5">
+        <p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">
+          {post.caption || post.content || ''}
+        </p>
+      </div>
+      
+      {/* Post etkileşimleri */}
+      <div className="flex items-center justify-between px-5 py-3.5 border-t border-[#0affd9]/10">
+        <div className="flex items-center space-x-5">
+          <button 
+            onClick={handleLike}
+            disabled={isLiking}
+            className={`flex items-center space-x-1.5 group ${isLiked ? 'text-[#0affd9]' : 'text-gray-400 hover:text-[#0affd9]'}`}
           >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth={post.saved ? "0" : "2"} 
-              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-            ></path>
-          </svg>
-          <span>Kaydet</span>
-        </button>
+            <Heart size={20} className={`transition-all ${isLiked ? 'fill-[#0affd9] scale-110' : 'group-hover:scale-110'}`} />
+            <span className="text-sm font-medium">{likeCount || 0}</span>
+          </button>
+          
+          <button 
+            onClick={handleCommentClick}
+            className="flex items-center space-x-1.5 text-gray-400 hover:text-[#0affd9] group"
+          >
+            <MessageCircle size={20} className="group-hover:scale-110 transition-all" />
+            <span className="text-sm font-medium">{commentCount || 0}</span>
+          </button>
+          
+          <button className="flex items-center space-x-1.5 text-gray-400 hover:text-[#0affd9] group">
+            <Send size={20} className="group-hover:scale-110 transition-all" />
+          </button>
+        </div>
+        
+        <div>
+          <button 
+            onClick={handleSave}
+            className={`flex items-center group ${post.saved ? 'text-[#0affd9]' : 'text-gray-400 hover:text-[#0affd9]'}`}
+          >
+            <Bookmark size={20} className={`transition-all group-hover:scale-110 ${post.saved ? 'fill-[#0affd9]' : ''}`} />
+          </button>
+        </div>
       </div>
       
-      {/* Yorumlar ve yorum formu */}
+      {/* Yorumlar bölümü */}
       {showComments && (
-        <div className="p-4 space-y-4">
-          {/* Yorum formu */}
-          <form onSubmit={handleSubmitComment} className="flex">
-            <input
-              type="text"
-              placeholder="Bir yorum yazın..."
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              className="flex-1 p-2 rounded-l-lg bg-slate-800/50 border-none text-white"
-            />
-            <button
-              type="submit"
-              className="px-3 rounded-r-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-              disabled={!comment.trim()}
-              style={{
-                opacity: !comment.trim() ? 0.7 : 1,
-              }}
-            >
-              Gönder
-            </button>
-          </form>
+        <div className="border-t border-[#0affd9]/10 px-4 py-4">
+          <h4 className="text-sm font-medium text-white mb-3">Yorumlar</h4>
           
-          {/* Hata mesajı */}
           {error && (
-            <div 
-              className="p-2 rounded-lg text-sm text-center bg-red-500/10 text-red-400 border border-red-500/20"
-            >
-              {error}
+            <div className="bg-red-600/10 border border-red-600/30 rounded-lg p-3 mb-4">
+              <p className="text-red-400 text-sm">{error}</p>
             </div>
           )}
           
-          {/* Yorumlar listesi */}
           {loadingComments ? (
-            <div className="flex justify-center py-4">
-              <div className="animate-spin h-5 w-5 border-2 rounded-full border-blue-500 border-t-transparent"></div>
+            <div className="py-6 text-center">
+              <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#0affd9]"></div>
+              <p className="mt-2 text-sm text-gray-400">Yorumlar yükleniyor...</p>
+            </div>
+          ) : comments.length === 0 ? (
+            <div className="py-6 text-center">
+              <p className="text-gray-400">Henüz yorum yok</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {comments.length === 0 ? (
-                <p className="text-center py-2 text-sm text-blue-200/70">
-                  Henüz yorum yapılmamış. İlk yorumu siz yapın!
-                </p>
-              ) : (
-                comments.map(comment => {
-                  // ID kontrolü yap
-                  if (!comment?.id) {
-                    console.error('Geçersiz yorum:', comment);
-                    return null;
-                  }
-                  
-                  return (
-                    <Comment 
-                      key={`comment-${comment.id}-${Date.now()}`} 
-                      comment={comment}
-                      onReply={(parentId, content) => handleSubmitComment({ 
-                        preventDefault: () => {}, 
-                        target: null 
-                      }, parentId)}
-                      currentUser={currentUser}
-                      setComments={setComments}
-                    />
-                  );
-                }).filter(Boolean)
-              )}
+              {comments.map(comment => (
+                <Comment 
+                  key={comment.id} 
+                  comment={comment} 
+                  onReply={fetchComments}
+                  currentUser={currentUser}
+                  setComments={setComments}
+                />
+              ))}
             </div>
           )}
+          
+          {/* Yorum formu */}
+          <form onSubmit={handleSubmitComment} className="mt-4">
+            <div className="flex items-start space-x-3">
+              <img 
+                src={getFullImageUrl(currentUser?.profile_picture || DEFAULT_AVATAR_URL)}
+                alt={currentUser?.username || 'Kullanıcı'} 
+                className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[#0affd9]/20"
+                onError={handleImageError}
+              />
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="Yorum ekle..."
+                  className="w-full bg-black/40 border border-[#0affd9]/20 rounded-full py-2.5 px-4 pr-12 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0affd9] focus:border-[#0affd9]"
+                />
+                <button 
+                  type="submit"
+                  disabled={!comment.trim()}
+                  className={`absolute right-3 top-1/2 transform -translate-y-1/2 ${
+                    comment.trim() ? 'text-[#0affd9]' : 'text-gray-600 cursor-not-allowed'
+                  }`}
+                >
+                  <Send size={18} />
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       )}
     </div>

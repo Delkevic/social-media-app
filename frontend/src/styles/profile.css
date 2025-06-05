@@ -1,0 +1,175 @@
+/* ProfileHeader Stilleri */
+.profile-header {
+  margin-bottom: 20px;
+}
+
+.profile-avatar-container {
+  display: flex;
+  justify-content: center;
+}
+
+.profile-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.profile-stats {
+  display: flex;
+  gap: 30px;
+  margin: 16px 0;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.profile-bio {
+  margin: 12px 0;
+  white-space: pre-line;
+}
+
+.profile-website {
+  margin-bottom: 8px;
+}
+
+.profile-location {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.profile-privacy-badge {
+  margin-top: 8px;
+  display: inline-block;
+  padding: 5px 10px;
+  background-color: #f5f5f5;
+  border-radius: 5px;
+}
+
+.verified-badge {
+  margin-left: 5px;
+  color: #1890ff;
+  font-size: 16px;
+}
+
+/* Gizli Profil Stilleri */
+.private-profile-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.private-profile-header {
+  margin-bottom: 24px;
+}
+
+.private-profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.private-profile-message {
+  text-align: center;
+  padding: 32px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.profile-content-placeholder {
+  margin: 40px 0;
+  width: 100%;
+}
+
+/* Takip İsteği Paneli Stilleri */
+.follow-requests-panel {
+  margin-top: 20px;
+}
+
+.requests-title {
+  margin-bottom: 16px;
+}
+
+.follow-requests-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+}
+
+.follow-requests-info {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  text-align: center;
+}
+
+/* Follow Button Stilleri */
+.ant-btn-dashed {
+  color: #1890ff;
+  border-color: #1890ff;
+}
+
+/* Takip İstekleri Sayfası */
+.follow-requests-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.requests-container {
+  margin-bottom: 30px;
+}
+
+.requests-description {
+  margin-bottom: 20px;
+  color: #666;
+}
+
+/* Profil Gizlilik Toggle */
+.privacy-toggle-container {
+  border: 1px solid #f0f0f0;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.privacy-toggle-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.privacy-toggle-description {
+  margin-bottom: 20px;
+  color: #666;
+}
+
+.privacy-info {
+  background-color: #f5f5f5;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.privacy-info-item {
+  margin-bottom: 16px;
+}
+
+.privacy-info-item h4 {
+  margin-bottom: 8px;
+}
+
+.privacy-info-item ul {
+  padding-left: 20px;
+  margin-bottom: 0;
+} 

@@ -1,5 +1,5 @@
 import React, { useId } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Particles, { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 import { motion, useAnimation } from "framer-motion";
@@ -17,6 +17,9 @@ export const SparklesCore = (props) => {
   } = props;
   
   const [init, setInit] = useState(false);
+  const controls = useAnimation();
+  const containerRef = useRef(null);
+  const isMountedRef = useRef(false);
   
   useEffect(() => {
     initParticlesEngine(async (engine) => {
@@ -24,12 +27,16 @@ export const SparklesCore = (props) => {
     }).then(() => {
       setInit(true);
     });
+    
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
   
-  const controls = useAnimation();
-
-  const particlesLoaded = async (container) => {
-    if (container) {
+  useEffect(() => {
+    if (init && containerRef.current && isMountedRef.current) {
       controls.start({
         opacity: 1,
         transition: {
@@ -37,14 +44,36 @@ export const SparklesCore = (props) => {
         },
       });
     }
+  }, [init, controls]);
+
+  const particlesLoaded = async (container) => {
+    if (!isMountedRef.current) return;
+    
+    containerRef.current = container;
+    
+    if (container) {
+        if (isMountedRef.current) {
+        try {
+          await controls.start({
+            opacity: 1,
+            transition: {
+              duration: 1,
+            },
+          });
+        } catch (err) {
+          console.log("Animation error handled:", err.message);
+        }
+      }
+    }
   };
 
   const generatedId = useId();
   
   return (
     <motion.div 
+      initial={{ opacity: 0 }}
       animate={controls} 
-      className={className ? `opacity-0 ${className}` : "opacity-0"}
+      className={className ? className : ""}
     >
       {init && (
         <Particles

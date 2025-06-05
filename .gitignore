@@ -164,3 +164,33 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+backend/uploads/*
+
+# IDE ayarları
+.idea/
+.vscode/
+
+# Frontend build dizini
+frontend/build/
+build/
+
+# Medya yüklemeleri (backend/uploads zaten var)
+uploads/images/
+uploads/videos/
+uploads/thumbnails/
+
+# Gizli ayar dosyaları
+config.json
+settings.json
+
+.cursorrules
+
+
+backend/development.db-shm
+backend/development.db-wal
+
+# Firebase yapılandırması (gerçek kimlik bilgileri içerdiği için)
+firebase-config.local.js
+**/firebase-credentials.json
+**/serviceAccount.json
