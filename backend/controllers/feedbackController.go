@@ -74,8 +74,8 @@ func SubmitFeedback(c *gin.Context) {
 	// Create email
 	sendSmtpEmail := brevo.SendSmtpEmail{
 		Sender: &brevo.SendSmtpEmailSender{
-			Name:  "Buzzify Destek Sistemi", // Or your app name
-			Email: "erenkcr2004@gmail.com",  // <<< GÖNDEREN E-POSTA (Sabit kodlanmış)
+			Name:  "Nexora Destek Sistemi", // Or your app name
+			Email: "erenkcr2004@gmail.com", // <<< GÖNDEREN E-POSTA (Sabit kodlanmış)
 		},
 		To: []brevo.SendSmtpEmailTo{
 			{Email: supportEmail}, // <<< ALICI E-POSTA (Ortam değişkeninden)

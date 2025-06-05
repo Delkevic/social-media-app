@@ -254,17 +254,17 @@ func sendResetCodeEmail(email, code string) error {
 		<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
 			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
 				<div style="text-align: center; margin-bottom: 20px;">
-					<h1 style="color: #3b82f6;">Buzzify - Şifre Sıfırlama</h1>
+					<h1 style="color: #3b82f6;">Nexora - Şifre Sıfırlama</h1>
 				</div>
 				<p>Merhaba,</p>
-				<p>Buzzify hesabınız için şifre sıfırlama talebinde bulundunuz. Şifre sıfırlama kodunuz:</p>
+				<p>Nexora hesabınız için şifre sıfırlama talebinde bulundunuz. Şifre sıfırlama kodunuz:</p>
 				<div style="text-align: center; margin: 30px 0;">
 					<div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; background-color: #f0f4f8; padding: 15px; border-radius: 6px; color: #3b82f6;">%s</div>
 				</div>
 				<p>Bu kod 15 dakika süreyle geçerlidir.</p>
 				<p>Eğer bu talebi siz yapmadıysanız, lütfen bu e-postayı dikkate almayın.</p>
 				<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-				<p style="font-size: 12px; color: #666; text-align: center;">İyi günler,<br>Buzzify Ekibi</p>
+				<p style="font-size: 12px; color: #666; text-align: center;">İyi günler,<br>Nexora Ekibi</p>
 			</div>
 		</body>
 		</html>
@@ -280,7 +280,7 @@ func sendResetCodeEmail(email, code string) error {
 				"email": email,
 			},
 		},
-		"subject":     "Buzzify - Şifre Sıfırlama Kodunuz",
+		"subject":     "Nexora - Şifre Sıfırlama Kodunuz",
 		"htmlContent": htmlContent,
 	}
 

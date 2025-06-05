@@ -142,7 +142,7 @@ const LeftPanel = ({ showMessagesAndNotifications = true, onPostFormToggle }) =>
         {/* Logo veya Başlık */}
         <div className="mb-8 p-2">
           <Link to="/" className="text-2xl font-bold text-[#0affd9]">
-            BUZZİFY
+            Nexora
           </Link>
       </div>
 

@@ -320,17 +320,17 @@ func sendVerificationEmail(email, code string) error {
 		<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
 			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
 				<div style="text-align: center; margin-bottom: 20px;">
-					<h1 style="color: #3b82f6;">Buzzify - E-posta Doğrulama</h1>
+					<h1 style="color: #3b82f6;">Nexora - E-posta Doğrulama</h1>
 				</div>
 				<p>Merhaba,</p>
-				<p>Buzzify hesabınızı oluşturmak için e-posta adresinizi doğrulamanız gerekiyor. Doğrulama kodunuz:</p>
+				<p>Nexora hesabınızı oluşturmak için e-posta adresinizi doğrulamanız gerekiyor. Doğrulama kodunuz:</p>
 				<div style="text-align: center; margin: 30px 0;">
 					<div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; background-color: #f0f4f8; padding: 15px; border-radius: 6px; color: #3b82f6;">%s</div>
 				</div>
 				<p>Bu kod 15 dakika süreyle geçerlidir.</p>
 				<p>Eğer bu hesabı siz oluşturmadıysanız, lütfen bu e-postayı dikkate almayın.</p>
 				<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-				<p style="font-size: 12px; color: #666; text-align: center;">İyi günler,<br>Buzzify Ekibi</p>
+				<p style="font-size: 12px; color: #666; text-align: center;">İyi günler,<br>Nexora Ekibi</p>
 			</div>
 		</body>
 		</html>
@@ -346,7 +346,7 @@ func sendVerificationEmail(email, code string) error {
 				"email": email,
 			},
 		},
-		"subject":     "Buzzify - E-posta Doğrulama Kodunuz",
+		"subject":     "Nexora - E-posta Doğrulama Kodunuz",
 		"htmlContent": htmlContent,
 	}
 
@@ -501,7 +501,7 @@ func send2FACode(email, code string) error {
 		<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
 			<div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
 				<div style="text-align: center; margin-bottom: 20px;">
-					<h1 style="color: #3b82f6;">Buzzify - İki Faktörlü Doğrulama</h1>
+					<h1 style="color: #3b82f6;">Nexora - İki Faktörlü Doğrulama</h1>
 				</div>
 				<p>Merhaba,</p>
 				<p>Hesabınıza giriş yapmak için iki faktörlü doğrulama kodunuz:</p>
@@ -511,7 +511,7 @@ func send2FACode(email, code string) error {
 				<p>Bu kod 5 dakika süreyle geçerlidir.</p>
 				<p>Eğer bu giriş işlemini siz başlatmadıysanız, lütfen şifrenizi değiştirin ve hesabınızı kontrol edin.</p>
 				<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-				<p style="font-size: 12px; color: #666; text-align: center;">İyi günler,<br>Buzzify Ekibi</p>
+				<p style="font-size: 12px; color: #666; text-align: center;">İyi günler,<br>Nexora Ekibi</p>
 			</div>
 		</body>
 		</html>
@@ -527,7 +527,7 @@ func send2FACode(email, code string) error {
 				"email": email,
 			},
 		},
-		"subject":     "Buzzify - İki Faktörlü Doğrulama Kodunuz",
+		"subject":     "Nexora - İki Faktörlü Doğrulama Kodunuz",
 		"htmlContent": htmlContent,
 	}
 

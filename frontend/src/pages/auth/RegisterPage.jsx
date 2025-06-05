@@ -170,7 +170,7 @@ function RegisterPage() {
             <h1
               className="text-4xl font-bold inline-block relative tracking-widest text-white"
             >
-              BUZZIFY
+              NEXORA
               <span
                 className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-32 h-0.5 mt-1 bg-gradient-to-r from-transparent via-[#0affd9] to-transparent"
               ></span>
